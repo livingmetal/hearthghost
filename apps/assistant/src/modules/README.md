@@ -40,3 +40,8 @@ conversation opens only from a Gateway-admitted `conversation.text` context,
 keeps its identifier and lifetime separate from the Node technical session,
 and emits semantic state events. It has no provider, Policy, Tool, media, or
 device call.
+
+HG-010 adds `orchestrator.py` and `privacy_gateway.py`. The orchestrator submits
+only text through the gateway and receives conversation text plus inert
+`pending_policy` proposals. The default Privacy Gateway policy denies cloud
+audio, image, and video. Neither module exposes a device or Tool executor.

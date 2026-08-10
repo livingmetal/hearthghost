@@ -25,19 +25,27 @@ from apps.assistant.src.adapters.in_memory_core import (
 from apps.assistant.src.adapters.in_memory_conversation import (
     InMemoryConversationRepository,
 )
+from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
 from apps.assistant.src.modules.conversation import ConversationManager
 from apps.assistant.src.modules.node_administration import NodeAdministration
 from apps.assistant.src.modules.node_security import NodeGatewaySecurity, SystemClock
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
+from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
+from apps.assistant.src.modules.privacy_gateway import (
+    DEFAULT_CLOUD_PRIVACY_POLICY,
+    PrivacyGateway,
+)
 from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
 from apps.assistant.src.ports.conversation import ConversationRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
 from apps.assistant.src.ports.policy import PolicyBoundary
+from apps.assistant.src.ports.llm import LLMPort
 
 
 DEFAULT_BIND_ADDRESS = "127.0.0.1"
 DEFAULT_STATUS_PORT = 8080
 DEFAULT_FOLLOW_UP_TIMEOUT = timedelta(seconds=45)
+DEFAULT_LLM_TIMEOUT_SECONDS = 15.0
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -49,12 +57,15 @@ class CoreComponents:
     node_administration: NodeAdministration
     policy: PolicyBoundary
     conversation: ConversationManager
+    privacy_gateway: PrivacyGateway
+    orchestrator: ConversationOrchestrator
     registry: InMemoryNodeRegistry
     credentials: InMemoryCredentialRepository
     contracts: ContractCatalog
     transport_configured: bool
     administrator_authority_configured: bool
     policy_rules_configured: bool
+    llm_configured: bool
 
     def liveness(self) -> dict[str, object]:
         return {
@@ -70,6 +81,8 @@ class CoreComponents:
             missing.append("administrator_authority_not_configured")
         if not self.policy_rules_configured:
             missing.append("policy_rules_not_configured")
+        if not self.llm_configured:
+            missing.append("llm_adapter_not_configured")
         ready = not missing
         return ready, {
             "service": "hearthghost-core",
@@ -101,6 +114,8 @@ class CoreComponents:
                     "configured" if self.policy_rules_configured else "deny_only"
                 ),
                 "conversation": "text_only",
+                "privacy_gateway": "text_allow_media_deny",
+                "llm": "configured" if self.llm_configured else "unavailable",
             },
             "readiness_reasons": readiness["reasons"],
         }
@@ -114,6 +129,8 @@ def build_core(
     policy: PolicyBoundary | None = None,
     conversation_repository: ConversationRepository | None = None,
     follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
+    llm: LLMPort | None = None,
+    llm_timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS,
 ) -> CoreComponents:
     """Build Core with explicit deny-only substitutes for missing authorities."""
 
@@ -158,17 +175,29 @@ def build_core(
         clock=clock,
         follow_up_timeout=follow_up_timeout,
     )
+    privacy_gateway = PrivacyGateway(
+        llm=llm if llm is not None else UnavailableLLMAdapter(),
+        policy=DEFAULT_CLOUD_PRIVACY_POLICY,
+    )
+    orchestrator = ConversationOrchestrator(
+        conversation=conversation,
+        privacy_gateway=privacy_gateway,
+        llm_timeout_seconds=llm_timeout_seconds,
+    )
     return CoreComponents(
         node_gateway=gateway,
         node_administration=administration,
         policy=selected_policy,
         conversation=conversation,
+        privacy_gateway=privacy_gateway,
+        orchestrator=orchestrator,
         registry=registry,
         credentials=credentials,
         contracts=ContractCatalog(contracts_root or REPOSITORY_ROOT / "contracts"),
         transport_configured=authenticator is not None,
         administrator_authority_configured=administrator_authorizer is not None,
         policy_rules_configured=policy is not None,
+        llm_configured=llm is not None,
     )
 
 

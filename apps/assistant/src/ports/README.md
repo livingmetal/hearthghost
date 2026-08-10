@@ -30,3 +30,7 @@ implementation explicitly denies every proposal until rules are configured.
 `conversation.py` stores bounded text conversation state separately from Node
 technical sessions. Repository or trusted-time failure rejects the transition;
 it never ends or mutates a Node identity/session as a side effect.
+
+`llm.py` defines provider-neutral text input, completion, failure, and inert
+proposal types. It offers generation only and deliberately has no credential,
+filesystem, Policy mutation, Tool execution, or device API.

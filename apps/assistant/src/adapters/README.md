@@ -23,3 +23,8 @@ does not pretend to perform full JSON Schema validation.
 rejects unknown message fields and dispatches only session open/close and
 sequenced capability admission. It owns no listener and an accepted result
 remains narrower than Policy or execution.
+
+`fake_llm.py` is the explicitly selected offline adapter. `openai_responses.py`
+is the server-only Responses API adapter; construction is side-effect-free and
+live calls require explicit OpenAI selection plus server-side secret injection.
+Neither adapter has Tool or device execution access.

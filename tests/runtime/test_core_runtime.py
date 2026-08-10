@@ -19,6 +19,7 @@ from apps.assistant.src.modules.node_security import (
     NodeTrustState,
     SecurityReason,
 )
+from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
 from apps.assistant.src.runtime.core import (
     CoreStatusServer,
     build_core,
@@ -41,6 +42,8 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(core.node_administration)
         self.assertIsNotNone(core.policy)
         self.assertIsNotNone(core.conversation)
+        self.assertIsNotNone(core.privacy_gateway)
+        self.assertIsNotNone(core.orchestrator)
         self.assertIsNotNone(core.registry)
 
     def test_unconfigured_security_boundaries_all_fail_closed(self):
@@ -150,13 +153,24 @@ class CoreRuntimeTests(unittest.TestCase):
                 "node_transport_not_configured",
                 "administrator_authority_not_configured",
                 "policy_rules_not_configured",
+                "llm_adapter_not_configured",
             ],
         )
         status = core.status()
         self.assertEqual(status["storage"], "ephemeral")
         self.assertEqual(status["boundaries"]["policy"], "deny_only")
+        self.assertEqual(status["boundaries"]["llm"], "unavailable")
         self.assertNotIn("contract_ids", status)
         self.assertNotIn("credentials", status)
+
+    def test_fake_llm_must_be_explicitly_injected(self):
+        core = build_core(llm=FakeLLMAdapter())
+
+        ready, readiness = core.readiness()
+
+        self.assertFalse(ready)
+        self.assertNotIn("llm_adapter_not_configured", readiness["reasons"])
+        self.assertEqual(core.status()["boundaries"]["llm"], "configured")
 
     def test_status_server_is_loopback_only_and_read_only(self):
         core = build_core()
