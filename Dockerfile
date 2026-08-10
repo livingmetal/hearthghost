@@ -43,6 +43,10 @@ COPY --chown=hearthghost:hearthghost contracts ./contracts
 
 CMD ["python", "-m", "apps.client_node.src.client", "--check"]
 
+FROM core AS openai-smoke
+
+CMD ["python", "-m", "apps.assistant.src.runtime.openai_smoke", "--adapter", "openai"]
+
 FROM test AS walking-skeleton
 
 CMD ["python", "-m", "unittest", "-v", "tests.integration.test_text_walking_skeleton_e2e"]

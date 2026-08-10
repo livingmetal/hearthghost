@@ -10,7 +10,10 @@ keeps Node and conversation sessions separate; Privacy Gateway calls an
 explicit fake LLM adapter; the client receives text plus semantic character
 states. Three/three-vrm is isolated behind `CharacterRenderer`, with a DOM
 fallback. Cloud media, real sensors, physical control, production deployment,
-and live provider validation remain deliberately absent.
+and live household use remain deliberately absent. A separate opt-in synthetic
+text smoke path has validated the real OpenAI adapter through Privacy Gateway
+with an external server secret; normal development and tests remain fake-first,
+credential-optional, and network-isolated.
 
 ## Foundation
 

@@ -75,4 +75,10 @@ inert action proposals on that same socket-pair mTLS path. The dedicated
 `walking-skeleton` image runs this scenario with networking disabled and test
 certificates only in tmpfs.
 
+The opt-in `openai-smoke` runtime is deliberately not a test-suite dependency.
+Unit tests inject fake HTTP behavior or the fake LLM adapter, and all normal test
+containers keep networking disabled. A live provider check requires an
+explicitly selected adapter, an external server secret, and a separately run
+egress-enabled container.
+
 See `../AGENTS.md` and `../docs/security/threat-model.md`.

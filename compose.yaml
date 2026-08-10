@@ -88,3 +88,32 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+  openai-smoke:
+    profiles:
+      - provider-smoke
+    image: hearthghost-openai-smoke:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: openai-smoke
+    environment:
+      OPENAI_API_KEY_FILE: /run/secrets/openai-api-key
+    secrets:
+      - source: openai_api_key
+        target: openai-api-key
+        uid: "10001"
+        gid: "10001"
+        mode: 0400
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  openai_api_key:
+    external: true
+    name: hearthghost-openai-api-key

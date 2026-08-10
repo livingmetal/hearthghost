@@ -55,10 +55,23 @@ The repository-defined `walking-skeleton` image runs only that integration
 scenario under a non-root user with no network, read-only root filesystem,
 dropped capabilities, `no-new-privileges`, and tmpfs for ephemeral certificates.
 
+## Post-milestone provider validation
+
+On 2026-08-11, the dedicated `openai-smoke` image completed one synthetic
+text-only request through the real Privacy Gateway, LLM Port, and
+`OpenAIResponsesAdapter` using the `gpt-5.6` alias. A rootless external Podman
+secret was mounted read-only; no credential, prompt, or provider response body
+was printed. The process reported only `status=ok`, `modality=text`, and a
+31-character response length.
+
+This validation remains separate from the normal suite. The Python and client
+test containers keep networking disabled and require no provider credential.
+
 ## Deferred
 
-- first live OpenAI Responses API smoke test (requires a securely injected
-  development credential and explicit provider selection);
+- production provider routing, rate/cost budgets, retries, and network-layer
+  egress allowlisting;
+- representative conversation quality, latency, and provider evaluation;
 - Android native Keystore/mTLS bridge and device lifecycle validation;
 - persistent conversation/session storage and behavior-preference persistence;
 - representative Android VRM performance and an approved character asset;

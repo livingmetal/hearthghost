@@ -38,6 +38,12 @@ The tracked module layout is documented under `src/`. Node network listeners
 remain intentionally absent; the only HG-005 listener is read-only status on
 literal loopback.
 
+The OpenAI adapter remains opt-in. A synthetic provider smoke command lives in
+`src/runtime/openai_smoke.py`; it uses the real Privacy Gateway and LLM Port,
+accepts a server-only environment or secret-file credential, and is excluded
+from normal tests. See `../../docs/architecture/llm-privacy.md` for the hardened
+container invocation.
+
 See:
 
 - `../../AGENTS.md`

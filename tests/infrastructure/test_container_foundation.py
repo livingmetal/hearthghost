@@ -68,6 +68,15 @@ class ContainerFoundationTests(unittest.TestCase):
         self.assertIn("FROM runtime-base AS client-node", self.dockerfile)
         self.assertNotIn("EXPOSE", self.dockerfile)
 
+    def test_openai_smoke_image_is_explicit_and_contains_no_secret(self):
+        self.assertIn("FROM core AS openai-smoke", self.dockerfile)
+        self.assertIn(
+            '"apps.assistant.src.runtime.openai_smoke", "--adapter", "openai"',
+            self.dockerfile,
+        )
+        self.assertNotIn("OPENAI_API_KEY", self.dockerfile)
+        self.assertNotIn("--build-arg", self.dockerfile)
+
     def test_compose_test_service_preserves_security_baseline(self):
         required = {
             'network_mode: "none"',
@@ -127,7 +136,9 @@ class ContainerFoundationTests(unittest.TestCase):
                 self.assertNotIn(value, client_service)
 
     def test_walking_skeleton_service_is_ephemeral_and_network_isolated(self):
-        service = self.compose.split("  walking-skeleton:", maxsplit=1)[1]
+        service = self.compose.split("  walking-skeleton:", maxsplit=1)[1].split(
+            "  openai-smoke:", maxsplit=1
+        )[0]
         for value in {
             "target: walking-skeleton",
             'network_mode: "none"',
@@ -139,6 +150,27 @@ class ContainerFoundationTests(unittest.TestCase):
                 self.assertIn(value, service)
         self.assertNotIn("ports:", service)
         self.assertNotIn("volumes:", service)
+
+    def test_openai_smoke_is_opt_in_hardened_and_uses_external_secret(self):
+        service = self.compose.split("  openai-smoke:", maxsplit=1)[1].split(
+            "\nsecrets:", maxsplit=1
+        )[0]
+        for value in {
+            "- provider-smoke",
+            "target: openai-smoke",
+            "OPENAI_API_KEY_FILE: /run/secrets/openai-api-key",
+            "source: openai_api_key",
+            "read_only: true",
+            "- ALL",
+            "- no-new-privileges:true",
+        }:
+            with self.subTest(value=value):
+                self.assertIn(value, service)
+        self.assertNotIn("network_mode: host", service)
+        self.assertNotIn("ports:", service)
+        self.assertNotIn("volumes:", service)
+        self.assertIn("external: true", self.compose)
+        self.assertIn("name: hearthghost-openai-api-key", self.compose)
 
     def test_build_context_excludes_local_and_sensitive_state(self):
         ignored = set(self.dockerignore.splitlines())

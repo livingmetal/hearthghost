@@ -6,6 +6,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from apps.assistant.src.adapters.fake_llm import (
     FakeLLMAdapter,
@@ -35,6 +36,8 @@ from apps.assistant.src.modules.privacy_gateway import (
 )
 from apps.assistant.src.ports.llm import LLMRequest
 from apps.assistant.src.runtime.llm_selection import select_llm_adapter
+from apps.assistant.src.runtime.openai_smoke import main as openai_smoke_main
+from apps.assistant.src.runtime.openai_smoke import run_smoke
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -252,9 +255,33 @@ class OpenAIAdapterTests(unittest.TestCase):
         self.assertEqual(body["input"], "ordinary text")
         self.assertEqual(body["instructions"], HEARTHGHOST_INSTRUCTIONS)
         self.assertIs(body["store"], False)
-        self.assertEqual(set(body), {"model", "instructions", "input", "store"})
+        self.assertEqual(body["max_output_tokens"], 1_024)
+        self.assertEqual(
+            set(body),
+            {"model", "instructions", "input", "store", "max_output_tokens"},
+        )
         self.assertEqual(completion.text, "first\nsecond")
         self.assertEqual(captured["timeout"], 3.0)
+
+    def test_server_secret_file_is_supported_without_an_environment_key(self):
+        with TemporaryDirectory() as temporary_directory:
+            secret_path = Path(temporary_directory) / "openai-api-key"
+            secret_path.write_text("fake-file-key\n", encoding="utf-8")
+
+            adapter = OpenAIResponsesAdapter.from_environment(
+                {"OPENAI_API_KEY_FILE": str(secret_path)}
+            )
+
+        self.assertNotIn("fake-file-key", repr(adapter))
+
+    def test_environment_and_secret_file_are_rejected_as_ambiguous(self):
+        with self.assertRaisesRegex(OpenAIConfigurationError, "exactly one"):
+            OpenAIResponsesAdapter.from_environment(
+                {
+                    "OPENAI_API_KEY": "fake-environment-key",
+                    "OPENAI_API_KEY_FILE": "ignored-secret-path",
+                }
+            )
 
     def test_timeout_is_typed_and_secret_is_never_rendered_or_logged(self):
         secret = "test-development-secret"
@@ -315,6 +342,30 @@ class OpenAIAdapterTests(unittest.TestCase):
         )
         self.assertNotIn("OPENAI_API_KEY", combined)
         self.assertNotIn("test-development-secret", combined)
+
+
+class OpenAISmokeTests(unittest.TestCase):
+    def test_smoke_uses_privacy_gateway_with_an_injected_fake(self):
+        exit_code, report = run_smoke(FakeLLMAdapter())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(report["status"], "ok")
+        self.assertEqual(report["adapter"], "openai")
+        self.assertEqual(report["modality"], "text")
+        self.assertGreater(report["response_characters"], 0)
+
+    def test_smoke_requires_explicit_server_key_without_network_access(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = openai_smoke_main(
+                ["--adapter", "openai"],
+                environ={},
+            )
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(report["status"], "configuration_error")
+        self.assertIn("OPENAI_API_KEY", report["reason"])
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import json
 import os
 import socket
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import BinaryIO
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -25,7 +26,9 @@ from apps.assistant.src.ports.llm import (
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_OPENAI_MODEL = "gpt-5.6"
+DEFAULT_MAX_OUTPUT_TOKENS = 1_024
 MAX_RESPONSE_BYTES = 1_048_576
+MAX_API_KEY_BYTES = 16_384
 
 
 class OpenAIConfigurationError(LLMUnavailableError):
@@ -45,6 +48,7 @@ class OpenAIResponsesAdapter:
         *,
         api_key: str,
         model: str,
+        max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
         open_call: OpenCall = _open,
     ) -> None:
         if not isinstance(api_key, str) or not api_key.strip():
@@ -53,8 +57,17 @@ class OpenAIResponsesAdapter:
             )
         if not isinstance(model, str) or not model.strip():
             raise OpenAIConfigurationError("OpenAI adapter requires a model")
+        if (
+            not isinstance(max_output_tokens, int)
+            or isinstance(max_output_tokens, bool)
+            or max_output_tokens <= 0
+        ):
+            raise OpenAIConfigurationError(
+                "OpenAI adapter requires a positive output-token limit"
+            )
         self._api_key = api_key.strip()
         self._model = model.strip()
+        self._max_output_tokens = max_output_tokens
         self._open_call = open_call
 
     @classmethod
@@ -65,8 +78,16 @@ class OpenAIResponsesAdapter:
         open_call: OpenCall = _open,
     ) -> OpenAIResponsesAdapter:
         selected = os.environ if environ is None else environ
+        api_key = selected.get("OPENAI_API_KEY", "").strip()
+        api_key_file = selected.get("OPENAI_API_KEY_FILE", "").strip()
+        if api_key and api_key_file:
+            raise OpenAIConfigurationError(
+                "Configure exactly one of OPENAI_API_KEY or OPENAI_API_KEY_FILE"
+            )
+        if api_key_file:
+            api_key = _read_api_key_file(api_key_file)
         return cls(
-            api_key=selected.get("OPENAI_API_KEY", ""),
+            api_key=api_key,
             model=selected.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
             open_call=open_call,
         )
@@ -83,6 +104,7 @@ class OpenAIResponsesAdapter:
                 "instructions": request.instructions,
                 "input": request.input_text,
                 "store": False,
+                "max_output_tokens": self._max_output_tokens,
             },
             ensure_ascii=False,
             separators=(",", ":"),
@@ -128,6 +150,31 @@ class OpenAIResponsesAdapter:
         if not text:
             raise LLMProviderError("OpenAI response contained no text output")
         return LLMCompletion(text)
+
+
+def _read_api_key_file(path_value: str) -> str:
+    path = Path(path_value)
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise OpenAIConfigurationError(
+                "OPENAI_API_KEY_FILE must reference a regular secret file"
+            )
+        with path.open("rb") as secret_file:
+            raw = secret_file.read(MAX_API_KEY_BYTES + 1)
+    except OpenAIConfigurationError:
+        raise
+    except OSError as error:
+        raise OpenAIConfigurationError(
+            "OpenAI API key secret file could not be read"
+        ) from error
+    if len(raw) > MAX_API_KEY_BYTES:
+        raise OpenAIConfigurationError("OpenAI API key secret file is too large")
+    try:
+        return raw.decode("utf-8").strip()
+    except UnicodeDecodeError as error:
+        raise OpenAIConfigurationError(
+            "OpenAI API key secret file must be UTF-8 text"
+        ) from error
 
 
 def _extract_output_text(payload: object) -> str:
