@@ -12,13 +12,17 @@ A node should have at least:
 
 ```text
 node_id
-identity / credential
+trust state
 area or location
-capabilities
-permissions
-security state
+advertised capabilities
+granted capabilities
 connection state
 ```
+
+Node identity, credentials, transport connections, authenticated Node sessions,
+and conversation sessions are separate records. In particular, `node_id` is not
+an IP address, hostname, room, user, or credential identifier. See
+`../security/node-identity-and-replay.md`.
 
 Example:
 
@@ -31,8 +35,12 @@ capabilities:
   - speaker
   - camera.snapshot
   - touch
-security_state: trusted
+trust_state: trusted
 ```
+
+Credential lifecycle is stored separately, so a credential can be revoked or
+replaced without changing the logical Node identity. A trusted Node with a
+revoked credential is still denied; trust does not reactivate credentials.
 
 A future robot may expose:
 
@@ -70,6 +78,11 @@ Each node must eventually have an independent, revocable identity. Do not reuse 
 Nodes should normally initiate outbound authenticated connections to the Node Gateway. They should not expose generic inbound camera/microphone HTTP servers merely for convenience.
 
 A node must locally enforce security-sensitive capabilities such as camera access so that an authenticated but compromised Core is not automatically sufficient to activate them.
+
+Authentication, trust, advertised capability, granted capability, current
+Policy, and node-local authorization are independent checks. The Node Gateway's
+successful authentication or request admission never waives a local camera or
+microphone gate.
 
 ## Capability routing
 

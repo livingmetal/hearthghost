@@ -20,3 +20,8 @@ These are logical boundaries inside one modular monolith, not separate services.
 Modules depend on ports. Provider and product implementations belong in
 `../adapters/`; domain modules must not import them directly. Missing or invalid
 security-sensitive decisions are interpreted as denial.
+
+HG-002 implements the initial Node Gateway security boundary in
+`node_security.py`. It separates verified credential evidence, authoritative
+credential lifecycle, Node trust, advertised/granted capabilities, technical
+sessions, and replay admission. Its admitted result is Gateway admission only.

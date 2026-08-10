@@ -16,6 +16,20 @@
   input requires a new major directory.
 - Schema, documentation, fixtures, and tests change together.
 
+Contract families advance independently. HG-002 therefore introduces Node
+identity and capability `v2` contracts while the new credential lifecycle starts
+at `v1`. The preserved Node `v1.0` contracts are not valid substitutes for v2 in
+new Node Gateway code because they duplicate or couple credential, trust, and
+grant state.
+
+There is no single Node protocol version implied by these directories. In
+`node/v2/node-identity.schema.json`, `v2` is the major version of the Node
+identity schema only; in `node/v1/node-credential.schema.json`, `v1` is the major
+version of the credential schema only. Schemas that share a directory are not a
+release bundle. Producers and consumers must identify, validate, and declare
+support for every schema they exchange instead of inferring compatibility from
+the directory name of another Node contract.
+
 ## Boundary rule
 
 Adapters translate provider and vendor payloads into these contracts. Provider

@@ -31,9 +31,10 @@ python -m unittest discover -s tests -p "test_*.py"
 ```
 
 `contracts/` verifies the structure and selected security invariants of the JSON
-Schemas. `security/` records required denial cases as `not_implemented`; it does
-not pretend that application behavior exists. Each future implementation task
-must promote relevant cases into executable boundary tests before changing their
-status.
+Schemas. `security/` records required denial cases and links `implemented`
+entries to executable boundary tests. Deferred cases remain
+`not_implemented`; planning entries never substitute for application behavior.
+Each implementation task must promote only the cases it proves through the
+public boundary.
 
 See `../AGENTS.md` and `../docs/security/threat-model.md`.

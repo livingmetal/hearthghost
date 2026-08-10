@@ -74,6 +74,12 @@ Transport encryption does not replace authorization. An authenticated node still
 
 Future node authentication should support per-node revocable credentials and strong mutual identity verification.
 
+Node identity and capability v2 plus the Node credential lifecycle contract
+deliberately keep logical trust, credential validity, advertised capabilities,
+and grants separate. Node Gateway replay admission uses a technical session
+identifier and monotonically increasing per-session sequence in domain code;
+transport framing remains deferred.
+
 ## Versioning
 
 Public event and tool schemas should carry a version. Breaking changes require coordinated schema, test, and documentation updates.

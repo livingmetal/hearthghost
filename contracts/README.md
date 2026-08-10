@@ -7,7 +7,7 @@ It does not select a runtime language, web framework, or wire transport.
 
 ## Catalog
 
-| Family | Version 1 schema | Purpose |
+| Family | Schema | Purpose |
 | --- | --- | --- |
 | Events | `events/v1/conversation-state.schema.json` | Bounded conversation/session state |
 | Events | `events/v1/character-state.schema.json` | Renderer-neutral character activity |
@@ -17,13 +17,25 @@ It does not select a runtime language, web framework, or wire transport.
 | Tools | `tools/v1/tool-proposal.schema.json` | Non-authoritative LLM/tool proposal |
 | Policy | `policy/v1/policy-decision.schema.json` | Explicit allow/deny decision |
 | Policy | `policy/v1/behavior-preference-update.schema.json` | Typed, non-Hard-Policy preference proposal |
-| Node | `node/v1/node-identity.schema.json` | Node identity and independently revocable status |
-| Node | `node/v1/node-capabilities.schema.json` | Advertised capabilities and granted permissions |
+| Node | `node/v1/node-identity.schema.json` | Preserved HG-001 identity/credential snapshot |
+| Node | `node/v2/node-identity.schema.json` | Logical Node identity and trust, independent of credentials |
+| Node | `node/v1/node-credential.schema.json` | Credential lifecycle and per-Node binding without secret material |
+| Node | `node/v1/node-capabilities.schema.json` | Preserved HG-001 capability/trust snapshot |
+| Node | `node/v2/node-capabilities.schema.json` | Advertised and granted capabilities, independent of trust |
 
-Every instance carries `contract_version: "1.0"`. Directory version `v1`
-represents the contract major family. Minor revisions are published alongside
-the immutable 1.0 shape; breaking changes require a new major directory. Unknown
-properties are rejected and consumers must explicitly support a revision.
+Every instance carries an explicit `contract_version`. The directory version
+represents that contract's major family. Most foundation contracts remain at
+`v1` / `1.0`; Node identity and capabilities v2 remove the v1 coupling among a
+credential's status, the logical Node's trust state, and capability grants. The
+immutable v1 Node schemas are retained for traceability but must not be used by
+the HG-002 Node Gateway.
+Unknown properties are rejected and consumers must explicitly support a
+revision.
+
+Node schemas are independently versioned, not one global Node protocol family.
+For example, Node identity `v2.0` and Node credential `v1.0` are the current
+contracts for different records; neither version number determines the other's
+compatibility. See `VERSIONING.md`.
 
 Contracts express HearthGhost semantics rather than vendor/provider payloads.
 Binary audio, images, and video are intentionally absent; future media flows

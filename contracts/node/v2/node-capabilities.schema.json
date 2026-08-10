@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v2.0:node-capabilities",
+  "title": "Node Capabilities v2.0",
+  "description": "Separates Node-advertised capabilities from administrator-granted capabilities; trust and authentication are evaluated independently.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "node_id", "advertised_capabilities", "granted_capabilities"],
+  "properties": {
+    "contract_version": { "const": "2.0" },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "advertised_capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "local_authorization_required"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$"
+          },
+          "local_authorization_required": { "type": "boolean" }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "name": { "enum": ["camera.snapshot", "camera.stream", "microphone", "microphone.session"] }
+              },
+              "required": ["name"]
+            },
+            "then": {
+              "properties": { "local_authorization_required": { "const": true } }
+            }
+          }
+        ]
+      }
+    },
+    "granted_capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$"
+      }
+    }
+  }
+}

@@ -17,7 +17,10 @@ EXPECTED_SCHEMAS = {
     "policy/v1/policy-decision.schema.json",
     "policy/v1/behavior-preference-update.schema.json",
     "node/v1/node-identity.schema.json",
+    "node/v1/node-credential.schema.json",
     "node/v1/node-capabilities.schema.json",
+    "node/v2/node-identity.schema.json",
+    "node/v2/node-capabilities.schema.json",
 }
 
 
@@ -64,16 +67,18 @@ class ContractFoundationTests(unittest.TestCase):
     def test_every_schema_is_versioned_and_closed_at_top_level(self):
         for relative_path, schema in self.schemas.items():
             with self.subTest(schema=relative_path):
+                major = relative_path.split("/")[1].removeprefix("v")
+                contract_version = f"{major}.0"
                 self.assertEqual(
                     "https://json-schema.org/draft/2020-12/schema",
                     schema.get("$schema"),
                 )
-                self.assertIn(":v1.0:", schema.get("$id", ""))
+                self.assertIn(f":v{contract_version}:", schema.get("$id", ""))
                 self.assertEqual("object", schema.get("type"))
                 self.assertIs(schema.get("additionalProperties"), False)
                 self.assertIn("contract_version", schema.get("required", []))
                 self.assertEqual(
-                    "1.0",
+                    contract_version,
                     schema.get("properties", {})
                     .get("contract_version", {})
                     .get("const"),
@@ -135,9 +140,9 @@ class ContractFoundationTests(unittest.TestCase):
         self.assertNotIn("security", update["properties"]["scope"]["enum"])
         self.assertIn("proposed_at", update["required"])
 
-    def test_node_identity_requires_independent_revocation(self):
-        identity = self.schemas["node/v1/node-identity.schema.json"]
-        identity_properties = identity["properties"]["identity"]
+    def test_legacy_node_identity_is_preserved_for_traceability(self):
+        legacy = self.schemas["node/v1/node-identity.schema.json"]
+        identity_properties = legacy["properties"]["identity"]
         self.assertIn("independently_revocable", identity_properties["required"])
         self.assertIn("credential_id", identity_properties["required"])
         self.assertNotIn("key_id", identity_properties["properties"])
@@ -145,15 +150,98 @@ class ContractFoundationTests(unittest.TestCase):
             identity_properties["properties"]["independently_revocable"]["const"],
             True,
         )
-        revoked_states = identity["allOf"][0]["if"]["properties"]["identity"][
+        revoked_states = legacy["allOf"][0]["if"]["properties"]["identity"][
             "properties"
         ]["status"]["enum"]
         self.assertEqual({"revoked", "expired"}, set(revoked_states))
         self.assertEqual(
             "revoked",
-            identity["allOf"][0]["then"]["properties"]["security_state"][
+            legacy["allOf"][0]["then"]["properties"]["security_state"][
                 "const"
             ],
+        )
+
+    def test_current_node_identity_is_independent_from_credentials(self):
+        identity = self.schemas["node/v2/node-identity.schema.json"]
+        self.assertEqual("2.0", identity["properties"]["contract_version"]["const"])
+        self.assertEqual(
+            {"contract_version", "node_id", "trust_state"},
+            set(identity["required"]),
+        )
+        self.assertNotIn("identity", identity["properties"])
+        self.assertNotIn("credential_id", identity["properties"])
+        self.assertEqual(
+            {"untrusted", "pending_approval", "trusted", "restricted", "revoked"},
+            set(identity["properties"]["trust_state"]["enum"]),
+        )
+
+    def test_current_node_capabilities_are_independent_from_trust(self):
+        capabilities = self.schemas["node/v2/node-capabilities.schema.json"]
+        properties = capabilities["properties"]
+        self.assertEqual(
+            {
+                "contract_version",
+                "node_id",
+                "advertised_capabilities",
+                "granted_capabilities",
+            },
+            set(capabilities["required"]),
+        )
+        self.assertNotIn("security_state", properties)
+        self.assertNotIn("trust_state", properties)
+        sensitive_rule = properties["advertised_capabilities"]["items"][
+            "allOf"
+        ][0]
+        self.assertIn(
+            "camera.snapshot",
+            sensitive_rule["if"]["properties"]["name"]["enum"],
+        )
+        self.assertIs(
+            sensitive_rule["then"]["properties"][
+                "local_authorization_required"
+            ]["const"],
+            True,
+        )
+
+    def test_credential_lifecycle_is_separate_and_technology_neutral(self):
+        credential = self.schemas["node/v1/node-credential.schema.json"]
+        properties = credential["properties"]
+        self.assertEqual(
+            {"active", "revoked", "expired", "replaced"},
+            set(properties["status"]["enum"]),
+        )
+        self.assertEqual("string", properties["credential_type"]["type"])
+        self.assertNotIn("enum", properties["credential_type"])
+        self.assertTrue(
+            {"credential_id", "node_id", "credential_type", "issued_at", "status"}
+            .issubset(credential["required"])
+        )
+        secret_fields = {
+            "private_key",
+            "secret",
+            "token",
+            "certificate_pem",
+            "key_material",
+        }
+        self.assertTrue(secret_fields.isdisjoint(properties))
+        self.assertIn("revoked_at", credential["allOf"][1]["then"]["required"])
+        self.assertIn("expires_at", credential["allOf"][2]["then"]["required"])
+        self.assertIn(
+            "replacement_credential_id",
+            credential["allOf"][3]["then"]["required"],
+        )
+        self.assertIn(
+            "replacement_credential_id",
+            credential["allOf"][1]["then"]["not"]["required"],
+        )
+        expired_forbidden = credential["allOf"][2]["then"]["not"]["anyOf"]
+        self.assertEqual(
+            {"revoked_at", "replacement_credential_id"},
+            {rule["required"][0] for rule in expired_forbidden},
+        )
+        self.assertIn(
+            "revoked_at",
+            credential["allOf"][3]["then"]["not"]["required"],
         )
 
     def test_node_capability_names_support_documented_simple_and_namespaced_forms(self):

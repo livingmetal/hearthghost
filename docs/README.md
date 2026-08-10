@@ -37,6 +37,10 @@ For a new contributor or coding agent:
 6. For user-facing behavior, read the documents under `product/`.
 7. Record decisions that intentionally change architecture or trust boundaries under `adr/`.
 
+For Node authentication, credential rotation/revocation, technical sessions, or
+replay behavior, read `security/node-identity-and-replay.md` and
+`adr/0001-per-node-mutual-authentication.md`.
+
 `architecture/implementation-foundation.md` records the reversible HG-001
 foundation choices and the technology decisions deliberately left open.
 

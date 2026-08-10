@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v2.0:node-identity",
+  "title": "Node Identity v2.0",
+  "description": "Logical Node identity and trust metadata, independent of network location, user identity, and credential lifecycle.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "node_id", "trust_state"],
+  "properties": {
+    "contract_version": { "const": "2.0" },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "area": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "trust_state": {
+      "description": "Node trust state; it does not describe credential validity or capability authorization.",
+      "enum": ["untrusted", "pending_approval", "trusted", "restricted", "revoked"],
+      "default": "untrusted"
+    }
+  }
+}

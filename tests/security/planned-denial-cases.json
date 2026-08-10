@@ -1,6 +1,6 @@
 {
   "plan_version": "1.0",
-  "description": "Required future denial tests; this file is an inventory, not evidence of implemented behavior.",
+  "description": "Required denial-test inventory. Implemented entries name the executable public-boundary test that proves them.",
   "cases": [
     {
       "id": "unauthorized-camera-request",
@@ -12,13 +12,71 @@
       "id": "unknown-node",
       "precondition": "node identity is absent from the registry",
       "expected_decision": "deny",
-      "implementation_status": "not_implemented"
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_valid_credential_for_unknown_node_is_denied"
     },
     {
-      "id": "revoked-node",
+      "id": "revoked-credential",
       "precondition": "node credential status is revoked",
       "expected_decision": "deny",
-      "implementation_status": "not_implemented"
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_revoked_credential_is_denied_even_for_trusted_node"
+    },
+    {
+      "id": "unknown-credential",
+      "precondition": "credential evidence resolves to no lifecycle record",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_unknown_credential_is_denied"
+    },
+    {
+      "id": "expired-credential",
+      "precondition": "credential is expired at trusted server time",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_expired_credential_is_denied"
+    },
+    {
+      "id": "untrusted-node-protected-operation",
+      "precondition": "credential is active but Node trust state is untrusted",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_untrusted_node_can_authenticate_but_not_use_protected_capability"
+    },
+    {
+      "id": "ungranted-capability",
+      "precondition": "trusted Node requests an advertised capability that was not granted",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_advertised_but_ungranted_capability_is_denied"
+    },
+    {
+      "id": "unadvertised-capability",
+      "precondition": "trusted Node requests a capability it did not advertise",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_trusted_node_with_unadvertised_capability_is_denied"
+    },
+    {
+      "id": "replayed-node-request",
+      "precondition": "a session sequence is duplicated or older than the accepted sequence",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_duplicate_or_older_sequence_is_denied"
+    },
+    {
+      "id": "malformed-node-identity",
+      "precondition": "the claimed Node identifier does not satisfy the identity grammar",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_malformed_claimed_identity_is_denied_before_authentication"
+    },
+    {
+      "id": "ambiguous-security-state",
+      "precondition": "credential or Node state is internally inconsistent or unknown",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_ambiguous_credential_state_is_denied"
     },
     {
       "id": "llm-hard-policy-modification",

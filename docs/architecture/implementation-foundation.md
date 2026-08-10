@@ -66,7 +66,7 @@ is safely replaceable.
 - assistant implementation language and runtime framework
 - client framework and Android packaging approach
 - dependency/workspace/build system
-- authenticated node transport and credential format
+- authenticated node transport and concrete certificate profile/PKI operations
 - production authentication and user identity model
 - database and persistence technology
 - LLM, STT, TTS, vision, Home Assistant, and robot providers
@@ -80,9 +80,10 @@ boundary and can be made by a later scoped task.
 
 ## Open architecture questions
 
-- Which node identity mechanism supplies independently revocable credentials and
-  mutual authentication?
-- Which component owns authoritative session-to-node binding and replay defense?
+- How will the proposed per-Node mTLS approach be provisioned and recovered on
+  Android and embedded Nodes?
+- Which persistent store will implement authoritative session-to-Node binding
+  and atomic replay state?
 - How are policy versions distributed to node-local camera/microphone gates?
 - What binary media reference format provides bounded lifetime, integrity, and
   authorization without putting media in generic events?

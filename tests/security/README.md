@@ -1,9 +1,10 @@
 # Security Boundary Tests
 
-`planned-denial-cases.json` is the acceptance-test inventory for future
-security-sensitive implementations. Every case is deliberately marked
-`not_implemented` in HG-001 because no Policy, node authentication, Privacy
-Gateway, or tool executor exists yet.
+`planned-denial-cases.json` is the acceptance-test inventory for
+security-sensitive implementations. HG-002 promotes Node identity, credential,
+trust, capability, session, and replay cases to `implemented` and links each to
+an executable public-boundary test. Policy, Privacy Gateway, node-local sensor
+gate, and tool-executor cases remain explicitly `not_implemented`.
 
 When a later task implements a boundary:
 
