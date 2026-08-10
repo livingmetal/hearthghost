@@ -1,6 +1,8 @@
 import "./styles.css";
 import { BrowserDevelopmentNodePlatform } from "./node/browser-platform.js";
 import { ClientNode } from "./node/client-node.js";
+import { loadCharacterRenderer } from "./character/renderer-loader.js";
+import { CharacterViewport } from "./character/viewport.js";
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (root === null) {
@@ -18,8 +20,6 @@ root.innerHTML = `
       <span>Cloud media: denied</span>
     </header>
     <section class="character-viewport" aria-label="Character viewport">
-      <div class="character-placeholder" aria-hidden="true">HG</div>
-      <p>Character renderer is not loaded</p>
     </section>
     <section class="interaction-panel">
       <label for="message">Text conversation</label>
@@ -35,6 +35,18 @@ root.innerHTML = `
 const connectButton = root.querySelector<HTMLButtonElement>("[data-connect]");
 const nodeStatus = root.querySelector<HTMLElement>("[data-node-status]");
 const notice = root.querySelector<HTMLElement>("[data-notice]");
+const viewportElement = root.querySelector<HTMLElement>(".character-viewport");
+if (viewportElement === null) {
+  throw new Error("CharacterViewport element is missing");
+}
+const rendererKind = document.documentElement.dataset.characterRenderer === "vrm"
+  ? "vrm"
+  : "dom";
+const viewport = new CharacterViewport(
+  viewportElement,
+  await loadCharacterRenderer(rendererKind),
+);
+await viewport.mount();
 
 connectButton?.addEventListener("click", async () => {
   const snapshot = await node.connect({
@@ -52,5 +64,8 @@ connectButton?.addEventListener("click", async () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     void node.suspend();
+    viewport.suspend();
+  } else {
+    viewport.resume();
   }
 });

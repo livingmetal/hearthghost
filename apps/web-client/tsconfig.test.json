@@ -6,5 +6,5 @@
     "outDir": ".test-dist",
     "rootDir": "src"
   },
-  "include": ["src/node"]
+  "include": ["src/node", "src/character"]
 }

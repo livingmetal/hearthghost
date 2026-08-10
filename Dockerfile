@@ -51,4 +51,4 @@ RUN npm run check \
 
 USER node
 
-CMD ["node", "--test", "tests/client-node.test.mjs"]
+CMD ["node", "--test", "tests/client-node.test.mjs", "tests/character-presentation.test.mjs"]

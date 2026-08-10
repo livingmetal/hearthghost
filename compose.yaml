@@ -62,6 +62,7 @@ services:
       - node
       - --test
       - tests/client-node.test.mjs
+      - tests/character-presentation.test.mjs
     network_mode: "none"
     read_only: true
     tmpfs:
