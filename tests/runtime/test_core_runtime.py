@@ -40,6 +40,7 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(core.node_gateway)
         self.assertIsNotNone(core.node_administration)
         self.assertIsNotNone(core.policy)
+        self.assertIsNotNone(core.conversation)
         self.assertIsNotNone(core.registry)
 
     def test_unconfigured_security_boundaries_all_fail_closed(self):

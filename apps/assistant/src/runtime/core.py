@@ -22,16 +22,22 @@ from apps.assistant.src.adapters.in_memory_core import (
     InMemorySessionRepository,
     RejectingCredentialAuthenticator,
 )
+from apps.assistant.src.adapters.in_memory_conversation import (
+    InMemoryConversationRepository,
+)
+from apps.assistant.src.modules.conversation import ConversationManager
 from apps.assistant.src.modules.node_administration import NodeAdministration
 from apps.assistant.src.modules.node_security import NodeGatewaySecurity, SystemClock
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
+from apps.assistant.src.ports.conversation import ConversationRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
 from apps.assistant.src.ports.policy import PolicyBoundary
 
 
 DEFAULT_BIND_ADDRESS = "127.0.0.1"
 DEFAULT_STATUS_PORT = 8080
+DEFAULT_FOLLOW_UP_TIMEOUT = timedelta(seconds=45)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 
 
@@ -42,6 +48,7 @@ class CoreComponents:
     node_gateway: NodeGatewaySecurity
     node_administration: NodeAdministration
     policy: PolicyBoundary
+    conversation: ConversationManager
     registry: InMemoryNodeRegistry
     credentials: InMemoryCredentialRepository
     contracts: ContractCatalog
@@ -93,6 +100,7 @@ class CoreComponents:
                 "policy": (
                     "configured" if self.policy_rules_configured else "deny_only"
                 ),
+                "conversation": "text_only",
             },
             "readiness_reasons": readiness["reasons"],
         }
@@ -104,6 +112,8 @@ def build_core(
     authenticator: CredentialAuthenticator | None = None,
     administrator_authorizer: AdministratorAuthorizer | None = None,
     policy: PolicyBoundary | None = None,
+    conversation_repository: ConversationRepository | None = None,
+    follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
 ) -> CoreComponents:
     """Build Core with explicit deny-only substitutes for missing authorities."""
 
@@ -123,6 +133,11 @@ def build_core(
         else DenyingAdministratorAuthorizer()
     )
     selected_policy = policy if policy is not None else UnconfiguredPolicyBoundary()
+    selected_conversation_repository = (
+        conversation_repository
+        if conversation_repository is not None
+        else InMemoryConversationRepository()
+    )
     gateway = NodeGatewaySecurity(
         authenticator=selected_authenticator,
         credentials=credentials,
@@ -138,10 +153,16 @@ def build_core(
         capabilities=registry,
         clock=clock,
     )
+    conversation = ConversationManager(
+        repository=selected_conversation_repository,
+        clock=clock,
+        follow_up_timeout=follow_up_timeout,
+    )
     return CoreComponents(
         node_gateway=gateway,
         node_administration=administration,
         policy=selected_policy,
+        conversation=conversation,
         registry=registry,
         credentials=credentials,
         contracts=ContractCatalog(contracts_root or REPOSITORY_ROOT / "contracts"),

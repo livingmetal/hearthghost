@@ -26,3 +26,7 @@ in the Node Gateway and registry boundaries.
 `policy.py` defines the proposal-evaluation boundary used by the Core. Missing or
 malformed Policy results must never be interpreted as allow; the HG-005 default
 implementation explicitly denies every proposal until rules are configured.
+
+`conversation.py` stores bounded text conversation state separately from Node
+technical sessions. Repository or trusted-time failure rejects the transition;
+it never ends or mutates a Node identity/session as a side effect.

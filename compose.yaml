@@ -63,6 +63,7 @@ services:
       - --test
       - tests/client-node.test.mjs
       - tests/character-presentation.test.mjs
+      - tests/conversation-controller.test.mjs
     network_mode: "none"
     read_only: true
     tmpfs:

@@ -34,3 +34,9 @@ audit persistence. It exposes no device or Tool executor.
 HG-005 adds `policy.py` as an explicit deny-only Policy boundary for the initial
 Core composition. It cannot produce an allow decision; reviewed rules,
 confirmation state, and a real Policy implementation remain future work.
+
+HG-009 adds `conversation.py` for bounded text-only dialogue state. A
+conversation opens only from a Gateway-admitted `conversation.text` context,
+keeps its identifier and lifetime separate from the Node technical session,
+and emits semantic state events. It has no provider, Policy, Tool, media, or
+device call.
