@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -153,7 +153,7 @@ the peer; it does not make the peer universally trustworthy.
 - CA topology, root-key storage, issuance, renewal, and recovery;
 - certificate profile, key algorithm, lifetime, and subject/extension mapping;
 - Android Keystore and embedded secure-storage integration;
-- TLS library and transport selection;
+- production listener and application framing;
 - bounded rotation overlap, if operational evidence requires one;
 - persistent revocation and replay storage technology;
 - whether application-level signatures are needed in addition to mTLS.

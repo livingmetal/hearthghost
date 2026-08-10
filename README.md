@@ -815,10 +815,11 @@ python -m unittest discover -s tests -p "test_*.py"
 ## Status
 
 HearthGhost has an implementation foundation, versioned contracts, the core
-Node security boundary, and a privileged Node administration boundary. The
+Node security boundary, a privileged Node administration boundary, and a TLS
+1.3 mutual-authentication adapter for already-connected Node sockets. The
 repository includes a containerized validation environment, but no production
 runtime deployment, renderer, device integration, administrator identity
-provider, or transport listener has been implemented.
+provider, production PKI, or transport listener has been implemented.
 
 The next work should implement one narrowly scoped security boundary against the
 contracts without bypassing Policy, Privacy Gateway, node-local media gates, or

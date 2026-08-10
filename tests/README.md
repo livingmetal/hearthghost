@@ -20,6 +20,10 @@ policy service unavailable -> sensitive action denied
 
 The test suite must not use real household secrets, private media, addresses, access tokens, or production credentials.
 
+Secure-transport integration tests generate short-lived, test-only certificates
+inside an operating-system temporary directory. The fixtures are removed after
+the tests and do not establish production certificate authority policy.
+
 When a task changes a trust boundary, contract, or security policy, tests should demonstrate that the intended negative cases remain closed.
 
 ## Reproducible validation

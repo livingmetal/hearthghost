@@ -10,6 +10,12 @@ HG-003 adds executable denial coverage for authenticated-Node privilege
 confusion, automatic trust, stale administration revisions, unadvertised grants,
 and non-atomic privileged audit writes.
 
+HG-004 adds ephemeral-certificate integration coverage for TLS downgrade and
+profile enforcement, missing client certificates, server hostname mismatch,
+unknown certificate mappings, resolver failure, and the rule that successful
+mTLS authentication does not grant Node authority. The fixtures are generated
+at test time and never committed.
+
 When a later task implements a boundary:
 
 1. create an executable test through the public boundary rather than mocking the

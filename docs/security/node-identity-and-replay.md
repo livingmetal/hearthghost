@@ -15,8 +15,9 @@ credential proof verified
 ```
 
 HG-002 implements a transport-neutral application boundary. It opens no
-listener and performs no cryptography. A future credential adapter supplies a
-verified public credential result using mature platform/library primitives.
+listener and performs no cryptography. HG-004 supplies a standard-library mTLS
+credential adapter while preserving that domain separation; the adapter still
+opens no listener.
 
 ## Domain records
 
@@ -116,7 +117,7 @@ The implemented ordering is:
 
 ```text
 opaque transport presentation
-  -> credential authenticator (future adapter; no custom crypto)
+  -> credential authenticator (HG-004 mTLS adapter; no custom crypto)
   -> verified credential_id + node_id
   -> authoritative credential lifecycle / expiry / revocation
   -> credential-to-Node binding
@@ -232,8 +233,8 @@ presentations.
 
 ## Deferred work
 
-- network protocol and listener;
-- TLS/PKI and certificate enrollment;
+- network listener and application framing;
+- production PKI and certificate enrollment;
 - persistent repository and replay-store implementations;
 - persistent administration store and administrator identity implementation;
 - Policy Decision binding to a device action;

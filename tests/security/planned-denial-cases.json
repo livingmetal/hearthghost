@@ -30,6 +30,27 @@
       "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_unknown_credential_is_denied"
     },
     {
+      "id": "missing-node-client-certificate",
+      "precondition": "a transport peer does not present a Node client certificate",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_tls_transport.NodeTlsTransportTests.test_server_rejects_client_without_certificate"
+    },
+    {
+      "id": "unknown-node-client-certificate",
+      "precondition": "a TLS-valid Node certificate has no registered credential binding",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_tls_transport.NodeTlsTransportTests.test_valid_but_unknown_certificate_is_not_an_identity"
+    },
+    {
+      "id": "node-certificate-resolver-unavailable",
+      "precondition": "the verified certificate cannot be resolved because the identity store fails",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_tls_transport.NodeTlsTransportTests.test_identity_store_failure_is_denied_by_node_gateway"
+    },
+    {
       "id": "expired-credential",
       "precondition": "credential is expired at trusted server time",
       "expected_decision": "deny",

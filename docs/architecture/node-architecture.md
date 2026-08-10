@@ -95,6 +95,14 @@ its privileged audit metadata. See `../security/node-administration.md`.
 Administration success changes registry state only. It does not approve a
 current action, create a Tool execution permission, or bypass a node-local gate.
 
+## Secure transport boundary
+
+HG-004 uses TLS 1.3 mutual certificate authentication for already-connected
+sockets, as described by ADR-0002 and `../security/node-tls-transport.md`. The
+adapter validates the transport profile and maps the verified certificate to
+credential identity evidence. It owns no listener, Node trust decision,
+capability grant, Policy decision, or device execution authority.
+
 ## Capability routing
 
 Requests should resolve by capability and context, not by hard-coded product names.

@@ -17,3 +17,8 @@ persistence implementation.
 administrator authorization, advertised-capability lookup, and an atomic
 revision/idempotency/state/audit store. It deliberately selects no identity
 provider, database, message broker, or audit backend.
+
+`node_transport.py` defines the HG-004 mapping from a TLS-verified public Node
+certificate to credential identity evidence. Certificate verification remains
+in the adapter; lifecycle, revocation, trust, and capability authority remain
+in the Node Gateway and registry boundaries.
