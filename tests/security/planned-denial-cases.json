@@ -135,6 +135,34 @@
       "executable_test": "tests.security.test_node_administration.NodeAdministrationTests.test_atomic_audit_failure_does_not_change_state"
     },
     {
+      "id": "mock-node-plaintext-or-oversized-frame",
+      "precondition": "a Node Gateway frame is plaintext or exceeds the bounded frame size",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.integration.test_mock_node_e2e.MockNodeEndToEndTests.test_protocol_rejects_plaintext_and_oversized_frames"
+    },
+    {
+      "id": "mock-node-revoked-capability",
+      "precondition": "an open Mock Node session requests a capability after its grant is revoked",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.integration.test_mock_node_e2e.MockNodeEndToEndTests.test_full_mock_node_security_lifecycle"
+    },
+    {
+      "id": "mock-node-revoked-trust",
+      "precondition": "an open Mock Node session requests a capability after Node trust is removed",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.integration.test_mock_node_e2e.MockNodeEndToEndTests.test_full_mock_node_security_lifecycle"
+    },
+    {
+      "id": "mock-node-revoked-credential-reconnect",
+      "precondition": "a Mock Node uses an open session or reconnects after credential revocation",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.integration.test_mock_node_e2e.MockNodeEndToEndTests.test_full_mock_node_security_lifecycle"
+    },
+    {
       "id": "llm-hard-policy-modification",
       "precondition": "LLM proposes a Hard Policy mutation through conversation",
       "expected_decision": "deny",

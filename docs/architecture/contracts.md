@@ -78,7 +78,9 @@ Node identity and capability v2 plus the Node credential lifecycle contract
 deliberately keep logical trust, credential validity, advertised capabilities,
 and grants separate. Node Gateway replay admission uses a technical session
 identifier and monotonically increasing per-session sequence in domain code;
-transport framing remains deferred.
+HG-006 adds a bounded length-prefixed JSON v1.0 frame for technical session
+open/close and sequenced capability requests. It does not define media transport
+or a network listener.
 
 Node administration command/result v1 represents explicit registry mutation.
 Its operation ID provides idempotency and its expected revision prevents stale

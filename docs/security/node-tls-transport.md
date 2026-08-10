@@ -47,13 +47,14 @@ The adapter wraps an already-connected socket. It does not:
 - bind or listen on an address;
 - expose a container port;
 - select TCP routing, HTTP, WebSocket, gRPC, MQTT, or QUIC;
-- parse Node application messages;
+- create or own Node application messages (HG-006 adds a separate bounded
+  framing adapter);
 - serialize concurrent requests before replay admission;
 - issue certificates or retain private keys.
 
-The HG-005 Core runtime must make listener scope and application framing
-explicit. A transport that allows concurrent or reordered application messages
-must deliver them in sequence order before calling the replay boundary.
+HG-006 defines ordered v1.0 session/capability framing but still creates no
+listener. A future transport that allows concurrent or reordered application
+messages must deliver them in sequence order before calling the replay boundary.
 
 ## Test credential handling
 

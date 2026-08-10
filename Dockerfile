@@ -28,3 +28,10 @@ COPY --chown=hearthghost:hearthghost apps ./apps
 COPY --chown=hearthghost:hearthghost contracts ./contracts
 
 CMD ["python", "-m", "apps.assistant.src.runtime.core"]
+
+FROM runtime-base AS mock-node
+
+COPY --chown=hearthghost:hearthghost apps ./apps
+COPY --chown=hearthghost:hearthghost contracts ./contracts
+
+CMD ["python", "-m", "apps.mock_node.src.client", "--check"]

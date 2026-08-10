@@ -116,7 +116,7 @@ not begin until persistent security state and restart behavior are reviewed.
 
 ## Deferred decisions
 
-- secure Node listener and application framing;
+- secure Node listener and connection resource limits;
 - persistent registry, credential, audit, session, and replay stores;
 - administrator identity provider and management interface;
 - actual Policy rules and confirmation state;

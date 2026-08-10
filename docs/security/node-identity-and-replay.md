@@ -233,7 +233,7 @@ presentations.
 
 ## Deferred work
 
-- network listener and application framing;
+- network listener, connection limits, and media framing;
 - production PKI and certificate enrollment;
 - persistent repository and replay-store implementations;
 - persistent administration store and administrator identity implementation;

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v1.0:node-gateway-message",
+  "title": "Node Gateway Message v1.0",
+  "description": "A framed request on an authenticated Node transport. Possession of message fields is not authentication, authorization, or Policy approval.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "message_type", "request_id"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "message_type": {
+      "enum": ["session.open", "capability.request", "session.close"]
+    },
+    "request_id": { "type": "string", "format": "uuid" },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "capability": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "message_type": { "const": "session.open" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "required": ["node_id"],
+        "not": {
+          "anyOf": [
+            { "required": ["session_id"] },
+            { "required": ["sequence"] },
+            { "required": ["capability"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "capability.request" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "required": ["session_id", "sequence", "capability"],
+        "not": { "required": ["node_id"] }
+      }
+    },
+    {
+      "if": {
+        "properties": { "message_type": { "const": "session.close" } },
+        "required": ["message_type"]
+      },
+      "then": {
+        "required": ["session_id"],
+        "not": {
+          "anyOf": [
+            { "required": ["node_id"] },
+            { "required": ["sequence"] },
+            { "required": ["capability"] }
+          ]
+        }
+      }
+    }
+  ]
+}

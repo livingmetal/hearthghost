@@ -20,6 +20,8 @@ EXPECTED_SCHEMAS = {
     "node/v1/node-credential.schema.json",
     "node/v1/node-administration-command.schema.json",
     "node/v1/node-administration-result.schema.json",
+    "node/v1/node-gateway-message.schema.json",
+    "node/v1/node-gateway-result.schema.json",
     "node/v1/node-capabilities.schema.json",
     "node/v2/node-identity.schema.json",
     "node/v2/node-capabilities.schema.json",
@@ -324,6 +326,33 @@ class ContractFoundationTests(unittest.TestCase):
         self.assertNotIn("execution_allowed", result_properties)
         self.assertNotIn("policy_decision", result_properties)
         self.assertIn("not Policy approval", result["description"])
+
+    def test_node_gateway_messages_preserve_session_replay_and_authority_separation(self):
+        message = self.schemas[
+            "node/v1/node-gateway-message.schema.json"
+        ]
+        self.assertEqual(
+            {
+                "session.open",
+                "capability.request",
+                "session.close",
+            },
+            set(message["properties"]["message_type"]["enum"]),
+        )
+        self.assertEqual(
+            1,
+            message["properties"]["sequence"]["minimum"],
+        )
+        self.assertNotIn("authorized", message["properties"])
+        self.assertNotIn("policy_decision", message["properties"])
+
+        result = self.schemas["node/v1/node-gateway-result.schema.json"]
+        self.assertEqual(
+            {"accepted", "denied"},
+            set(result["properties"]["outcome"]["enum"]),
+        )
+        self.assertNotIn("execution_allowed", result["properties"])
+        self.assertIn("never a Policy Decision", result["description"])
 
     def test_audit_metadata_is_allowlisted(self):
         audit = self.schemas["events/v1/audit-event.schema.json"]

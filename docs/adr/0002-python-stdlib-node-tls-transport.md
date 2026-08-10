@@ -158,7 +158,7 @@ test evidence, not a production version pin.
 - production CA topology, certificate profile, issuance, storage, and recovery;
 - persistent certificate-to-credential resolver;
 - network listener address, port, accept-loop, and connection limits;
-- application framing, request size limits, and ordered delivery integration;
+- message types beyond the bounded HG-006 session/capability frame and media;
 - production certificate revocation distribution beyond the authoritative
   application lifecycle check;
 - Android TLS/Keystore implementation.

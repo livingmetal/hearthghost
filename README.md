@@ -828,9 +828,11 @@ HearthGhost has an implementation foundation, versioned contracts, the core
 Node security boundary, a privileged Node administration boundary, and a TLS
 1.3 mutual-authentication adapter for already-connected Node sockets. A minimal
 containerized Core composes those boundaries with deny-only defaults and
-loopback health/status. There is still no production deployment, renderer,
-device integration, administrator identity provider, production PKI, Node
-listener, persistent state, or Policy allow path.
+loopback health/status. A test-only Mock Node proves the framed mTLS lifecycle
+with `display`, `speaker`, and `test.echo` declarations. There is still no
+production deployment, renderer, physical device integration, administrator
+identity provider, production PKI, Node listener, persistent state, or Policy
+allow path.
 
 The next work should implement one narrowly scoped security boundary against the
 contracts without bypassing Policy, Privacy Gateway, node-local media gates, or

@@ -72,5 +72,6 @@ not be treated as sufficient input validation for a security-sensitive handler.
 
 Restarting loses all state and invalidates sessions. No Node listener, user
 administration endpoint, Tool executor, database, production certificate, or
-Policy allow path exists. These omissions are visible through readiness rather
+Policy allow path exists. HG-006 adds only bounded connected-socket framing and
+a test-only Mock Node. These omissions remain visible through readiness rather
 than hidden behind demo defaults.

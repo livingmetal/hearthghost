@@ -40,6 +40,14 @@ class ContainerFoundationTests(unittest.TestCase):
         self.assertNotIn("COPY .env", self.dockerfile)
         self.assertNotIn("COPY secrets", self.dockerfile)
 
+    def test_mock_node_image_is_outbound_only_and_uses_the_runtime_base(self):
+        self.assertIn("FROM runtime-base AS mock-node", self.dockerfile)
+        self.assertIn(
+            'CMD ["python", "-m", "apps.mock_node.src.client", "--check"]',
+            self.dockerfile,
+        )
+        self.assertNotIn("EXPOSE", self.dockerfile)
+
     def test_compose_test_service_preserves_security_baseline(self):
         required = {
             'network_mode: "none"',

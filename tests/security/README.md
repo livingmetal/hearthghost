@@ -16,6 +16,11 @@ unknown certificate mappings, resolver failure, and the rule that successful
 mTLS authentication does not grant Node authority. The fixtures are generated
 at test time and never committed.
 
+HG-006 extends this into a framed Mock Node lifecycle. One E2E scenario proves
+unknown-Node denial, explicit enrollment/trust/grant, replay rejection,
+capability and trust revocation, credential revocation, and reconnect behavior.
+The Mock Node cannot administer itself and has no media or physical capability.
+
 When a later task implements a boundary:
 
 1. create an executable test through the public boundary rather than mocking the

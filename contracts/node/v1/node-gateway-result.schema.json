@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v1.0:node-gateway-result",
+  "title": "Node Gateway Result v1.0",
+  "description": "A transport request result. Accepted means only the named Node Gateway operation succeeded; it is never a Policy Decision or device execution authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "message_type", "request_id", "outcome", "reason_code"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "message_type": { "const": "node.result" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "outcome": { "enum": ["accepted", "denied"] },
+    "reason_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "session_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    }
+  }
+}

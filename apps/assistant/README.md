@@ -5,8 +5,9 @@ server-side application runtime. HG-002 adds a dependency-free Python Node
 Gateway security module; HG-003 adds the privileged Node enrollment and registry
 administration boundary; HG-004 adds a standard-library TLS 1.3 adapter for
 already-connected Node sockets; HG-005 composes the boundaries into a minimal
-containerized Core with loopback-only status. The domain ports do not select a
-web framework, database, production PKI, Node protocol, or deployment stack.
+containerized Core with loopback-only status; HG-006 adds bounded Node Gateway
+framing used by a test-only Mock Node. The domain ports do not select a web
+framework, database, production PKI, network listener, or deployment stack.
 
 Expected logical responsibilities include:
 

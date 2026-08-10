@@ -63,4 +63,9 @@ read-only filesystems, and restricted build context.
 registry adapter, contract catalog, loopback-only status listener, and separate
 liveness/readiness semantics.
 
+`integration/` runs the test-only Mock Node through ephemeral mutual TLS,
+versioned framing, administration, technical session, replay, capability/trust
+revocation, credential revocation, and reconnect behavior. It uses no real
+credentials, media, listener, or physical capability.
+
 See `../AGENTS.md` and `../docs/security/threat-model.md`.

@@ -22,6 +22,8 @@ It does not select a runtime language, web framework, or wire transport.
 | Node | `node/v1/node-credential.schema.json` | Credential lifecycle and per-Node binding without secret material |
 | Node | `node/v1/node-administration-command.schema.json` | Revisioned, idempotent privileged registry mutation |
 | Node | `node/v1/node-administration-result.schema.json` | Mutation result without Policy or execution authority |
+| Node | `node/v1/node-gateway-message.schema.json` | Framed technical-session and sequenced capability request |
+| Node | `node/v1/node-gateway-result.schema.json` | Gateway result without Policy or execution authority |
 | Node | `node/v1/node-capabilities.schema.json` | Preserved HG-001 capability/trust snapshot |
 | Node | `node/v2/node-capabilities.schema.json` | Advertised and granted capabilities, independent of trust |
 
@@ -42,5 +44,9 @@ compatibility. See `VERSIONING.md`.
 Contracts express HearthGhost semantics rather than vendor/provider payloads.
 Binary audio, images, and video are intentionally absent; future media flows
 must use dedicated binary transport or opaque references approved by policy.
+
+Node Gateway message/result v1 is carried only after mutual TLS. Framing
+success, transport authentication, or an `accepted` result never represents a
+Policy Decision or device execution authority.
 
 See `VERSIONING.md` and `../docs/architecture/contracts.md`.

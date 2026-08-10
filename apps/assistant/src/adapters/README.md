@@ -18,3 +18,8 @@ session, replay, and deny-only identity adapters for HG-005. They are executable
 development/runtime composition pieces, not production persistence or identity
 providers. `contract_catalog.py` loads only schema identity/version metadata and
 does not pretend to perform full JSON Schema validation.
+
+`node_gateway_protocol.py` implements bounded v1.0 framing after mutual TLS. It
+rejects unknown message fields and dispatches only session open/close and
+sequenced capability admission. It owns no listener and an accepted result
+remains narrower than Policy or execution.

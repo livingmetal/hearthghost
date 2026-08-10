@@ -25,6 +25,7 @@ from apps.assistant.src.modules.node_security import (
     SENSITIVE_LOCAL_CAPABILITIES,
     CapabilityAdvertisement,
     CredentialRecord,
+    CredentialStatus,
     NodeRecord,
     NodeSession,
     VerifiedCredential,
@@ -67,6 +68,22 @@ class InMemoryCredentialRepository:
         with self._lock:
             if record.credential_id in self._records:
                 raise ValueError("credential already exists")
+            self._records[record.credential_id] = record
+
+    def replace(self, record: CredentialRecord) -> None:
+        """Replace existing lifecycle metadata without changing its identity."""
+
+        with self._lock:
+            prior = self._records.get(record.credential_id)
+            if prior is None:
+                raise ValueError("credential does not exist")
+            if prior.node_id != record.node_id:
+                raise ValueError("credential Node binding cannot change")
+            if (
+                prior.status is not CredentialStatus.ACTIVE
+                and record != prior
+            ):
+                raise ValueError("terminal credential lifecycle cannot change")
             self._records[record.credential_id] = record
 
 
