@@ -19,4 +19,3 @@ class InMemoryConversationRepository:
     def put(self, session: ConversationSession) -> None:
         with self._lock:
             self._sessions[session.session_id] = session
-
