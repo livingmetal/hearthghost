@@ -826,15 +826,16 @@ docker compose --profile runtime down
 
 HearthGhost has an implementation foundation, versioned contracts, the core
 Node security boundary, a privileged Node administration boundary, and a TLS
-1.3 mutual-authentication adapter for already-connected Node sockets. A minimal
-containerized Core composes those boundaries with deny-only defaults and
-loopback health/status. A test-only Mock Node proves the framed mTLS lifecycle
-with `display`, `speaker`, and `test.echo` declarations. There is still no
-production deployment, renderer, physical device integration, administrator
-identity provider, production PKI, Node listener, persistent state, or Policy
-allow path.
+1.3 mutual-authentication adapter. A minimal containerized Core keeps deny-only
+defaults and loopback health/status. The separate HG-012 development runtime
+adds a narrowly published rootless mTLS Node listener, restrictive file-backed
+development registry/credential state, explicit local administration, and a
+development PKI whose authority remains outside the container and repository.
+A test-only Mock Node proves the framed lifecycle. There is still no production
+deployment, physical device integration, administrator identity provider,
+production PKI, database, or Policy allow path.
 
-The next work should implement one narrowly scoped security boundary against the
-contracts without bypassing Policy, Privacy Gateway, node-local media gates, or
-adapter isolation. See `docs/architecture/implementation-foundation.md` for the
-decisions deliberately deferred by HG-001.
+The next physical slice packages the reviewed web client in Android, keeps the
+Node private key non-exportable in Android Keystore, and connects through the
+narrow native mTLS bridge. It must not bypass Policy, Privacy Gateway,
+node-local media gates, or adapter isolation.

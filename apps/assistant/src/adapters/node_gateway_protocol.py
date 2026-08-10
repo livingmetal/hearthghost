@@ -68,10 +68,26 @@ class NodeGatewayProtocol:
     def handle_next(self, channel: ssl.SSLSocket) -> GatewayResult:
         if not isinstance(channel, ssl.SSLSocket):
             raise NodeProtocolError("Node Gateway requires an authenticated TLS channel")
-        message = read_gateway_message(channel)
+        return self.handle_document(channel, read_frame(channel))
+
+    def handle_document(
+        self,
+        channel: ssl.SSLSocket,
+        document: object,
+    ) -> GatewayResult:
+        """Handle one already-framed document on an authenticated channel."""
+
+        if not isinstance(channel, ssl.SSLSocket):
+            raise NodeProtocolError("Node Gateway requires an authenticated TLS channel")
+        message = parse_gateway_message(document)
         result = self._dispatch(channel, message)
         write_frame(channel, result.to_document())
         return result
+
+    def close_bound_session(self, channel: ssl.SSLSocket, session_id: str) -> bool:
+        """Close connection-owned session state without emitting another frame."""
+
+        return self._gateway.close_session(channel, session_id)
 
     def _dispatch(
         self,
@@ -116,7 +132,12 @@ class NodeGatewayProtocol:
 
 
 def read_gateway_message(channel: socket.socket) -> GatewayMessage:
-    document = read_frame(channel)
+    return parse_gateway_message(read_frame(channel))
+
+
+def parse_gateway_message(document: object) -> GatewayMessage:
+    """Validate a decoded Node Gateway document without weakening framing."""
+
     if not isinstance(document, dict):
         raise NodeProtocolError("Node message must be an object")
     if document.get("contract_version") != CONTRACT_VERSION:

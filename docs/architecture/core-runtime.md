@@ -75,3 +75,19 @@ administration endpoint, Tool executor, database, production certificate, or
 Policy allow path exists. HG-006 adds only bounded connected-socket framing and
 a test-only Mock Node. These omissions remain visible through readiness rather
 than hidden behind demo defaults.
+
+## Rootless development deployment
+
+HG-012 adds a separate, explicitly development-only composition without
+changing the deny-only default Core above. It uses a file-backed Node registry
+and credential lifecycle adapter, fake LLM responses, a local-only
+administration CLI, and the mTLS listener selected in ADR-0006. Session,
+conversation, and replay state remain ephemeral so a process restart requires a
+new technical session.
+
+The rootless Podman deployment binds the application to `10.89.0.10:8443` on an
+internal network and publishes only `192.168.55.100:38443`. Status remains on
+container loopback and is not published. The development CA authority is
+outside the repository and its private key is not mounted into the runtime.
+This is not a production deployment, database, administrator identity provider,
+or production PKI.

@@ -95,7 +95,18 @@ class ConversationProtocol:
     def handle_next(self, channel: ssl.SSLSocket) -> ConversationWireResult:
         if not isinstance(channel, ssl.SSLSocket):
             raise NodeProtocolError("Conversation requires an authenticated TLS channel")
-        command = read_conversation_command(channel)
+        return self.handle_document(channel, read_frame(channel))
+
+    def handle_document(
+        self,
+        channel: ssl.SSLSocket,
+        document: object,
+    ) -> ConversationWireResult:
+        """Handle one already-framed command on an authenticated channel."""
+
+        if not isinstance(channel, ssl.SSLSocket):
+            raise NodeProtocolError("Conversation requires an authenticated TLS channel")
+        command = parse_conversation_command(document)
         admission = self._gateway.admit_request(
             channel,
             CapabilityRequest(
@@ -165,7 +176,12 @@ class ConversationProtocol:
 
 
 def read_conversation_command(channel) -> ConversationCommand:
-    document = read_frame(channel)
+    return parse_conversation_command(read_frame(channel))
+
+
+def parse_conversation_command(document: object) -> ConversationCommand:
+    """Validate a decoded conversation document without weakening framing."""
+
     if not isinstance(document, dict):
         raise NodeProtocolError("Conversation command must be an object")
     if document.get("contract_version") != CONTRACT_VERSION:

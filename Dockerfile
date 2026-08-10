@@ -47,6 +47,10 @@ FROM core AS openai-smoke
 
 CMD ["python", "-m", "apps.assistant.src.runtime.openai_smoke", "--adapter", "openai"]
 
+FROM core AS development-core
+
+CMD ["python", "-m", "apps.assistant.src.runtime.development_server", "--state", "/var/lib/hearthghost/state.json", "--certificate", "/run/hearthghost-tls/server.crt", "--private-key", "/run/hearthghost-tls/server.key", "--client-ca", "/run/hearthghost-tls/client-ca.crt"]
+
 FROM test AS walking-skeleton
 
 CMD ["python", "-m", "unittest", "-v", "tests.integration.test_text_walking_skeleton_e2e"]

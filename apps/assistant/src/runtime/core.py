@@ -59,13 +59,14 @@ class CoreComponents:
     conversation: ConversationManager
     privacy_gateway: PrivacyGateway
     orchestrator: ConversationOrchestrator
-    registry: InMemoryNodeRegistry
-    credentials: InMemoryCredentialRepository
+    registry: object
+    credentials: object
     contracts: ContractCatalog
     transport_configured: bool
     administrator_authority_configured: bool
     policy_rules_configured: bool
     llm_configured: bool
+    storage_kind: str = "ephemeral"
 
     def liveness(self) -> dict[str, object]:
         return {
@@ -95,7 +96,7 @@ class CoreComponents:
         return {
             "service": "hearthghost-core",
             "status": "ready" if ready else "degraded",
-            "storage": "ephemeral",
+            "storage": self.storage_kind,
             "contracts_loaded": self.contracts.count,
             "boundaries": {
                 "node_gateway": "loaded",
@@ -127,16 +128,23 @@ def build_core(
     authenticator: CredentialAuthenticator | None = None,
     administrator_authorizer: AdministratorAuthorizer | None = None,
     policy: PolicyBoundary | None = None,
+    node_registry: object | None = None,
+    credential_repository: object | None = None,
     conversation_repository: ConversationRepository | None = None,
     follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
     llm: LLMPort | None = None,
     llm_timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS,
+    storage_kind: str = "ephemeral",
 ) -> CoreComponents:
     """Build Core with explicit deny-only substitutes for missing authorities."""
 
     clock = SystemClock()
-    registry = InMemoryNodeRegistry()
-    credentials = InMemoryCredentialRepository()
+    registry = node_registry if node_registry is not None else InMemoryNodeRegistry()
+    credentials = (
+        credential_repository
+        if credential_repository is not None
+        else InMemoryCredentialRepository()
+    )
     sessions = InMemorySessionRepository()
     replay = InMemoryReplayProtector()
     selected_authenticator = (
@@ -198,6 +206,7 @@ def build_core(
         administrator_authority_configured=administrator_authorizer is not None,
         policy_rules_configured=policy is not None,
         llm_configured=llm is not None,
+        storage_kind=storage_kind,
     )
 
 
