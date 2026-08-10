@@ -48,6 +48,17 @@ class ContainerFoundationTests(unittest.TestCase):
         )
         self.assertNotIn("EXPOSE", self.dockerfile)
 
+    def test_client_validation_image_uses_locked_dependencies_and_no_secrets(self):
+        self.assertIn("FROM node:22-bookworm-slim AS client-test", self.dockerfile)
+        self.assertIn(
+            "apps/web-client/package.json apps/web-client/package-lock.json",
+            self.dockerfile,
+        )
+        self.assertIn("npm ci --ignore-scripts --no-audit --no-fund", self.dockerfile)
+        self.assertIn("USER node", self.dockerfile)
+        self.assertNotIn("OPENAI_API_KEY", self.dockerfile)
+        self.assertNotIn("--build-arg", self.dockerfile)
+
     def test_compose_test_service_preserves_security_baseline(self):
         required = {
             'network_mode: "none"',
@@ -89,6 +100,22 @@ class ContainerFoundationTests(unittest.TestCase):
 
         self.assertNotIn("ports:", self.compose)
         self.assertNotIn("expose:", self.compose)
+
+    def test_client_test_service_is_network_isolated_and_hardened(self):
+        client_service = self.compose.split("  client-test:", maxsplit=1)[1]
+        for value in {
+            "target: client-test",
+            'network_mode: "none"',
+            "read_only: true",
+            "- ALL",
+            "- no-new-privileges:true",
+        }:
+            with self.subTest(value=value):
+                self.assertIn(value, client_service)
+
+        for value in {"ports:", "volumes:", "devices:", "privileged: true"}:
+            with self.subTest(value=value):
+                self.assertNotIn(value, client_service)
 
     def test_build_context_excludes_local_and_sensitive_state(self):
         ignored = set(self.dockerignore.splitlines())

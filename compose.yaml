@@ -51,3 +51,22 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+
+  client-test:
+    image: hearthghost-client-test:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: client-test
+    command:
+      - node
+      - --test
+      - tests/client-node.test.mjs
+    network_mode: "none"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

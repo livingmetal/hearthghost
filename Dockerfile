@@ -35,3 +35,20 @@ COPY --chown=hearthghost:hearthghost apps ./apps
 COPY --chown=hearthghost:hearthghost contracts ./contracts
 
 CMD ["python", "-m", "apps.mock_node.src.client", "--check"]
+
+FROM node:22-bookworm-slim AS client-test
+
+WORKDIR /workspace/apps/web-client
+
+COPY --chown=node:node apps/web-client/package.json apps/web-client/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+
+COPY --chown=node:node apps/web-client ./
+
+RUN npm run check \
+    && npm test \
+    && npm run build
+
+USER node
+
+CMD ["node", "--test", "tests/client-node.test.mjs"]
