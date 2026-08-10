@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v1.0:node-administration-result",
+  "title": "Node Administration Result v1.0",
+  "description": "Result of a Node registry mutation; success is not Policy approval or device execution authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "operation_id", "node_id", "outcome", "reason_code", "changed", "idempotent"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "operation_id": { "type": "string", "format": "uuid" },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "outcome": {
+      "enum": ["applied", "idempotent", "no_change", "denied", "conflict", "failed"]
+    },
+    "reason_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "changed": { "type": "boolean" },
+    "idempotent": { "type": "boolean" },
+    "current_revision": { "type": "integer", "minimum": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "outcome": { "const": "applied" } },
+        "required": ["outcome"]
+      },
+      "then": {
+        "required": ["current_revision"],
+        "properties": {
+          "changed": { "const": true },
+          "idempotent": { "const": false }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "outcome": { "enum": ["idempotent", "no_change"] } },
+        "required": ["outcome"]
+      },
+      "then": {
+        "required": ["current_revision"],
+        "properties": {
+          "changed": { "const": false },
+          "idempotent": { "const": true }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "outcome": { "enum": ["denied", "conflict", "failed"] } },
+        "required": ["outcome"]
+      },
+      "then": {
+        "properties": {
+          "changed": { "const": false },
+          "idempotent": { "const": false }
+        }
+      }
+    }
+  ]
+}

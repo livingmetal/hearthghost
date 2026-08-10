@@ -80,6 +80,12 @@ and grants separate. Node Gateway replay admission uses a technical session
 identifier and monotonically increasing per-session sequence in domain code;
 transport framing remains deferred.
 
+Node administration command/result v1 represents explicit registry mutation.
+Its operation ID provides idempotency and its expected revision prevents stale
+updates. Administrator identity comes from the authenticated administration
+boundary rather than caller-supplied contract fields. An applied administration
+result is not a Policy Decision or execution authorization.
+
 ## Versioning
 
 Public event and tool schemas should carry a version. Breaking changes require coordinated schema, test, and documentation updates.

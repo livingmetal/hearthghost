@@ -18,9 +18,9 @@
 
 Contract families advance independently. HG-002 therefore introduces Node
 identity and capability `v2` contracts while the new credential lifecycle starts
-at `v1`. The preserved Node `v1.0` contracts are not valid substitutes for v2 in
-new Node Gateway code because they duplicate or couple credential, trust, and
-grant state.
+at `v1`. The preserved HG-001 Node identity and capability `v1.0` contracts are
+not valid substitutes for v2 in new Node Gateway code because they duplicate or
+couple credential, trust, and grant state.
 
 There is no single Node protocol version implied by these directories. In
 `node/v2/node-identity.schema.json`, `v2` is the major version of the Node

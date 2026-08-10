@@ -41,6 +41,10 @@ For Node authentication, credential rotation/revocation, technical sessions, or
 replay behavior, read `security/node-identity-and-replay.md` and
 `adr/0001-per-node-mutual-authentication.md`.
 
+For Node enrollment, trust administration, capability grants, registry
+revisions, idempotency, or privileged audit, read
+`security/node-administration.md`.
+
 `architecture/implementation-foundation.md` records the reversible HG-001
 foundation choices and the technology decisions deliberately left open.
 

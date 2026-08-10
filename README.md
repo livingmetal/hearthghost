@@ -814,10 +814,11 @@ python -m unittest discover -s tests -p "test_*.py"
 
 ## Status
 
-HearthGhost has an implementation foundation, versioned contracts, and the core
-Node security boundary. The repository includes a containerized validation
-environment, but no production runtime deployment, renderer, device integration,
-or transport listener has been implemented.
+HearthGhost has an implementation foundation, versioned contracts, the core
+Node security boundary, and a privileged Node administration boundary. The
+repository includes a containerized validation environment, but no production
+runtime deployment, renderer, device integration, administrator identity
+provider, or transport listener has been implemented.
 
 The next work should implement one narrowly scoped security boundary against the
 contracts without bypassing Policy, Privacy Gateway, node-local media gates, or

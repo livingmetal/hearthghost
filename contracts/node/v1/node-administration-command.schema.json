@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v1.0:node-administration-command",
+  "title": "Node Administration Command v1.0",
+  "description": "A revisioned, idempotent Node registry mutation request. Administrator identity and authorization come from the authenticated administration boundary, not this payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "operation_id", "correlation_id", "action", "node_id", "expected_revision"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "operation_id": { "type": "string", "format": "uuid" },
+    "correlation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "action": {
+      "enum": [
+        "node.enroll",
+        "node.trust.set",
+        "node.capability.grant",
+        "node.capability.revoke",
+        "node.revoke"
+      ]
+    },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "expected_revision": { "type": "integer", "minimum": 0 },
+    "trust_state": { "enum": ["untrusted", "trusted", "restricted"] },
+    "capability": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "action": { "const": "node.enroll" } },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": { "expected_revision": { "const": 0 } },
+        "not": {
+          "anyOf": [
+            { "required": ["trust_state"] },
+            { "required": ["capability"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "action": { "const": "node.trust.set" } },
+        "required": ["action"]
+      },
+      "then": {
+        "required": ["trust_state"],
+        "properties": { "expected_revision": { "minimum": 1 } },
+        "not": { "required": ["capability"] }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "action": {
+            "enum": ["node.capability.grant", "node.capability.revoke"]
+          }
+        },
+        "required": ["action"]
+      },
+      "then": {
+        "required": ["capability"],
+        "properties": { "expected_revision": { "minimum": 1 } },
+        "not": { "required": ["trust_state"] }
+      }
+    },
+    {
+      "if": {
+        "properties": { "action": { "const": "node.revoke" } },
+        "required": ["action"]
+      },
+      "then": {
+        "properties": { "expected_revision": { "minimum": 1 } },
+        "not": {
+          "anyOf": [
+            { "required": ["trust_state"] },
+            { "required": ["capability"] }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -79,6 +79,41 @@
       "executable_test": "tests.security.test_node_gateway_security.NodeGatewaySecurityTests.test_ambiguous_credential_state_is_denied"
     },
     {
+      "id": "authenticated-node-auto-enrollment",
+      "precondition": "an authenticated Node attempts to use its Node identity as administrative authority",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_administration.NodeAdministrationTests.test_authenticated_node_is_not_administrative_authority_or_enrolled"
+    },
+    {
+      "id": "enrolled-node-auto-trust",
+      "precondition": "a Node has been explicitly enrolled but no separate trust operation was authorized",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_administration.NodeAdministrationTests.test_enrollment_does_not_implicitly_trust_even_when_capabilities_advertised"
+    },
+    {
+      "id": "stale-node-administration-revision",
+      "precondition": "a privileged Node mutation carries a stale expected revision",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_administration.NodeAdministrationTests.test_stale_revision_is_rejected_without_state_or_audit_change"
+    },
+    {
+      "id": "unadvertised-capability-administration-grant",
+      "precondition": "an administrator attempts to grant a capability the Node does not advertise",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_administration.NodeAdministrationTests.test_unadvertised_capability_cannot_be_granted"
+    },
+    {
+      "id": "administration-audit-write-failure",
+      "precondition": "privileged Node state and its audit event cannot be persisted atomically",
+      "expected_decision": "deny",
+      "implementation_status": "implemented",
+      "executable_test": "tests.security.test_node_administration.NodeAdministrationTests.test_atomic_audit_failure_does_not_change_state"
+    },
+    {
       "id": "llm-hard-policy-modification",
       "precondition": "LLM proposes a Hard Policy mutation through conversation",
       "expected_decision": "deny",

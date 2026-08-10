@@ -235,8 +235,8 @@ presentations.
 - network protocol and listener;
 - TLS/PKI and certificate enrollment;
 - persistent repository and replay-store implementations;
-- administrator onboarding and trust mutation workflow;
+- persistent administration store and administrator identity implementation;
 - Policy Decision binding to a device action;
-- audit sink integration;
+- runtime audit adapter integration;
 - node-local camera/microphone gate implementation;
 - conversation sessions and media transport.

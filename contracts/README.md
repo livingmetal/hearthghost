@@ -20,6 +20,8 @@ It does not select a runtime language, web framework, or wire transport.
 | Node | `node/v1/node-identity.schema.json` | Preserved HG-001 identity/credential snapshot |
 | Node | `node/v2/node-identity.schema.json` | Logical Node identity and trust, independent of credentials |
 | Node | `node/v1/node-credential.schema.json` | Credential lifecycle and per-Node binding without secret material |
+| Node | `node/v1/node-administration-command.schema.json` | Revisioned, idempotent privileged registry mutation |
+| Node | `node/v1/node-administration-result.schema.json` | Mutation result without Policy or execution authority |
 | Node | `node/v1/node-capabilities.schema.json` | Preserved HG-001 capability/trust snapshot |
 | Node | `node/v2/node-capabilities.schema.json` | Advertised and granted capabilities, independent of trust |
 
@@ -27,8 +29,8 @@ Every instance carries an explicit `contract_version`. The directory version
 represents that contract's major family. Most foundation contracts remain at
 `v1` / `1.0`; Node identity and capabilities v2 remove the v1 coupling among a
 credential's status, the logical Node's trust state, and capability grants. The
-immutable v1 Node schemas are retained for traceability but must not be used by
-the HG-002 Node Gateway.
+immutable HG-001 Node identity and capability v1 schemas are retained for
+traceability but must not be used by the HG-002 Node Gateway.
 Unknown properties are rejected and consumers must explicitly support a
 revision.
 

@@ -2,7 +2,8 @@
 
 This directory contains the implementation boundary for the HearthGhost
 server-side application runtime. HG-002 adds a dependency-free Python Node
-Gateway security module and technology-neutral ports. It does not select a web
+Gateway security module; HG-003 adds the privileged Node enrollment and registry
+administration boundary. Their technology-neutral ports do not select a web
 framework, network transport, database, PKI implementation, or deployment stack.
 
 Expected logical responsibilities include:
@@ -25,6 +26,10 @@ Security-sensitive device actions must pass through policy and authorization bef
 
 Node Gateway authentication and request admission are narrower checks. They do
 not grant device execution or bypass a node-local sensor gate.
+
+Node administration is also narrower than action authorization. Enrollment,
+trust, and capability grants mutate registry state but never constitute a Policy
+allow or Tool execution permission.
 
 The tracked module layout is documented under `src/`. Empty runtime stubs and
 network listeners are intentionally absent until an implementation technology is

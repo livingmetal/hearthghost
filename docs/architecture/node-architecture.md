@@ -84,6 +84,17 @@ Policy, and node-local authorization are independent checks. The Node Gateway's
 successful authentication or request admission never waives a local camera or
 microphone gate.
 
+## Administration boundary
+
+Node enrollment, trust changes, capability grants, and Node revocation require
+an independently authenticated and action-authorized administrator. Enrollment
+always creates an untrusted Node with no grants. Registry changes use optimistic
+revisions and idempotency keys, and an actual change is committed atomically with
+its privileged audit metadata. See `../security/node-administration.md`.
+
+Administration success changes registry state only. It does not approve a
+current action, create a Tool execution permission, or bypass a node-local gate.
+
 ## Capability routing
 
 Requests should resolve by capability and context, not by hard-coded product names.

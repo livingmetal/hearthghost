@@ -18,6 +18,8 @@ EXPECTED_SCHEMAS = {
     "policy/v1/behavior-preference-update.schema.json",
     "node/v1/node-identity.schema.json",
     "node/v1/node-credential.schema.json",
+    "node/v1/node-administration-command.schema.json",
+    "node/v1/node-administration-result.schema.json",
     "node/v1/node-capabilities.schema.json",
     "node/v2/node-identity.schema.json",
     "node/v2/node-capabilities.schema.json",
@@ -285,6 +287,43 @@ class ContractFoundationTests(unittest.TestCase):
                 "granted_permissions"
             ]["maxItems"],
         )
+
+    def test_node_administration_contract_is_revisioned_and_non_authoritative(self):
+        command = self.schemas[
+            "node/v1/node-administration-command.schema.json"
+        ]
+        properties = command["properties"]
+        self.assertTrue(
+            {
+                "operation_id",
+                "correlation_id",
+                "action",
+                "node_id",
+                "expected_revision",
+            }.issubset(command["required"])
+        )
+        self.assertEqual(
+            {
+                "node.enroll",
+                "node.trust.set",
+                "node.capability.grant",
+                "node.capability.revoke",
+                "node.revoke",
+            },
+            set(properties["action"]["enum"]),
+        )
+        self.assertNotIn("actor", properties)
+        self.assertNotIn("administrator_id", properties)
+        self.assertNotIn("policy_decision", properties)
+
+        result = self.schemas[
+            "node/v1/node-administration-result.schema.json"
+        ]
+        result_properties = result["properties"]
+        self.assertIn("current_revision", result_properties)
+        self.assertNotIn("execution_allowed", result_properties)
+        self.assertNotIn("policy_decision", result_properties)
+        self.assertIn("not Policy approval", result["description"])
 
     def test_audit_metadata_is_allowlisted(self):
         audit = self.schemas["events/v1/audit-event.schema.json"]

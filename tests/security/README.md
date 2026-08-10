@@ -6,6 +6,10 @@ trust, capability, session, and replay cases to `implemented` and links each to
 an executable public-boundary test. Policy, Privacy Gateway, node-local sensor
 gate, and tool-executor cases remain explicitly `not_implemented`.
 
+HG-003 adds executable denial coverage for authenticated-Node privilege
+confusion, automatic trust, stale administration revisions, unadvertised grants,
+and non-atomic privileged audit writes.
+
 When a later task implements a boundary:
 
 1. create an executable test through the public boundary rather than mocking the

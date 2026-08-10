@@ -12,3 +12,8 @@ credential and Node repositories, technical session storage, atomic replay
 tracking, trusted time, and the inbound Node Gateway security boundary. It
 deliberately defines no HTTP, WebSocket, gRPC, MQTT, QUIC, TLS, certificate, or
 persistence implementation.
+
+`node_administration.py` defines the HG-003 ports for action-specific
+administrator authorization, advertised-capability lookup, and an atomic
+revision/idempotency/state/audit store. It deliberately selects no identity
+provider, database, message broker, or audit backend.

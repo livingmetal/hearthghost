@@ -25,3 +25,8 @@ HG-002 implements the initial Node Gateway security boundary in
 `node_security.py`. It separates verified credential evidence, authoritative
 credential lifecycle, Node trust, advertised/granted capabilities, technical
 sessions, and replay admission. Its admitted result is Gateway admission only.
+
+HG-003 implements `node_administration.py`. It requires action-specific
+administrator authorization and coordinates explicit enrollment, revisioned
+trust/grant changes, terminal Node revocation, idempotency, and atomic privileged
+audit persistence. It exposes no device or Tool executor.
