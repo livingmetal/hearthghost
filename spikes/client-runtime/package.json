@@ -1,0 +1,21 @@
+{
+  "name": "@hearthghost/client-runtime-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:vrm": "vite build --config vite.vrm.config.js",
+    "build:pixi": "vite build --config vite.pixi.config.js",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pixiv/three-vrm": "3.5.5",
+    "pixi.js": "8.19.0",
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.185.4",
+    "typescript": "7.0.2",
+    "vite": "8.2.1"
+  }
+}
