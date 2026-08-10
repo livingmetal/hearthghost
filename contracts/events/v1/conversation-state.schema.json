@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:events:v1.0:conversation-state",
+  "title": "Conversation State v1.0",
+  "description": "Semantic state of an explicitly established conversation session.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "state", "occurred_at"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "state": {
+      "enum": ["sleeping", "listening", "thinking", "speaking", "engaged"]
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "reason": { "type": "string", "minLength": 1, "maxLength": 160 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "state": { "not": { "const": "sleeping" } } },
+        "required": ["state"]
+      },
+      "then": { "required": ["session_id"] }
+    }
+  ]
+}

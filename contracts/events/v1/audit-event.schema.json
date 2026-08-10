@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:events:v1.0:audit-event",
+  "title": "Audit Event v1.0",
+  "description": "Security metadata without private conversation or media content.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "event_id", "correlation_id", "occurred_at", "category", "action", "actor", "decision", "result"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "event_id": { "type": "string", "format": "uuid" },
+    "correlation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "category": {
+      "enum": ["node", "authentication", "policy", "tool", "camera", "microphone", "cloud_transfer", "physical_action", "administration"]
+    },
+    "action": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "enum": ["user", "node", "service", "system", "unknown"] },
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "decision": { "enum": ["allow", "deny", "not_applicable"] },
+    "result": { "enum": ["success", "rejected", "failed"] },
+    "reason_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "session_id": { "type": "string", "maxLength": 128 },
+        "node_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "capability": { "type": "string", "maxLength": 128 },
+        "tool_name": { "type": "string", "maxLength": 128 },
+        "policy_version": { "type": "string", "maxLength": 64 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": { "decision": { "const": "deny" } },
+            "required": ["decision"]
+          },
+          {
+            "properties": { "result": { "enum": ["rejected", "failed"] } },
+            "required": ["result"]
+          }
+        ]
+      },
+      "then": { "required": ["reason_code"] }
+    }
+  ]
+}

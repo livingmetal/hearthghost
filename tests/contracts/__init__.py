@@ -1,0 +1,1 @@
+"""Versioned contract foundation tests."""

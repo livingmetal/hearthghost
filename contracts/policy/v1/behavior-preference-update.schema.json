@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:policy:v1.0:behavior-preference-update",
+  "title": "Behavior Preference Update v1.0",
+  "description": "A typed proposal limited to behavior preferences; Hard Policy paths are not representable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "proposal_id", "proposed_at", "scope", "scope_id", "origin", "status", "changes"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "proposal_id": { "type": "string", "format": "uuid" },
+    "proposed_at": { "type": "string", "format": "date-time" },
+    "scope": { "enum": ["character", "user", "household"] },
+    "scope_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "origin": { "enum": ["llm_proposal", "user_interface", "administrator_interface"] },
+    "status": { "const": "proposed" },
+    "changes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "value"],
+            "properties": {
+              "path": { "const": "character.humor" },
+              "value": { "enum": ["low", "moderate", "high"] }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "value"],
+            "properties": {
+              "path": { "const": "character.verbosity" },
+              "value": { "enum": ["concise", "normal", "detailed"] }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "value"],
+            "properties": {
+              "path": { "const": "character.formality" },
+              "value": { "enum": ["casual", "neutral", "formal"] }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "value"],
+            "properties": {
+              "path": { "const": "character.initiative" },
+              "value": { "enum": ["low", "moderate", "high"] }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "value"],
+            "properties": {
+              "path": { "const": "conversation.followup_timeout_sec" },
+              "value": { "type": "integer", "minimum": 5, "maximum": 120 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "value"],
+            "properties": {
+              "path": { "const": "proactive.frequency" },
+              "value": { "enum": ["off", "low", "moderate"] }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

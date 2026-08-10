@@ -37,6 +37,9 @@ For a new contributor or coding agent:
 6. For user-facing behavior, read the documents under `product/`.
 7. Record decisions that intentionally change architecture or trust boundaries under `adr/`.
 
+`architecture/implementation-foundation.md` records the reversible HG-001
+foundation choices and the technology decisions deliberately left open.
+
 ## Documentation rule
 
 Do not duplicate the entire specification across multiple files. Put durable implementation invariants in `AGENTS.md`; put rationale and system design here; put individual irreversible or high-impact decisions in ADRs.

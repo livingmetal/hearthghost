@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:events:v1.0:character-emotion",
+  "title": "Character Emotion v1.0",
+  "description": "Renderer-neutral emotion independent from conversation/activity state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "character_id", "emotion", "occurred_at"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "character_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "emotion": {
+      "enum": ["neutral", "happy", "amused", "curious", "concerned", "surprised"]
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "intensity": { "type": "number", "minimum": 0, "maximum": 1 }
+  }
+}

@@ -1,0 +1,23 @@
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Development caches and build output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+dist/
+build/
+coverage/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

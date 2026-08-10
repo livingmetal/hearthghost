@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:tools:v1.0:tool-proposal",
+  "title": "Tool Proposal v1.0",
+  "description": "An untrusted proposal that cannot itself authorize execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "proposal_id", "proposed_at", "tool_name", "arguments", "proposer", "authorization_status", "context"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "proposal_id": { "type": "string", "format": "uuid" },
+    "proposed_at": { "type": "string", "format": "date-time" },
+    "tool_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)+$"
+    },
+    "arguments": { "type": "object" },
+    "proposer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "enum": ["llm", "user_interface", "system"] },
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "authorization_status": { "const": "pending_policy" },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_id", "explicit_user_request"],
+      "properties": {
+        "request_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "node_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+        },
+        "actor_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "explicit_user_request": { "type": "boolean" },
+        "confirmation_id": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    }
+  }
+}

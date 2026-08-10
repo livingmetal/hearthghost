@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v1.0:node-capabilities",
+  "title": "Node Capabilities v1.0",
+  "description": "Separates advertised capabilities from explicitly granted permissions; authentication alone grants neither.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "node_id", "security_state", "capabilities", "granted_permissions"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "security_state": {
+      "enum": ["untrusted", "pending_approval", "trusted", "restricted", "revoked"]
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "local_authorization_required"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$"
+          },
+          "local_authorization_required": { "type": "boolean" }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "name": { "enum": ["camera.snapshot", "camera.stream", "microphone", "microphone.session"] }
+              },
+              "required": ["name"]
+            },
+            "then": {
+              "properties": { "local_authorization_required": { "const": true } }
+            }
+          }
+        ]
+      }
+    },
+    "granted_permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z][a-z0-9_-]*)*$"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "security_state": { "enum": ["untrusted", "pending_approval", "revoked"] }
+        },
+        "required": ["security_state"]
+      },
+      "then": {
+        "properties": { "granted_permissions": { "maxItems": 0 } }
+      }
+    }
+  ]
+}

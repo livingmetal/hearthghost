@@ -1,0 +1,48 @@
+{
+  "plan_version": "1.0",
+  "description": "Required future denial tests; this file is an inventory, not evidence of implemented behavior.",
+  "cases": [
+    {
+      "id": "unauthorized-camera-request",
+      "precondition": "camera.snapshot lacks node-local authorization",
+      "expected_decision": "deny",
+      "implementation_status": "not_implemented"
+    },
+    {
+      "id": "unknown-node",
+      "precondition": "node identity is absent from the registry",
+      "expected_decision": "deny",
+      "implementation_status": "not_implemented"
+    },
+    {
+      "id": "revoked-node",
+      "precondition": "node credential status is revoked",
+      "expected_decision": "deny",
+      "implementation_status": "not_implemented"
+    },
+    {
+      "id": "llm-hard-policy-modification",
+      "precondition": "LLM proposes a Hard Policy mutation through conversation",
+      "expected_decision": "deny",
+      "implementation_status": "not_implemented"
+    },
+    {
+      "id": "default-cloud-image-upload",
+      "precondition": "image transfer is proposed under default cloud policy",
+      "expected_decision": "deny",
+      "implementation_status": "not_implemented"
+    },
+    {
+      "id": "critical-action-without-confirmation",
+      "precondition": "critical physical action has no valid explicit confirmation",
+      "expected_decision": "deny",
+      "implementation_status": "not_implemented"
+    },
+    {
+      "id": "policy-service-unavailable",
+      "precondition": "a sensitive action cannot obtain a valid policy decision",
+      "expected_decision": "deny",
+      "implementation_status": "not_implemented"
+    }
+  ]
+}

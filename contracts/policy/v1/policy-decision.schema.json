@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:policy:v1.0:policy-decision",
+  "title": "Policy Decision v1.0",
+  "description": "An explicit policy result. Allow means all required checks, including confirmation, succeeded; missing, invalid, or unavailable decisions fail closed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "decision_id", "proposal_id", "decision", "reason_code", "risk_level", "confirmation_policy", "evaluated_policy_version", "decided_at"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "decision_id": { "type": "string", "format": "uuid" },
+    "proposal_id": { "type": "string", "format": "uuid" },
+    "decision": { "enum": ["allow", "deny"] },
+    "reason_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "risk_level": { "enum": ["low", "medium", "high", "critical"] },
+    "evaluated_policy_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "confirmation_policy": { "enum": ["none", "contextual", "explicit"] },
+    "confirmation_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "decided_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "risk_level": { "const": "critical" },
+          "decision": { "const": "allow" }
+        },
+        "required": ["risk_level", "decision"]
+      },
+      "then": {
+        "properties": {
+          "confirmation_policy": { "const": "explicit" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": { "const": "allow" },
+          "confirmation_policy": { "const": "explicit" }
+        },
+        "required": ["decision", "confirmation_policy"]
+      },
+      "then": {
+        "required": ["confirmation_id"]
+      }
+    }
+  ]
+}

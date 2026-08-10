@@ -784,15 +784,12 @@ HearthGhost should be useful, personable, and extensible, but never by quietly w
 
 ## Status
 
-HearthGhost is currently at the architecture and requirements stage.
+HearthGhost is currently at the implementation-foundation stage. The repository
+contains documented module boundaries and initial versioned contracts, but no
+assistant, renderer, device integration, production authentication, or runtime
+deployment has been implemented.
 
-The next repository work should define:
-
-- `AGENTS.md`
-- `docs/security/threat-model.md`
-- `docs/security/trust-boundaries.md`
-- `docs/security/privacy-policy.md`
-- `docs/architecture/overview.md`
-- initial contracts and policy schemas
-
-No implementation should assume that these boundaries can be bypassed for convenience.
+The next work should implement one narrowly scoped security boundary against the
+contracts without bypassing Policy, Privacy Gateway, node-local media gates, or
+adapter isolation. See `docs/architecture/implementation-foundation.md` for the
+decisions deliberately deferred by HG-001.

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v1.0:node-identity",
+  "title": "Node Identity v1.0",
+  "description": "Public identity metadata and revocable security state; never carries a credential secret.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "node_id", "identity", "security_state"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "area": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["credential_id", "issuer", "status", "independently_revocable"],
+      "properties": {
+        "credential_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "issuer": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "status": { "enum": ["pending", "active", "revoked", "expired"] },
+        "independently_revocable": { "const": true }
+      }
+    },
+    "security_state": {
+      "enum": ["untrusted", "pending_approval", "trusted", "restricted", "revoked"],
+      "default": "untrusted"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "identity": {
+            "properties": { "status": { "enum": ["revoked", "expired"] } },
+            "required": ["status"]
+          }
+        },
+        "required": ["identity"]
+      },
+      "then": {
+        "properties": { "security_state": { "const": "revoked" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "identity": {
+            "properties": { "status": { "const": "pending" } },
+            "required": ["status"]
+          }
+        },
+        "required": ["identity"]
+      },
+      "then": {
+        "properties": {
+          "security_state": { "enum": ["untrusted", "pending_approval"] }
+        }
+      }
+    }
+  ]
+}

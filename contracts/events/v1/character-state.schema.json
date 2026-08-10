@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:events:v1.0:character-state",
+  "title": "Character State v1.0",
+  "description": "Renderer-neutral character activity; emotion is a separate contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "character_id", "state", "occurred_at"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "character_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "state": {
+      "enum": ["sleeping", "listening", "thinking", "speaking", "engaged"]
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "session_id": { "type": "string", "minLength": 1, "maxLength": 128 }
+  }
+}

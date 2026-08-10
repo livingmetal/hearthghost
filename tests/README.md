@@ -1,6 +1,8 @@
 # Tests
 
-This directory will contain cross-module, integration, security-boundary, and future end-to-end tests that do not naturally belong beside a single module.
+This directory contains cross-module contract validation and the structure for
+future integration, security-boundary, and end-to-end tests that do not naturally
+belong beside a single module.
 
 Security-sensitive functionality must test denial paths as well as success paths.
 
@@ -19,5 +21,19 @@ policy service unavailable -> sensitive action denied
 The test suite must not use real household secrets, private media, addresses, access tokens, or production credentials.
 
 When a task changes a trust boundary, contract, or security policy, tests should demonstrate that the intended negative cases remain closed.
+
+## Foundation validation
+
+Run the dependency-free foundation suite from the repository root:
+
+```text
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+`contracts/` verifies the structure and selected security invariants of the JSON
+Schemas. `security/` records required denial cases as `not_implemented`; it does
+not pretend that application behavior exists. Each future implementation task
+must promote relevant cases into executable boundary tests before changing their
+status.
 
 See `../AGENTS.md` and `../docs/security/threat-model.md`.
