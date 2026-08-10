@@ -2,6 +2,16 @@
 
 This roadmap describes capability milestones, not fixed release dates. Security foundations and contracts may move earlier than visible features when required.
 
+## Current development evidence
+
+HG-011 completes the first text-only walking skeleton: a trusted, explicitly
+granted Client Node sends text over the existing mTLS/Node Gateway path; Core
+keeps Node and conversation sessions separate; Privacy Gateway calls an
+explicit fake LLM adapter; the client receives text plus semantic character
+states. Three/three-vrm is isolated behind `CharacterRenderer`, with a DOM
+fallback. Cloud media, real sensors, physical control, production deployment,
+and live provider validation remain deliberately absent.
+
 ## Foundation
 
 Before feature milestones:

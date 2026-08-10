@@ -33,6 +33,11 @@ fake adapter.
 No camera or microphone permission is requested. No private Node key, LLM
 provider credential, or Home Assistant credential belongs in this package.
 
+HG-011's client conversation parser accepts only the versioned text response,
+renderer-neutral semantic events, and proposals explicitly marked
+`pending_policy` and `not_executed`. Unknown fields—including provider secret
+fields—and renderer-specific commands fail closed.
+
 See:
 
 - `../../docs/architecture/character-presentation.md`

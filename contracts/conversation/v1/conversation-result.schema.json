@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:conversation:v1.0:conversation-result",
+  "title": "Conversation Result v1.0",
+  "description": "Text response and semantic presentation events; proposals remain pending and unexecuted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "message_type", "request_id", "outcome", "reason_code"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "message_type": { "const": "conversation.result" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "outcome": { "enum": ["accepted", "denied"] },
+    "reason_code": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "node_session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "conversation_session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "response_text": { "type": "string", "minLength": 1, "maxLength": 8000 },
+    "events": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "payload"],
+        "properties": {
+          "type": { "const": "character.state" },
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["state"],
+            "properties": {
+              "state": { "enum": ["sleeping", "listening", "thinking", "speaking", "engaged"] }
+            }
+          }
+        }
+      }
+    },
+    "proposed_actions": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "arguments", "authorization_status", "execution_status"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}(\\.[a-z][a-z0-9_-]{0,63})+$" },
+          "arguments": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 256 } },
+          "authorization_status": { "const": "pending_policy" },
+          "execution_status": { "const": "not_executed" }
+        }
+      }
+    }
+  }
+}

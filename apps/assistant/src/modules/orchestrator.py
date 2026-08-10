@@ -28,6 +28,7 @@ You may converse and return non-authoritative action proposals; every proposal r
 @dataclass(frozen=True)
 class OrchestrationResult:
     succeeded: bool
+    conversation_completed: bool
     reason: PrivacyReason
     response_text: str
     proposed_actions: tuple[ProposedAction, ...]
@@ -73,6 +74,7 @@ class ConversationOrchestrator:
             )
             return OrchestrationResult(
                 False,
+                completed.accepted,
                 generated.reason,
                 safe_text,
                 (),
@@ -87,12 +89,14 @@ class ConversationOrchestrator:
         if not completed.accepted:
             return OrchestrationResult(
                 False,
+                False,
                 PrivacyReason.PROVIDER_FAILURE,
                 "The conversation state changed before the response completed.",
                 (),
                 (),
             )
         return OrchestrationResult(
+            True,
             True,
             generated.reason,
             generated.completion.text,

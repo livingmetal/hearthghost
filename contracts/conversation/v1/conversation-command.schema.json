@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:conversation:v1.0:conversation-command",
+  "title": "Conversation Command v1.0",
+  "description": "Text-only command carried after mTLS; every command is independently admitted by Node Gateway.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "message_type", "request_id", "node_session_id", "sequence"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "message_type": { "enum": ["conversation.open", "conversation.text", "conversation.close"] },
+    "request_id": { "type": "string", "format": "uuid" },
+    "node_session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "sequence": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "conversation_session_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "text": { "type": "string", "minLength": 1, "maxLength": 4000 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "message_type": { "const": "conversation.open" } }, "required": ["message_type"] },
+      "then": { "not": { "anyOf": [{ "required": ["conversation_session_id"] }, { "required": ["text"] }] } }
+    },
+    {
+      "if": { "properties": { "message_type": { "const": "conversation.text" } }, "required": ["message_type"] },
+      "then": { "required": ["conversation_session_id", "text"] }
+    },
+    {
+      "if": { "properties": { "message_type": { "const": "conversation.close" } }, "required": ["message_type"] },
+      "then": {
+        "required": ["conversation_session_id"],
+        "not": { "required": ["text"] }
+      }
+    }
+  ]
+}

@@ -68,4 +68,11 @@ versioned framing, administration, technical session, replay, capability/trust
 revocation, credential revocation, and reconnect behavior. It uses no real
 credentials, media, listener, or physical capability.
 
+The HG-011 walking-skeleton integration test adds the development Client Node,
+`conversation.text` admission, separate conversation lifecycle, Privacy
+Gateway, explicitly selected fake LLM adapter, semantic client events, and
+inert action proposals on that same socket-pair mTLS path. The dedicated
+`walking-skeleton` image runs this scenario with networking disabled and test
+certificates only in tmpfs.
+
 See `../AGENTS.md` and `../docs/security/threat-model.md`.

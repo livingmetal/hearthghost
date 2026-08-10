@@ -49,6 +49,10 @@ class CloudPrivacyPolicy:
 
 
 DEFAULT_CLOUD_PRIVACY_POLICY = CloudPrivacyPolicy()
+MAX_CLOUD_TEXT_RESPONSE_LENGTH = 8_000
+MAX_CLOUD_TEXT_RESPONSE_BYTES = 8_000
+MAX_PROPOSALS = 8
+MAX_PROPOSAL_ARGUMENT_BYTES = 2_048
 
 
 @dataclass(frozen=True)
@@ -100,11 +104,19 @@ class PrivacyGateway:
         if (
             not isinstance(completion, LLMCompletion)
             or not completion.text.strip()
+            or len(completion.text) > MAX_CLOUD_TEXT_RESPONSE_LENGTH
+            or len(completion.text.encode("utf-8")) > MAX_CLOUD_TEXT_RESPONSE_BYTES
+            or len(completion.proposed_actions) > MAX_PROPOSALS
             or any(
                 not isinstance(proposal, ProposedAction)
                 or proposal.authorization_status != "pending_policy"
                 for proposal in completion.proposed_actions
             )
+            or sum(
+                len(key.encode("utf-8")) + len(value.encode("utf-8"))
+                for proposal in completion.proposed_actions
+                for key, value in proposal.arguments.items()
+            ) > MAX_PROPOSAL_ARGUMENT_BYTES
         ):
             return PrivacyGatewayResult(False, PrivacyReason.PROVIDER_FAILURE)
         return PrivacyGatewayResult(True, PrivacyReason.ALLOWED, completion)

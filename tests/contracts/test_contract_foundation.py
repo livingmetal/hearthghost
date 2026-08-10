@@ -8,6 +8,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "contracts"
 
 EXPECTED_SCHEMAS = {
+    "conversation/v1/conversation-command.schema.json",
+    "conversation/v1/conversation-result.schema.json",
     "events/v1/conversation-state.schema.json",
     "events/v1/character-state.schema.json",
     "events/v1/character-emotion.schema.json",
@@ -134,6 +136,23 @@ class ContractFoundationTests(unittest.TestCase):
         conversation = self.schemas["events/v1/conversation-state.schema.json"]
         self.assertNotIn("session_id", conversation["required"])
         self.assertIn("session_id", conversation["allOf"][0]["then"]["required"])
+
+    def test_conversation_wire_contract_is_text_only_and_non_executing(self):
+        command = self.schemas["conversation/v1/conversation-command.schema.json"]
+        self.assertEqual(
+            {"conversation.open", "conversation.text", "conversation.close"},
+            set(command["properties"]["message_type"]["enum"]),
+        )
+        self.assertIn("sequence", command["required"])
+        self.assertNotIn("audio", command["properties"])
+        self.assertNotIn("image", command["properties"])
+        self.assertNotIn("video", command["properties"])
+
+        result = self.schemas["conversation/v1/conversation-result.schema.json"]
+        proposal = result["properties"]["proposed_actions"]["items"]["properties"]
+        self.assertEqual("pending_policy", proposal["authorization_status"]["const"])
+        self.assertEqual("not_executed", proposal["execution_status"]["const"])
+        self.assertNotIn("execution_allowed", result["properties"])
 
     def test_behavior_updates_cannot_name_hard_policy_paths(self):
         update = self.schemas["policy/v1/behavior-preference-update.schema.json"]

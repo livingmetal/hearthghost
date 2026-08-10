@@ -36,6 +36,17 @@ COPY --chown=hearthghost:hearthghost contracts ./contracts
 
 CMD ["python", "-m", "apps.mock_node.src.client", "--check"]
 
+FROM runtime-base AS client-node
+
+COPY --chown=hearthghost:hearthghost apps ./apps
+COPY --chown=hearthghost:hearthghost contracts ./contracts
+
+CMD ["python", "-m", "apps.client_node.src.client", "--check"]
+
+FROM test AS walking-skeleton
+
+CMD ["python", "-m", "unittest", "-v", "tests.integration.test_text_walking_skeleton_e2e"]
+
 FROM node:22-bookworm-slim AS client-test
 
 WORKDIR /workspace/apps/web-client
@@ -51,4 +62,4 @@ RUN npm run check \
 
 USER node
 
-CMD ["node", "--test", "tests/client-node.test.mjs", "tests/character-presentation.test.mjs", "tests/conversation-controller.test.mjs"]
+CMD ["node", "--test", "tests/client-node.test.mjs", "tests/character-presentation.test.mjs", "tests/conversation-controller.test.mjs", "tests/conversation-protocol.test.mjs"]

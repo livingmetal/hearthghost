@@ -229,8 +229,9 @@ def read_gateway_result(channel: socket.socket) -> GatewayResult:
 def write_frame(channel: socket.socket, document: dict[str, object]) -> None:
     try:
         payload = json.dumps(
-            document,
-            separators=(",", ":"),
+        document,
+        ensure_ascii=False,
+        separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
     except (TypeError, ValueError) as error:

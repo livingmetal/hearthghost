@@ -59,6 +59,15 @@ class ContainerFoundationTests(unittest.TestCase):
         self.assertNotIn("OPENAI_API_KEY", self.dockerfile)
         self.assertNotIn("--build-arg", self.dockerfile)
 
+    def test_walking_skeleton_image_reuses_test_base_and_has_no_listener(self):
+        self.assertIn("FROM test AS walking-skeleton", self.dockerfile)
+        self.assertIn(
+            '"tests.integration.test_text_walking_skeleton_e2e"',
+            self.dockerfile,
+        )
+        self.assertIn("FROM runtime-base AS client-node", self.dockerfile)
+        self.assertNotIn("EXPOSE", self.dockerfile)
+
     def test_compose_test_service_preserves_security_baseline(self):
         required = {
             'network_mode: "none"',
@@ -116,6 +125,20 @@ class ContainerFoundationTests(unittest.TestCase):
         for value in {"ports:", "volumes:", "devices:", "privileged: true"}:
             with self.subTest(value=value):
                 self.assertNotIn(value, client_service)
+
+    def test_walking_skeleton_service_is_ephemeral_and_network_isolated(self):
+        service = self.compose.split("  walking-skeleton:", maxsplit=1)[1]
+        for value in {
+            "target: walking-skeleton",
+            'network_mode: "none"',
+            "read_only: true",
+            "- ALL",
+            "- no-new-privileges:true",
+        }:
+            with self.subTest(value=value):
+                self.assertIn(value, service)
+        self.assertNotIn("ports:", service)
+        self.assertNotIn("volumes:", service)
 
     def test_build_context_excludes_local_and_sensitive_state(self):
         ignored = set(self.dockerignore.splitlines())

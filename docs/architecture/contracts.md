@@ -82,6 +82,16 @@ HG-006 adds a bounded length-prefixed JSON v1.0 frame for technical session
 open/close and sequenced capability requests. It does not define media transport
 or a network listener.
 
+HG-011 adds a separate conversation command/result v1 family without changing
+the immutable Node Gateway v1 contract. Conversation frames use the same
+bounded framing and connected mTLS channel. Every open, text, or close command
+contains the Node technical session and a monotonically increasing sequence;
+the server passes that command through Node Gateway for the exact
+`conversation.text` capability before dispatch. A conversation result contains
+only text, validated semantic character-state events, and proposals explicitly
+marked `pending_policy` / `not_executed`. Provider payloads and secrets are not
+wire fields.
+
 Node administration command/result v1 represents explicit registry mutation.
 Its operation ID provides idempotency and its expected revision prevents stale
 updates. Administrator identity comes from the authenticated administration

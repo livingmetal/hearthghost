@@ -32,6 +32,7 @@ class MockNode:
     """Harmless Node client; administration remains outside this object."""
 
     node_id: str = MOCK_NODE_ID
+    declared_capabilities: tuple[str, ...] = MOCK_NODE_CAPABILITIES
     channel: ssl.SSLSocket | None = None
     session_id: str | None = None
 
@@ -67,7 +68,7 @@ class MockNode:
         *,
         sequence: int,
     ) -> GatewayResult:
-        if capability not in MOCK_NODE_CAPABILITIES:
+        if capability not in self.declared_capabilities:
             raise ValueError("Mock Node cannot request an undeclared capability")
         if self.session_id is None:
             raise RuntimeError("Mock Node has no authenticated technical session")

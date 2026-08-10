@@ -9,6 +9,8 @@ It does not select a runtime language, web framework, or wire transport.
 
 | Family | Schema | Purpose |
 | --- | --- | --- |
+| Conversation | `conversation/v1/conversation-command.schema.json` | Sequenced text-only command after Node Gateway admission |
+| Conversation | `conversation/v1/conversation-result.schema.json` | Text, semantic states, and explicitly unexecuted proposals |
 | Events | `events/v1/conversation-state.schema.json` | Bounded conversation/session state |
 | Events | `events/v1/character-state.schema.json` | Renderer-neutral character activity |
 | Events | `events/v1/character-emotion.schema.json` | Emotion independent from activity state |
