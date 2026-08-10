@@ -59,4 +59,8 @@ public boundary.
 including non-root execution, disabled networking, dropped capabilities,
 read-only filesystems, and restricted build context.
 
+`runtime/` verifies the Core composition, deny-only defaults, atomic ephemeral
+registry adapter, contract catalog, loopback-only status listener, and separate
+liveness/readiness semantics.
+
 See `../AGENTS.md` and `../docs/security/threat-model.md`.

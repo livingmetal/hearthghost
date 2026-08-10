@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bookworm AS test
+FROM python:3.13-slim-bookworm AS runtime-base
 
 ARG HEARTHGHOST_UID=10001
 ARG HEARTHGHOST_GID=10001
@@ -14,9 +14,17 @@ RUN groupadd --gid "${HEARTHGHOST_GID}" hearthghost \
         hearthghost
 
 WORKDIR /workspace
+USER hearthghost
+
+FROM runtime-base AS test
 
 COPY --chown=hearthghost:hearthghost . .
 
-USER hearthghost
-
 CMD ["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]
+
+FROM runtime-base AS core
+
+COPY --chown=hearthghost:hearthghost apps ./apps
+COPY --chown=hearthghost:hearthghost contracts ./contracts
+
+CMD ["python", "-m", "apps.assistant.src.runtime.core"]

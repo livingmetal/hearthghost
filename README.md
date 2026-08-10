@@ -810,16 +810,27 @@ Host-side standard-library validation remains available:
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
+The minimal, internal-only Core runtime can be started without publishing a
+host port:
+
+```text
+docker compose --profile runtime up --build -d core
+docker compose --profile runtime exec core \
+  python -m apps.assistant.src.runtime.healthcheck
+docker compose --profile runtime down
+```
+
 ---
 
 ## Status
 
 HearthGhost has an implementation foundation, versioned contracts, the core
 Node security boundary, a privileged Node administration boundary, and a TLS
-1.3 mutual-authentication adapter for already-connected Node sockets. The
-repository includes a containerized validation environment, but no production
-runtime deployment, renderer, device integration, administrator identity
-provider, production PKI, or transport listener has been implemented.
+1.3 mutual-authentication adapter for already-connected Node sockets. A minimal
+containerized Core composes those boundaries with deny-only defaults and
+loopback health/status. There is still no production deployment, renderer,
+device integration, administrator identity provider, production PKI, Node
+listener, persistent state, or Policy allow path.
 
 The next work should implement one narrowly scoped security boundary against the
 contracts without bypassing Policy, Privacy Gateway, node-local media gates, or

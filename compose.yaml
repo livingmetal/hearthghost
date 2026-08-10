@@ -1,6 +1,33 @@
 name: hearthghost
 
 services:
+  core:
+    profiles:
+      - runtime
+    image: hearthghost-core:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: core
+    network_mode: "none"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -m
+        - apps.assistant.src.runtime.healthcheck
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 2s
+
   test:
     image: hearthghost-test:local
     build:

@@ -30,3 +30,7 @@ HG-003 implements `node_administration.py`. It requires action-specific
 administrator authorization and coordinates explicit enrollment, revisioned
 trust/grant changes, terminal Node revocation, idempotency, and atomic privileged
 audit persistence. It exposes no device or Tool executor.
+
+HG-005 adds `policy.py` as an explicit deny-only Policy boundary for the initial
+Core composition. It cannot produce an allow decision; reviewed rules,
+confirmation state, and a real Policy implementation remain future work.

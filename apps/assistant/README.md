@@ -4,8 +4,9 @@ This directory contains the implementation boundary for the HearthGhost
 server-side application runtime. HG-002 adds a dependency-free Python Node
 Gateway security module; HG-003 adds the privileged Node enrollment and registry
 administration boundary; HG-004 adds a standard-library TLS 1.3 adapter for
-already-connected Node sockets. The domain ports do not select a web framework,
-database, production PKI, listener, application protocol, or deployment stack.
+already-connected Node sockets; HG-005 composes the boundaries into a minimal
+containerized Core with loopback-only status. The domain ports do not select a
+web framework, database, production PKI, Node protocol, or deployment stack.
 
 Expected logical responsibilities include:
 
@@ -32,8 +33,9 @@ Node administration is also narrower than action authorization. Enrollment,
 trust, and capability grants mutate registry state but never constitute a Policy
 allow or Tool execution permission.
 
-The tracked module layout is documented under `src/`. Empty runtime stubs and
-network listeners remain intentionally absent.
+The tracked module layout is documented under `src/`. Node network listeners
+remain intentionally absent; the only HG-005 listener is read-only status on
+literal loopback.
 
 See:
 

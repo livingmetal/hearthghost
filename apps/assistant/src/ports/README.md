@@ -22,3 +22,7 @@ provider, database, message broker, or audit backend.
 certificate to credential identity evidence. Certificate verification remains
 in the adapter; lifecycle, revocation, trust, and capability authority remain
 in the Node Gateway and registry boundaries.
+
+`policy.py` defines the proposal-evaluation boundary used by the Core. Missing or
+malformed Policy results must never be interpreted as allow; the HG-005 default
+implementation explicitly denies every proposal until rules are configured.
