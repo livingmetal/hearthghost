@@ -782,12 +782,42 @@ HearthGhost should be useful, personable, and extensible, but never by quietly w
 
 ---
 
+## Development Validation
+
+The preferred reproducible validation path uses the repository test image:
+
+```text
+docker compose build --pull test
+docker compose run --rm test
+```
+
+The image currently contains only Python 3.13 and the repository. It installs no
+project dependencies and does not select Python as the final Assistant runtime.
+The test service runs as an unprivileged user with no network, no Linux
+capabilities, a read-only root filesystem, no ports, no host devices, no Docker
+socket, and no persistent volumes.
+
+Rootless Podman can run the same image when a Compose provider is unavailable:
+
+```text
+podman build --pull=always --target test -t hearthghost-test:local .
+podman run --rm --network none --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop=all --security-opt=no-new-privileges hearthghost-test:local
+```
+
+Host-side standard-library validation remains available:
+
+```text
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+---
+
 ## Status
 
-HearthGhost is currently at the implementation-foundation stage. The repository
-contains documented module boundaries and initial versioned contracts, but no
-assistant, renderer, device integration, production authentication, or runtime
-deployment has been implemented.
+HearthGhost has an implementation foundation, versioned contracts, and the core
+Node security boundary. The repository includes a containerized validation
+environment, but no production runtime deployment, renderer, device integration,
+or transport listener has been implemented.
 
 The next work should implement one narrowly scoped security boundary against the
 contracts without bypassing Policy, Privacy Gateway, node-local media gates, or

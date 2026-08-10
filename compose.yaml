@@ -1,0 +1,26 @@
+name: hearthghost
+
+services:
+  test:
+    image: hearthghost-test:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    command:
+      - python
+      - -m
+      - unittest
+      - discover
+      - -s
+      - tests
+      - -p
+      - test_*.py
+    network_mode: "none"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

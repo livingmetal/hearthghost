@@ -1,6 +1,11 @@
 # Infrastructure
 
-This directory will contain deployment and local infrastructure definitions for HearthGhost.
+This directory owns deployment and local infrastructure guidance for HearthGhost.
+
+The repository-root `Dockerfile`, `compose.yaml`, and `.dockerignore` define the
+HG-DEV-001 development/test boundary. They are validation infrastructure, not a
+production deployment. The test image copies only the restricted build context,
+runs as a non-root user, exposes no ports, and needs no persistent state.
 
 Initial target:
 
@@ -32,6 +37,17 @@ Infrastructure must preserve the security model:
 - no `host` networking by default for convenience
 
 Do not introduce Kubernetes or distributed infrastructure without a concrete need and documented decision.
+
+Run the reproducible suite from the repository root with:
+
+```text
+docker compose build --pull test
+docker compose run --rm test
+```
+
+Do not add privileged mode, host networking, Docker socket mounts, host device
+passthrough, broad host mounts, or production secrets for development
+convenience.
 
 See:
 

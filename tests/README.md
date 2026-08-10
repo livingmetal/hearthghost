@@ -22,7 +22,21 @@ The test suite must not use real household secrets, private media, addresses, ac
 
 When a task changes a trust boundary, contract, or security policy, tests should demonstrate that the intended negative cases remain closed.
 
-## Foundation validation
+## Reproducible validation
+
+The preferred CI-style path builds the repository test image and runs the suite
+without network access or persistent state:
+
+```text
+docker compose build --pull test
+docker compose run --rm test
+```
+
+The container command must return non-zero when any test fails. The image is a
+development validation tool and does not decide the future Assistant or Web
+Client runtime.
+
+## Host validation
 
 Run the dependency-free foundation suite from the repository root:
 
@@ -36,5 +50,9 @@ entries to executable boundary tests. Deferred cases remain
 `not_implemented`; planning entries never substitute for application behavior.
 Each implementation task must promote only the cases it proves through the
 public boundary.
+
+`infrastructure/` verifies the dependency-free container development baseline,
+including non-root execution, disabled networking, dropped capabilities,
+read-only filesystems, and restricted build context.
 
 See `../AGENTS.md` and `../docs/security/threat-model.md`.

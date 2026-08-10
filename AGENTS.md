@@ -548,6 +548,17 @@ Do not put raw audio, images, or full private conversations into ordinary audit 
 
 Security-sensitive behavior requires automated tests.
 
+Prefer the repository container validation path for reproducible milestone and
+regression testing:
+
+```text
+docker compose build --pull test
+docker compose run --rm test
+```
+
+Host-side standard-library tests may remain available, but do not install
+project runtime dependencies globally merely to avoid using the container.
+
 At minimum, tests should prove negative cases as well as successful cases.
 
 Examples:
