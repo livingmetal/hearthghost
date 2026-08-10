@@ -268,6 +268,74 @@ class MockNodeEndToEndTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "undeclared capability"):
             mock.request_capability("mobility.goto", sequence=1)
 
+    def test_authenticated_untrusted_node_cannot_use_declared_capability(self):
+        enrolled = self._administer(AdministrationAction.ENROLL_NODE, 0)
+        self.assertTrue(enrolled.succeeded)
+
+        server_channel, mock = self._connect()
+        try:
+            opened = self._exchange(server_channel, mock.open_session)
+            self.assertTrue(opened.accepted)
+            denied = self._exchange(
+                server_channel,
+                lambda: mock.request_capability("test.echo", sequence=1),
+            )
+            self.assertFalse(denied.accepted)
+            self.assertEqual(denied.reason_code, "node_not_trusted")
+        finally:
+            server_channel.close()
+            mock.close()
+
+    def test_node_revocation_invalidates_open_session_and_reconnect(self):
+        self._administer(AdministrationAction.ENROLL_NODE, 0)
+        self._administer(
+            AdministrationAction.SET_TRUST,
+            1,
+            trust_state=NodeTrustState.TRUSTED,
+        )
+        self._administer(
+            AdministrationAction.GRANT_CAPABILITY,
+            2,
+            capability="test.echo",
+        )
+
+        server_channel, mock = self._connect()
+        try:
+            opened = self._exchange(server_channel, mock.open_session)
+            self.assertTrue(opened.accepted)
+            admitted = self._exchange(
+                server_channel,
+                lambda: mock.request_capability("test.echo", sequence=1),
+            )
+            self.assertTrue(admitted.accepted)
+
+            revoked = self._administer(AdministrationAction.REVOKE_NODE, 3)
+            self.assertTrue(revoked.succeeded)
+            denied = self._exchange(
+                server_channel,
+                lambda: mock.request_capability("test.echo", sequence=2),
+            )
+            self.assertFalse(denied.accepted)
+            self.assertEqual(denied.reason_code, "node_revoked")
+        finally:
+            server_channel.close()
+            mock.close()
+
+        reconnect_server, reconnect_mock = self._connect()
+        try:
+            denied_reconnect = self._exchange(
+                reconnect_server,
+                reconnect_mock.open_session,
+            )
+            self.assertFalse(denied_reconnect.accepted)
+            self.assertEqual(
+                denied_reconnect.reason_code,
+                "session_not_authenticated",
+            )
+        finally:
+            reconnect_server.close()
+            reconnect_mock.close()
+
     def test_protocol_rejects_plaintext_and_oversized_frames(self):
         plain_server, plain_client = socket.socketpair()
         try:
