@@ -37,9 +37,11 @@ the network-isolated test suite.
 
 The `openai-smoke` image performs exactly one synthetic text request through the
 real Privacy Gateway and LLM Port. It requires explicit `--adapter openai`
-selection, reports only status metadata and response length, and exposes no
-Tool executor. It is not part of normal tests and must never receive household
-conversation content.
+selection, defaults specifically to the cost-oriented `gpt-5.6-luna` model,
+reports only status metadata and response length, and exposes no Tool executor.
+It is not part of normal tests and must never receive household conversation
+content. This smoke-only choice does not change the adapter's normal Core
+default and can still be overridden explicitly with `OPENAI_MODEL`.
 
 With the external `hearthghost-openai-api-key` secret already present, a Compose
 provider can run the opt-in profile:
@@ -62,6 +64,7 @@ podman run --rm \
   --security-opt no-new-privileges \
   --secret source=hearthghost-openai-api-key,type=mount,target=openai-api-key,uid=10001,gid=10001,mode=0400 \
   --env OPENAI_API_KEY_FILE=/run/secrets/openai-api-key \
+  --env OPENAI_MODEL=gpt-5.6-luna \
   hearthghost-openai-smoke:local
 ```
 

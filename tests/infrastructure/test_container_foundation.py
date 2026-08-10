@@ -159,6 +159,7 @@ class ContainerFoundationTests(unittest.TestCase):
             "- provider-smoke",
             "target: openai-smoke",
             "OPENAI_API_KEY_FILE: /run/secrets/openai-api-key",
+            "OPENAI_MODEL: gpt-5.6-luna",
             "source: openai_api_key",
             "read_only: true",
             "- ALL",

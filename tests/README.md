@@ -79,6 +79,7 @@ The opt-in `openai-smoke` runtime is deliberately not a test-suite dependency.
 Unit tests inject fake HTTP behavior or the fake LLM adapter, and all normal test
 containers keep networking disabled. A live provider check requires an
 explicitly selected adapter, an external server secret, and a separately run
-egress-enabled container.
+egress-enabled container. That synthetic smoke path defaults to
+`gpt-5.6-luna`; fake/mock tests do not select or call any live model.
 
 See `../AGENTS.md` and `../docs/security/threat-model.md`.

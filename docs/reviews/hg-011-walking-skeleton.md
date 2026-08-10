@@ -66,6 +66,9 @@ was printed. The process reported only `status=ok`, `modality=text`, and a
 
 This validation remains separate from the normal suite. The Python and client
 test containers keep networking disabled and require no provider credential.
+The same synthetic check subsequently passed with an explicit
+`gpt-5.6-luna` selection and a 31-character response; Luna is now the dedicated
+smoke path's default while the normal adapter default remains unchanged.
 
 ## Deferred
 

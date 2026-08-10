@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections.abc import Mapping
 
 from apps.assistant.src.adapters.openai_responses import OpenAIConfigurationError
@@ -22,6 +23,7 @@ SMOKE_INPUT = (
     "Reply with one short sentence confirming text conversation is available."
 )
 SMOKE_TIMEOUT_SECONDS = 30.0
+DEFAULT_SMOKE_MODEL = "gpt-5.6-luna"
 
 
 def run_smoke(llm: LLMPort) -> tuple[int, dict[str, object]]:
@@ -69,8 +71,10 @@ def main(
         help="provider selection is required; no automatic fallback is available",
     )
     options = parser.parse_args(arguments)
+    selected_environment = dict(os.environ if environ is None else environ)
+    selected_environment.setdefault("OPENAI_MODEL", DEFAULT_SMOKE_MODEL)
     try:
-        llm = select_llm_adapter(options.adapter, environ=environ)
+        llm = select_llm_adapter(options.adapter, environ=selected_environment)
     except OpenAIConfigurationError as error:
         print(
             json.dumps(

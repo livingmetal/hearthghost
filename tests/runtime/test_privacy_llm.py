@@ -7,6 +7,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from apps.assistant.src.adapters.fake_llm import (
     FakeLLMAdapter,
@@ -37,6 +38,7 @@ from apps.assistant.src.modules.privacy_gateway import (
 from apps.assistant.src.ports.llm import LLMRequest
 from apps.assistant.src.runtime.llm_selection import select_llm_adapter
 from apps.assistant.src.runtime.openai_smoke import main as openai_smoke_main
+from apps.assistant.src.runtime.openai_smoke import DEFAULT_SMOKE_MODEL
 from apps.assistant.src.runtime.openai_smoke import run_smoke
 
 
@@ -366,6 +368,22 @@ class OpenAISmokeTests(unittest.TestCase):
         self.assertEqual(exit_code, 2)
         self.assertEqual(report["status"], "configuration_error")
         self.assertIn("OPENAI_API_KEY", report["reason"])
+
+    def test_smoke_defaults_to_luna_without_changing_adapter_default(self):
+        output = io.StringIO()
+        with patch(
+            "apps.assistant.src.runtime.openai_smoke.select_llm_adapter",
+            return_value=FakeLLMAdapter(),
+        ) as select_adapter, redirect_stdout(output):
+            exit_code = openai_smoke_main(
+                ["--adapter", "openai"],
+                environ={"OPENAI_API_KEY": "fake-smoke-key"},
+            )
+
+        self.assertEqual(exit_code, 0)
+        selected_environment = select_adapter.call_args.kwargs["environ"]
+        self.assertEqual(selected_environment["OPENAI_MODEL"], DEFAULT_SMOKE_MODEL)
+        self.assertEqual(DEFAULT_SMOKE_MODEL, "gpt-5.6-luna")
 
 
 if __name__ == "__main__":
