@@ -33,7 +33,7 @@ class PostgresTodoRepository:
                 cursor.execute(
                     """
                     INSERT INTO todo_records (
-                        todo_id, scope, scope_id, text, state, created_at, due_at, completed_at
+                        todo_id, scope, scope_id, text, state, created_at, completed_at, due_at
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
@@ -43,8 +43,8 @@ class PostgresTodoRepository:
                         record.text,
                         record.state.value,
                         record.created_at,
-                        record.due_at,
                         record.completed_at,
+                        record.due_at,
                     ),
                 )
 
@@ -54,7 +54,7 @@ class PostgresTodoRepository:
                 cursor.execute(
                     """
                     SELECT todo_id::text, scope, scope_id, text, state,
-                           created_at, due_at, completed_at
+                           created_at, completed_at, due_at
                     FROM todo_records WHERE todo_id = %s
                     """,
                     (todo_id,),
@@ -68,7 +68,7 @@ class PostgresTodoRepository:
                 cursor.execute(
                     """
                     SELECT todo_id::text, scope, scope_id, text, state,
-                           created_at, due_at, completed_at
+                           created_at, completed_at, due_at
                     FROM todo_records
                     WHERE scope = %s AND scope_id = %s
                     ORDER BY created_at DESC, todo_id DESC
@@ -87,14 +87,14 @@ class PostgresTodoRepository:
                 cursor.execute(
                     """
                     UPDATE todo_records
-                    SET text = %s, state = %s, due_at = %s, completed_at = %s
+                    SET text = %s, state = %s, completed_at = %s, due_at = %s
                     WHERE todo_id = %s AND scope = %s AND scope_id = %s
                     """,
                     (
                         record.text,
                         record.state.value,
-                        record.due_at,
                         record.completed_at,
+                        record.due_at,
                         record.todo_id,
                         record.scope.value,
                         record.scope_id,
@@ -119,15 +119,22 @@ def _decode(row: object) -> TodoRecord:
         if len(values) != 8:
             raise ValueError("unexpected column count")
         created_at = values[5]
-        due_at = values[6]
-        completed_at = values[7]
-        for name, value in (("created_at", created_at), ("due_at", due_at), ("completed_at", completed_at)):
-            if value is not None and (
-                not isinstance(value, datetime)
-                or value.tzinfo is None
-                or value.utcoffset() is None
-            ):
-                raise ValueError(f"{name} must be timezone-aware")
+        completed_at = values[6]
+        due_at = values[7]
+        if not isinstance(created_at, datetime) or created_at.tzinfo is None or created_at.utcoffset() is None:
+            raise ValueError("created_at must be timezone-aware")
+        if completed_at is not None and (
+            not isinstance(completed_at, datetime)
+            or completed_at.tzinfo is None
+            or completed_at.utcoffset() is None
+        ):
+            raise ValueError("completed_at must be timezone-aware")
+        if due_at is not None and (
+            not isinstance(due_at, datetime)
+            or due_at.tzinfo is None
+            or due_at.utcoffset() is None
+        ):
+            raise ValueError("due_at must be timezone-aware")
         state = TodoState(values[4])
         if (state is TodoState.OPEN) != (completed_at is None):
             raise ValueError("todo state and completed_at disagree")
@@ -138,8 +145,8 @@ def _decode(row: object) -> TodoRecord:
             text=values[3],
             state=state,
             created_at=created_at,
-            due_at=due_at,
             completed_at=completed_at,
+            due_at=due_at,
         )
     except (TypeError, ValueError) as error:
         raise RuntimeError("todo database contains invalid record") from error
