@@ -1,0 +1,40 @@
+.character-identity {
+  position: absolute;
+  z-index: 3;
+  top: 1rem;
+  left: 1rem;
+  display: grid;
+  gap: 0.1rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(170, 207, 193, 0.14);
+  border-radius: 0.9rem;
+  background: rgba(9, 16, 15, 0.56);
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.character-identity-label {
+  color: #8fa89e;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.character-identity strong {
+  overflow: hidden;
+  color: #edf4f1;
+  font-size: clamp(1rem, 4vw, 1.35rem);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 420px) {
+  .character-identity {
+    top: 0.7rem;
+    left: 0.7rem;
+    max-width: calc(100% - 1.4rem);
+  }
+}
