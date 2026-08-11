@@ -80,7 +80,7 @@ MIGRATIONS = (
             reminder_id UUID PRIMARY KEY,
             scope TEXT NOT NULL CHECK (scope IN ('user', 'household')),
             scope_id TEXT NOT NULL,
-            todo_id UUID NOT NULL,
+            todo_id UUID NOT NULL REFERENCES todo_records(todo_id) ON DELETE CASCADE,
             fire_at TIMESTAMPTZ NOT NULL,
             source TEXT NOT NULL CHECK (source = 'todo_due'),
             created_by_node_id TEXT NOT NULL,
@@ -100,6 +100,54 @@ MIGRATIONS = (
         WHERE state = 'scheduled';
         CREATE INDEX IF NOT EXISTS reminder_scope_created_idx
         ON reminder_records(scope, scope_id, created_at DESC, reminder_id DESC);
+
+        CREATE OR REPLACE FUNCTION hearthghost_validate_reminder_scope()
+        RETURNS TRIGGER LANGUAGE plpgsql AS $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM todo_records
+                WHERE todo_id = NEW.todo_id
+                  AND scope = NEW.scope
+                  AND scope_id = NEW.scope_id
+            ) THEN
+                RAISE EXCEPTION 'reminder scope does not match todo scope';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+        DROP TRIGGER IF EXISTS hearthghost_validate_reminder_scope_trigger ON reminder_records;
+        CREATE TRIGGER hearthghost_validate_reminder_scope_trigger
+        BEFORE INSERT OR UPDATE OF todo_id, scope, scope_id ON reminder_records
+        FOR EACH ROW EXECUTE FUNCTION hearthghost_validate_reminder_scope();
+
+        CREATE OR REPLACE FUNCTION hearthghost_sync_todo_reminder()
+        RETURNS TRIGGER LANGUAGE plpgsql AS $$
+        BEGIN
+            IF NEW.state <> 'open'
+               OR NEW.due_at IS NULL
+               OR NEW.due_at <= CURRENT_TIMESTAMP
+               OR NEW.due_at > CURRENT_TIMESTAMP + INTERVAL '366 days' THEN
+                UPDATE reminder_records
+                SET state = 'cancelled', cancelled_at = CURRENT_TIMESTAMP
+                WHERE todo_id = NEW.todo_id
+                  AND scope = NEW.scope
+                  AND scope_id = NEW.scope_id
+                  AND state = 'scheduled';
+            ELSE
+                UPDATE reminder_records
+                SET fire_at = NEW.due_at
+                WHERE todo_id = NEW.todo_id
+                  AND scope = NEW.scope
+                  AND scope_id = NEW.scope_id
+                  AND state = 'scheduled';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+        DROP TRIGGER IF EXISTS hearthghost_sync_todo_reminder_trigger ON todo_records;
+        CREATE TRIGGER hearthghost_sync_todo_reminder_trigger
+        AFTER UPDATE OF due_at, state ON todo_records
+        FOR EACH ROW EXECUTE FUNCTION hearthghost_sync_todo_reminder();
         """,
     ),
 )
