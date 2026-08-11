@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from apps.assistant.src.adapters.postgres_todo import PostgresTodoRepository
 from apps.assistant.src.modules.memory import MemoryScope
@@ -63,6 +63,7 @@ class PostgresTodoRepositoryTests(unittest.TestCase):
             text="우유 사기",
             state=TodoState.OPEN,
             created_at=datetime(2026, 8, 11, tzinfo=timezone.utc),
+            due_at=datetime(2026, 8, 12, 9, tzinfo=timezone(timedelta(hours=9))),
         )
 
     def test_dsn_is_redacted_and_connect_timeout_is_bounded(self):
@@ -71,7 +72,7 @@ class PostgresTodoRepositoryTests(unittest.TestCase):
         self.assertNotIn("secret", repr(repository))
         self.assertEqual(connector.calls[0][1]["connect_timeout"], 5)
 
-    def test_put_uses_parameter_binding(self):
+    def test_put_uses_parameter_binding_and_persists_due_at(self):
         schema = FakeCursor()
         write = FakeCursor()
         connector = Connector([schema, write])
@@ -81,12 +82,15 @@ class PostgresTodoRepositoryTests(unittest.TestCase):
 
         sql, params = write.executed[0]
         self.assertIn("INSERT INTO todo_records", sql)
+        self.assertIn("due_at", sql)
         self.assertNotIn(record.text, sql)
         self.assertIn(record.text, params)
-        self.assertEqual(len(params), 7)
+        self.assertEqual(params[-1], record.due_at)
+        self.assertEqual(len(params), 8)
 
-    def test_list_scope_binds_scope_scope_id_and_limit(self):
+    def test_list_scope_binds_scope_scope_id_and_limit_and_decodes_due_at(self):
         schema = FakeCursor()
+        due_at = datetime(2026, 8, 12, tzinfo=timezone.utc)
         row = (
             "11111111-1111-1111-1111-111111111111",
             "user",
@@ -95,6 +99,7 @@ class PostgresTodoRepositoryTests(unittest.TestCase):
             "open",
             datetime(2026, 8, 11, tzinfo=timezone.utc),
             None,
+            due_at,
         )
         query = FakeCursor([row])
         connector = Connector([schema, query])
@@ -103,11 +108,13 @@ class PostgresTodoRepositoryTests(unittest.TestCase):
 
         sql, params = query.executed[0]
         self.assertIn("WHERE scope = %s AND scope_id = %s", sql)
+        self.assertIn("due_at", sql)
         self.assertEqual(params, ("user", "owner", 10))
         self.assertEqual(records[0].scope, MemoryScope.USER)
         self.assertEqual(records[0].state, TodoState.OPEN)
+        self.assertEqual(records[0].due_at, due_at)
 
-    def test_replace_rechecks_scope_in_sql(self):
+    def test_replace_rechecks_scope_and_preserves_due_at(self):
         schema = FakeCursor()
         update = FakeCursor(rowcount=1)
         connector = Connector([schema, update])
@@ -121,11 +128,14 @@ class PostgresTodoRepositoryTests(unittest.TestCase):
             state=TodoState.COMPLETED,
             created_at=record.created_at,
             completed_at=datetime(2026, 8, 11, 1, tzinfo=timezone.utc),
+            due_at=record.due_at,
         )
         repository.replace(completed)
 
         sql, params = update.executed[0]
+        self.assertIn("due_at = %s", sql)
         self.assertIn("WHERE todo_id = %s AND scope = %s AND scope_id = %s", sql)
+        self.assertEqual(params[3], record.due_at)
         self.assertEqual(params[-2:], ("user", "owner"))
 
     def test_invalid_state_timestamp_pair_is_rejected_on_read(self):
@@ -139,6 +149,26 @@ class PostgresTodoRepositoryTests(unittest.TestCase):
                 "completed",
                 datetime(2026, 8, 11, tzinfo=timezone.utc),
                 None,
+                None,
+            )
+        ])
+        connector = Connector([schema, bad])
+        repository = PostgresTodoRepository("postgresql://db/hearthghost", connect=connector)
+        with self.assertRaisesRegex(RuntimeError, "invalid record"):
+            repository.get("11111111-1111-1111-1111-111111111111")
+
+    def test_naive_due_at_is_rejected_on_read(self):
+        schema = FakeCursor()
+        bad = FakeCursor([
+            (
+                "11111111-1111-1111-1111-111111111111",
+                "user",
+                "owner",
+                "우유 사기",
+                "open",
+                datetime(2026, 8, 11, tzinfo=timezone.utc),
+                None,
+                datetime(2026, 8, 12, 9),
             )
         ])
         connector = Connector([schema, bad])
