@@ -209,6 +209,7 @@ def main(arguments: list[str] | None = None) -> int:
         memory_commands=components.memory_commands,
         reminder_commands=components.reminder_commands,
         productivity_commands=components.productivity_commands,
+        preference_commands=components.preference_commands,
     )
     gateway_server = DevelopmentGatewayServer(bind_address=options.bind, port=options.port, tls=MutualTlsServerAdapter(server_context), node_protocol=node_protocol, conversation_protocol=conversation_protocol)
     status_server = CoreStatusServer((options.status_bind, options.status_port), components)
