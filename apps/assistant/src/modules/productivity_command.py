@@ -42,6 +42,14 @@ _DELETE_PATTERNS = (
     re.compile(rf"^\s*할\s*일\s*삭제\s*[:：]\s*{_TODO_REF}\s*$"),
     re.compile(rf"^\s*todo\s+delete\s*[:：]\s*{_TODO_REF}\s*$", re.IGNORECASE),
 )
+_DUE_SET_PATTERNS = (
+    re.compile(rf"^\s*할\s*일\s*기한\s*[:：]\s*{_TODO_REF}\s*\[(?P<due>[^\]]{{1,128}})\]\s*$"),
+    re.compile(rf"^\s*todo\s+due\s*[:：]\s*{_TODO_REF}\s*\[(?P<due>[^\]]{{1,128}})\]\s*$", re.IGNORECASE),
+)
+_DUE_CLEAR_PATTERNS = (
+    re.compile(rf"^\s*할\s*일\s*기한\s*삭제\s*[:：]\s*{_TODO_REF}\s*$"),
+    re.compile(rf"^\s*todo\s+due\s+clear\s*[:：]\s*{_TODO_REF}\s*$", re.IGNORECASE),
+)
 _LIST_PATTERNS = (
     re.compile(r"^\s*할\s*일\s*목록\s*[.!?]?\s*$"),
     re.compile(r"^\s*todo\s+list\s*[.!?]?\s*$", re.IGNORECASE),
@@ -146,6 +154,20 @@ class ProductivityCommandService:
                 return ProductivityCommandResult(True, False, "todo_not_found_in_scope", "이 범위에서 해당 할 일을 찾지 못했어요.")
             if resolved is _AMBIGUOUS:
                 return ProductivityCommandResult(True, False, "todo_reference_ambiguous", "짧은 할 일 ID가 겹쳐 처리하지 않았어요. 전체 ID를 사용해 주세요.")
+
+            if kind in {"due_set", "due_clear"}:
+                updated = self._todos.set_due(
+                    resolved,
+                    scope=principal.scope,
+                    scope_id=principal.scope_id,
+                    due_at=parsed.due_at if kind == "due_set" else None,
+                )
+                if updated is None:
+                    return ProductivityCommandResult(True, False, "todo_not_found_in_scope", "이 범위의 열린 할 일에서 해당 항목을 찾지 못했어요.")
+                if kind == "due_clear":
+                    return ProductivityCommandResult(True, True, "todo_due_cleared", "할 일 기한을 삭제했어요.", updated)
+                return ProductivityCommandResult(True, True, "todo_due_set", f"할 일 기한을 {updated.due_at.isoformat()}로 설정했어요.", updated)
+
             if kind == "delete":
                 deleted = self._todos.delete(resolved, scope=principal.scope, scope_id=principal.scope_id)
                 return ProductivityCommandResult(True, deleted, "todo_deleted" if deleted else "todo_not_found_in_scope", "할 일을 삭제했어요." if deleted else "이 범위에서 해당 할 일을 찾지 못했어요.")
@@ -166,6 +188,17 @@ def _parse(text: object) -> ParsedProductivityCommand | None:
     for pattern in _LIST_PATTERNS:
         if pattern.fullmatch(text) is not None:
             return ParsedProductivityCommand("list", "")
+    for pattern in _DUE_CLEAR_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match is not None:
+            return ParsedProductivityCommand("due_clear", match.group("todo_ref").lower())
+    for pattern in _DUE_SET_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match is not None:
+            due_at = _parse_due_at(match.group("due"))
+            if due_at is None:
+                return ParsedProductivityCommand("invalid_due", "")
+            return ParsedProductivityCommand("due_set", match.group("todo_ref").lower(), due_at)
     for pattern in _TODO_DUE_PATTERNS:
         match = pattern.fullmatch(text)
         if match is not None:
