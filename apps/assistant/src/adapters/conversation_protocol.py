@@ -26,6 +26,7 @@ from apps.assistant.src.modules.node_security import (
     CapabilityRequest,
 )
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
+from apps.assistant.src.modules.productivity_command import ProductivityCommandService
 from apps.assistant.src.ports.llm import ProposedAction
 from apps.assistant.src.ports.node_gateway import NodeGatewaySecurityBoundary
 
@@ -89,11 +90,13 @@ class ConversationProtocol:
         conversation: ConversationManager,
         orchestrator: ConversationOrchestrator,
         memory_commands: MemoryCommandService | None = None,
+        productivity_commands: ProductivityCommandService | None = None,
     ) -> None:
         self._gateway = gateway
         self._conversation = conversation
         self._orchestrator = orchestrator
         self._memory_commands = memory_commands
+        self._productivity_commands = productivity_commands
 
     def handle_next(self, channel: ssl.SSLSocket) -> ConversationWireResult:
         if not isinstance(channel, ssl.SSLSocket):
@@ -105,8 +108,6 @@ class ConversationProtocol:
         channel: ssl.SSLSocket,
         document: object,
     ) -> ConversationWireResult:
-        """Handle one already-framed command on an authenticated channel."""
-
         if not isinstance(channel, ssl.SSLSocket):
             raise NodeProtocolError("Conversation requires an authenticated TLS channel")
         command = parse_conversation_command(document)
@@ -142,12 +143,12 @@ class ConversationProtocol:
         command: ConversationCommand,
     ) -> ConversationWireResult:
         if command.message_type == "conversation.open":
-            opened = self._conversation.open(node)
-            return _conversation_result(command, opened)
-
+            return _conversation_result(command, self._conversation.open(node))
         if command.message_type == "conversation.close":
-            closed = self._conversation.end(node, command.conversation_session_id)
-            return _conversation_result(command, closed)
+            return _conversation_result(
+                command,
+                self._conversation.end(node, command.conversation_session_id),
+            )
 
         accepted = self._conversation.accept_text(
             node,
@@ -164,31 +165,35 @@ class ConversationProtocol:
                 conversation_session_id=accepted.turn.session_id,
             )
             if memory_result.recognized:
-                response_text = (
+                text = (
                     "기억했어요."
                     if memory_result.stored
                     else "기억 범위를 안전하게 확인할 수 없어 저장하지 않았어요."
                 )
-                completed = self._conversation.complete_response(
-                    node,
-                    accepted.turn.session_id,
-                    response_text,
-                )
-                if not completed.accepted:
-                    return ConversationWireResult(
-                        request_id=command.request_id,
-                        accepted=False,
-                        reason_code=completed.reason.value,
-                    )
-                events = accepted.events + completed.events
-                return ConversationWireResult(
-                    request_id=command.request_id,
-                    accepted=True,
+                return self._complete_local(
+                    node=node,
+                    command=command,
+                    accepted=accepted,
                     reason_code=memory_result.reason,
-                    node_session_id=command.node_session_id,
-                    conversation_session_id=command.conversation_session_id,
-                    response_text=response_text,
-                    events=tuple(_state_event(event) for event in events),
+                    response_text=text,
+                )
+
+        if self._productivity_commands is not None:
+            productivity_result = self._productivity_commands.handle(
+                node_id=node.node_id,
+                text=accepted.turn.text,
+                conversation_session_id=accepted.turn.session_id,
+            )
+            if productivity_result.recognized:
+                return self._complete_local(
+                    node=node,
+                    command=command,
+                    accepted=accepted,
+                    reason_code=productivity_result.reason,
+                    response_text=(
+                        productivity_result.response_text
+                        or "요청을 처리하지 않았어요."
+                    ),
                 )
 
         response = self._orchestrator.respond(node, accepted.turn)
@@ -212,14 +217,43 @@ class ConversationProtocol:
             ),
         )
 
+    def _complete_local(
+        self,
+        *,
+        node: AdmittedConversationNode,
+        command: ConversationCommand,
+        accepted,
+        reason_code: str,
+        response_text: str,
+    ) -> ConversationWireResult:
+        completed = self._conversation.complete_response(
+            node,
+            accepted.turn.session_id,
+            response_text,
+        )
+        if not completed.accepted:
+            return ConversationWireResult(
+                request_id=command.request_id,
+                accepted=False,
+                reason_code=completed.reason.value,
+            )
+        events = accepted.events + completed.events
+        return ConversationWireResult(
+            request_id=command.request_id,
+            accepted=True,
+            reason_code=reason_code,
+            node_session_id=command.node_session_id,
+            conversation_session_id=command.conversation_session_id,
+            response_text=response_text,
+            events=tuple(_state_event(event) for event in events),
+        )
+
 
 def read_conversation_command(channel) -> ConversationCommand:
     return parse_conversation_command(read_frame(channel))
 
 
 def parse_conversation_command(document: object) -> ConversationCommand:
-    """Validate a decoded conversation document without weakening framing."""
-
     if not isinstance(document, dict):
         raise NodeProtocolError("Conversation command must be an object")
     if document.get("contract_version") != CONTRACT_VERSION:
@@ -322,8 +356,6 @@ def read_conversation_result(channel) -> ConversationWireResult:
         )
     ):
         raise NodeProtocolError("invalid Conversation result")
-    events = _read_events(document.get("events", []))
-    proposals = _read_proposals(document.get("proposed_actions", []))
     return ConversationWireResult(
         request_id,
         outcome == "accepted",
@@ -331,8 +363,8 @@ def read_conversation_result(channel) -> ConversationWireResult:
         node_session_id,
         conversation_session_id,
         response_text,
-        events,
-        proposals,
+        _read_events(document.get("events", [])),
+        _read_proposals(document.get("proposed_actions", [])),
     )
 
 
@@ -409,10 +441,7 @@ def _read_proposals(value: object) -> tuple[dict[str, object], ...]:
     return tuple(proposals)
 
 
-def _require_exact_fields(
-    document: dict[str, object],
-    expected: set[str],
-) -> None:
+def _require_exact_fields(document: dict[str, object], expected: set[str]) -> None:
     if set(document) != expected:
         raise NodeProtocolError("Conversation fields do not match its message type")
 
@@ -427,7 +456,4 @@ def _valid_uuid(value: object) -> bool:
 
 
 def _valid_identifier(value: object) -> bool:
-    return (
-        isinstance(value, str)
-        and IDENTIFIER_PATTERN.fullmatch(value) is not None
-    )
+    return isinstance(value, str) and IDENTIFIER_PATTERN.fullmatch(value) is not None
