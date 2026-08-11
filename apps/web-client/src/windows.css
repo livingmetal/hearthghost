@@ -1,0 +1,43 @@
+.windows-shell {
+  min-height: 100vh;
+}
+
+.windows-character-stage {
+  min-height: min(58vh, 520px);
+}
+
+.windows-interaction-panel {
+  gap: 0.85rem;
+}
+
+.windows-node-status {
+  color: #9cb4aa;
+  font-size: 0.78rem;
+}
+
+.windows-text-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.windows-host-error {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  background: #09100f;
+  color: #edf4f1;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .windows-shell {
+    width: min(860px, calc(100vw - 3rem));
+    margin: 0 auto;
+  }
+
+  .windows-character-stage {
+    min-height: 560px;
+  }
+}
