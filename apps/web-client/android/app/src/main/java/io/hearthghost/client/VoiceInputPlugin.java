@@ -1,6 +1,7 @@
 package io.hearthghost.client;
 
 import android.Manifest;
+import android.annotation.TargetApi;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
@@ -109,6 +110,7 @@ public final class VoiceInputPlugin extends Plugin {
         super.handleOnDestroy();
     }
 
+    @TargetApi(Build.VERSION_CODES.S)
     private void startOnMainThread(String locale) {
         try {
             recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(getContext());
