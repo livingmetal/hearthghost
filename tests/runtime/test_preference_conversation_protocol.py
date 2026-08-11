@@ -22,43 +22,40 @@ from apps.assistant.src.runtime.core import build_core
 class PreferenceConversationProtocolTests(unittest.TestCase):
     def setUp(self):
         self.llm = FakeLLMAdapter()
-        principal = ConversationPrincipal(
-            scope=MemoryScope.USER,
-            scope_id="owner",
-            assurance=PrincipalAssurance.PERSONAL_NODE_BINDING,
-            source_node_id="android-personal-01",
+        self.principals = StaticConversationPrincipalResolver(
+            {
+                "android-personal-01": ConversationPrincipal(
+                    scope=MemoryScope.USER,
+                    scope_id="owner",
+                    assurance=PrincipalAssurance.PERSONAL_NODE_BINDING,
+                    source_node_id="android-personal-01",
+                ),
+                "android-personal-02": ConversationPrincipal(
+                    scope=MemoryScope.USER,
+                    scope_id="spouse",
+                    assurance=PrincipalAssurance.PERSONAL_NODE_BINDING,
+                    source_node_id="android-personal-02",
+                ),
+            }
         )
-        self.core = build_core(
-            llm=self.llm,
-            conversation_principal_resolver=StaticConversationPrincipalResolver(
-                {"android-personal-01": principal}
-            ),
-        )
+        self.core = build_core(llm=self.llm, conversation_principal_resolver=self.principals)
         self.protocol = ConversationProtocol(
             gateway=object(),
             conversation=self.core.conversation,
             orchestrator=self.core.orchestrator,
             preference_commands=self.core.preference_commands,
+            behavior_preferences=self.core.behavior_preferences,
+            conversation_principals=self.core.memory_principals,
         )
-        self.node = AdmittedConversationNode(
-            True,
-            "android-personal-01",
-            "node-session-1",
-            "conversation.text",
-        )
+        self.node = AdmittedConversationNode(True, "android-personal-01", "node-session-1", "conversation.text")
         opened = self.protocol._dispatch(
             self.node,
-            ConversationCommand(
-                "conversation.open",
-                str(uuid4()),
-                "node-session-1",
-                1,
-            ),
+            ConversationCommand("conversation.open", str(uuid4()), "node-session-1", 1),
         )
         self.conversation_id = opened.conversation_session_id
         self.assertEqual(opened.character_profile, {"name": "HearthGhost"})
 
-    def test_name_preference_applies_locally_and_same_result_has_new_profile(self):
+    def test_name_preference_applies_locally_and_same_result_has_new_scoped_profile(self):
         result = self.protocol._dispatch(
             self.node,
             ConversationCommand(
@@ -74,11 +71,48 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
         self.assertEqual(result.reason_code, "preference_applied")
         self.assertEqual(result.character_profile, {"name": "루나"})
         self.assertIn("이름: 루나", result.response_text)
-        self.assertEqual(self.core.orchestrator.persona.name, "루나")
+        self.assertEqual(
+            self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona.name,
+            "루나",
+        )
+        self.assertEqual(
+            self.core.behavior_preferences.snapshot(scope="user", scope_id="spouse").persona.name,
+            "HearthGhost",
+        )
+        self.assertEqual(self.core.orchestrator.persona.name, "HearthGhost")
         self.assertEqual(len(self.llm.requests), 1)
-        self.assertIn(
-            "BEHAVIOR_PREFERENCE_INTERPRETER_V1",
-            self.llm.requests[0].instructions,
+        self.assertIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", self.llm.requests[0].instructions)
+
+    def test_followup_preference_updates_only_current_principal_session(self):
+        result = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                2,
+                self.conversation_id,
+                "30초 정도 기다려",
+            ),
+        )
+        self.assertTrue(result.accepted)
+        session = self.core.conversation._repository.get(self.conversation_id)
+        self.assertEqual(session.follow_up_timeout_sec, 30)
+
+        other = AdmittedConversationNode(True, "android-personal-02", "node-session-2", "conversation.text")
+        opened = self.protocol._dispatch(
+            other,
+            ConversationCommand("conversation.open", str(uuid4()), "node-session-2", 1),
+        )
+        other_session = self.core.conversation._repository.get(opened.conversation_session_id)
+        self.assertEqual(other_session.follow_up_timeout_sec, 45)
+
+    def test_ordinary_text_uses_scoped_persona_in_normal_llm_prompt(self):
+        self.core.behavior_preferences.apply(
+            (),
+            scope="user",
+            scope_id="owner",
+            updated_by_node_id="android-personal-01",
         )
 
     def test_ordinary_text_skips_preference_interpreter_and_uses_normal_llm_once(self):
@@ -96,10 +130,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
         self.assertTrue(result.accepted)
         self.assertEqual(result.character_profile, {"name": "HearthGhost"})
         self.assertEqual(len(self.llm.requests), 1)
-        self.assertNotIn(
-            "BEHAVIOR_PREFERENCE_INTERPRETER_V1",
-            self.llm.requests[0].instructions,
-        )
+        self.assertNotIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", self.llm.requests[0].instructions)
 
     def test_wire_reader_rejects_extra_or_control_character_profile_fields(self):
         class FakeChannel:
