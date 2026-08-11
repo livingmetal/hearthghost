@@ -13,6 +13,7 @@ from apps.assistant.src.adapters.node_gateway_protocol import (
     read_frame,
     write_frame,
 )
+from apps.assistant.src.modules.behavior_preference_command import BehaviorPreferenceCommandService
 from apps.assistant.src.modules.conversation import (
     AdmittedConversationNode,
     ConversationManager,
@@ -26,6 +27,7 @@ from apps.assistant.src.modules.node_security import (
     CapabilityRequest,
 )
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
+from apps.assistant.src.modules.persona import require_persona_name
 from apps.assistant.src.modules.productivity_command import ProductivityCommandService
 from apps.assistant.src.modules.reminder_command import ReminderCommandService
 from apps.assistant.src.ports.llm import ProposedAction
@@ -58,6 +60,7 @@ class ConversationWireResult:
     response_text: str | None = None
     events: tuple[dict[str, object], ...] = ()
     proposed_actions: tuple[dict[str, object], ...] = ()
+    character_profile: dict[str, str] | None = None
 
     def to_document(self) -> dict[str, object]:
         document: dict[str, object] = {
@@ -71,6 +74,7 @@ class ConversationWireResult:
             ("node_session_id", self.node_session_id),
             ("conversation_session_id", self.conversation_session_id),
             ("response_text", self.response_text),
+            ("character_profile", self.character_profile),
         ):
             if value is not None:
                 document[field] = value
@@ -93,6 +97,7 @@ class ConversationProtocol:
         memory_commands: MemoryCommandService | None = None,
         reminder_commands: ReminderCommandService | None = None,
         productivity_commands: ProductivityCommandService | None = None,
+        preference_commands: BehaviorPreferenceCommandService | None = None,
     ) -> None:
         self._gateway = gateway
         self._conversation = conversation
@@ -100,6 +105,7 @@ class ConversationProtocol:
         self._memory_commands = memory_commands
         self._reminder_commands = reminder_commands
         self._productivity_commands = productivity_commands
+        self._preference_commands = preference_commands
 
     def handle_next(self, channel: ssl.SSLSocket) -> ConversationWireResult:
         if not isinstance(channel, ssl.SSLSocket):
@@ -129,9 +135,17 @@ class ConversationProtocol:
 
     def _dispatch(self, node: AdmittedConversationNode, command: ConversationCommand) -> ConversationWireResult:
         if command.message_type == "conversation.open":
-            return _conversation_result(command, self._conversation.open(node))
+            return _conversation_result(
+                command,
+                self._conversation.open(node),
+                character_profile=self._character_profile(),
+            )
         if command.message_type == "conversation.close":
-            return _conversation_result(command, self._conversation.end(node, command.conversation_session_id))
+            return _conversation_result(
+                command,
+                self._conversation.end(node, command.conversation_session_id),
+                character_profile=self._character_profile(),
+            )
 
         accepted = self._conversation.accept_text(node, command.conversation_session_id, command.text)
         if not accepted.accepted or accepted.turn is None:
@@ -182,6 +196,20 @@ class ConversationProtocol:
                     response_text=productivity_result.response_text or "요청을 처리하지 않았어요.",
                 )
 
+        if self._preference_commands is not None:
+            preference_result = self._preference_commands.handle(
+                node_id=node.node_id,
+                text=accepted.turn.text,
+            )
+            if preference_result.recognized:
+                return self._complete_local(
+                    node=node,
+                    command=command,
+                    accepted=accepted,
+                    reason_code=preference_result.reason,
+                    response_text=preference_result.response_text or "캐릭터 설정 요청을 처리하지 않았어요.",
+                )
+
         response = self._orchestrator.respond(node, accepted.turn)
         if not response.conversation_completed:
             return ConversationWireResult(command.request_id, False, response.reason.value)
@@ -195,6 +223,7 @@ class ConversationProtocol:
             response_text=response.response_text,
             events=tuple(_state_event(event) for event in events),
             proposed_actions=tuple(_wire_proposal(proposal) for proposal in response.proposed_actions),
+            character_profile=self._character_profile(),
         )
 
     def _complete_local(
@@ -218,7 +247,11 @@ class ConversationProtocol:
             conversation_session_id=command.conversation_session_id,
             response_text=response_text,
             events=tuple(_state_event(event) for event in events),
+            character_profile=self._character_profile(),
         )
+
+    def _character_profile(self) -> dict[str, str]:
+        return {"name": require_persona_name(self._orchestrator.persona.name)}
 
 
 def read_conversation_command(channel) -> ConversationCommand:
@@ -264,7 +297,7 @@ def read_conversation_result(channel) -> ConversationWireResult:
     document = read_frame(channel)
     if not isinstance(document, dict):
         raise NodeProtocolError("Conversation result must be an object")
-    allowed = {"contract_version", "message_type", "request_id", "outcome", "reason_code", "node_session_id", "conversation_session_id", "response_text", "events", "proposed_actions"}
+    allowed = {"contract_version", "message_type", "request_id", "outcome", "reason_code", "node_session_id", "conversation_session_id", "response_text", "events", "proposed_actions", "character_profile"}
     if set(document) - allowed:
         raise NodeProtocolError("Conversation result contains unknown fields")
     request_id = document.get("request_id")
@@ -286,18 +319,19 @@ def read_conversation_result(channel) -> ConversationWireResult:
     ):
         raise NodeProtocolError("invalid Conversation result")
     return ConversationWireResult(
-        request_id,
-        outcome == "accepted",
-        reason_code,
-        node_session_id,
-        conversation_session_id,
-        response_text,
-        _read_events(document.get("events", [])),
-        _read_proposals(document.get("proposed_actions", [])),
+        request_id=request_id,
+        accepted=outcome == "accepted",
+        reason_code=reason_code,
+        node_session_id=node_session_id,
+        conversation_session_id=conversation_session_id,
+        response_text=response_text,
+        events=_read_events(document.get("events", [])),
+        proposed_actions=_read_proposals(document.get("proposed_actions", [])),
+        character_profile=_read_character_profile(document.get("character_profile")),
     )
 
 
-def _conversation_result(command, result) -> ConversationWireResult:
+def _conversation_result(command, result, *, character_profile: dict[str, str] | None = None) -> ConversationWireResult:
     session = result.session
     return ConversationWireResult(
         request_id=command.request_id,
@@ -306,6 +340,7 @@ def _conversation_result(command, result) -> ConversationWireResult:
         node_session_id=command.node_session_id if result.accepted else None,
         conversation_session_id=session.session_id if result.accepted and session is not None else None,
         events=tuple(_state_event(event) for event in result.events),
+        character_profile=character_profile if result.accepted else None,
     )
 
 
@@ -315,6 +350,18 @@ def _state_event(event: ConversationStateEvent) -> dict[str, object]:
 
 def _wire_proposal(proposal: ProposedAction) -> dict[str, object]:
     return {"name": proposal.name, "arguments": dict(proposal.arguments), "authorization_status": "pending_policy", "execution_status": "not_executed"}
+
+
+def _read_character_profile(value: object) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or set(value) != {"name"}:
+        raise NodeProtocolError("Conversation result character profile is invalid")
+    try:
+        name = require_persona_name(value.get("name"))
+    except ValueError as error:
+        raise NodeProtocolError("Conversation result character profile is invalid") from error
+    return {"name": name}
 
 
 def _read_events(value: object) -> tuple[dict[str, object], ...]:
