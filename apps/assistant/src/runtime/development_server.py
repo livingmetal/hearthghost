@@ -23,6 +23,7 @@ from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
 from apps.assistant.src.adapters.node_gateway_protocol import NodeGatewayProtocol, NodeProtocolError, read_frame
 from apps.assistant.src.adapters.node_tls_transport import MutualTlsCredentialAuthenticator, MutualTlsServerAdapter, create_node_server_context
 from apps.assistant.src.adapters.postgres_memory import PostgresMemoryRepository
+from apps.assistant.src.adapters.postgres_reminder import PostgresReminderRepository
 from apps.assistant.src.adapters.postgres_todo import PostgresTodoRepository
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
@@ -145,11 +146,13 @@ def main(arguments: list[str] | None = None) -> int:
 
     memory_repository = None
     todo_repository = None
+    reminder_repository = None
     storage_kind = "persistent_development_file"
     if options.postgres_dsn_secret:
         dsn = read_postgres_dsn(options.postgres_dsn_secret)
         memory_repository = PostgresMemoryRepository(dsn)
         todo_repository = PostgresTodoRepository(dsn)
+        reminder_repository = PostgresReminderRepository(dsn)
         storage_kind = "persistent_postgresql"
     memory_principals = parse_memory_principal_bindings(options.memory_principal) if options.memory_principal else None
 
@@ -162,6 +165,7 @@ def main(arguments: list[str] | None = None) -> int:
         credential_repository=credentials,
         memory_repository=memory_repository,
         todo_repository=todo_repository,
+        reminder_repository=reminder_repository,
         conversation_principal_resolver=memory_principals,
         llm=FakeLLMAdapter(),
         storage_kind=storage_kind,
@@ -172,6 +176,7 @@ def main(arguments: list[str] | None = None) -> int:
         conversation=components.conversation,
         orchestrator=components.orchestrator,
         memory_commands=components.memory_commands,
+        reminder_commands=components.reminder_commands,
         productivity_commands=components.productivity_commands,
     )
     gateway_server = DevelopmentGatewayServer(bind_address=options.bind, port=options.port, tls=MutualTlsServerAdapter(server_context), node_protocol=node_protocol, conversation_protocol=conversation_protocol)

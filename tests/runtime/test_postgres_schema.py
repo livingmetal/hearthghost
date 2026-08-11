@@ -65,31 +65,40 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
         inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
         self.assertEqual(inserted, [(migration.version, migration.name) for migration in MIGRATIONS])
 
-    def test_existing_v1_applies_v2_and_v3(self):
+    def test_existing_v1_applies_v2_through_v4(self):
         cursor = FakeCursor([(1, "memory_records_v1")])
         version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
-        self.assertEqual(version, 3)
+        self.assertEqual(version, 4)
         inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
-        self.assertEqual(inserted, [(2, "todo_records_v1"), (3, "todo_due_at_v1")])
+        self.assertEqual(
+            inserted,
+            [(2, "todo_records_v1"), (3, "todo_due_at_v1"), (4, "reminder_records_v1")],
+        )
 
-    def test_existing_v2_applies_only_v3(self):
-        cursor = FakeCursor([(1, "memory_records_v1"), (2, "todo_records_v1")])
-        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
-        self.assertEqual(version, 3)
-        inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
-        self.assertEqual(inserted, [(3, "todo_due_at_v1")])
-        migration_sql = next(sql for sql, _ in cursor.executed if "ADD COLUMN IF NOT EXISTS due_at" in sql)
-        self.assertIn("TIMESTAMPTZ", migration_sql)
-        self.assertIn("WHERE state = 'open' AND due_at IS NOT NULL", migration_sql)
-
-    def test_current_database_is_idempotent(self):
+    def test_existing_v3_applies_only_v4(self):
         cursor = FakeCursor([
             (1, "memory_records_v1"),
             (2, "todo_records_v1"),
             (3, "todo_due_at_v1"),
         ])
         version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
-        self.assertEqual(version, 3)
+        self.assertEqual(version, 4)
+        inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
+        self.assertEqual(inserted, [(4, "reminder_records_v1")])
+        migration_sql = next(sql for sql, _ in cursor.executed if "CREATE TABLE IF NOT EXISTS reminder_records" in sql)
+        self.assertIn("TIMESTAMPTZ", migration_sql)
+        self.assertIn("reminder_one_active_per_todo_idx", migration_sql)
+        self.assertIn("WHERE state = 'scheduled'", migration_sql)
+
+    def test_current_database_is_idempotent(self):
+        cursor = FakeCursor([
+            (1, "memory_records_v1"),
+            (2, "todo_records_v1"),
+            (3, "todo_due_at_v1"),
+            (4, "reminder_records_v1"),
+        ])
+        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
+        self.assertEqual(version, 4)
         self.assertFalse(any("INSERT INTO hearthghost_schema_migrations" in sql for sql, _ in cursor.executed))
 
     def test_future_database_version_fails_closed(self):
@@ -97,7 +106,8 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
             (1, "memory_records_v1"),
             (2, "todo_records_v1"),
             (3, "todo_due_at_v1"),
-            (4, "future_build"),
+            (4, "reminder_records_v1"),
+            (5, "future_build"),
         ])
         with self.assertRaisesRegex(PostgresSchemaError, "newer"):
             ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))

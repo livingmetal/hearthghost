@@ -43,6 +43,8 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(core.behavior_preferences)
         self.assertIsNotNone(core.preference_interpreter)
         self.assertIsNotNone(core.preference_service)
+        self.assertIsNotNone(core.reminders)
+        self.assertIsNotNone(core.reminder_commands)
         self.assertIsNotNone(core.registry)
 
     def test_unconfigured_security_boundaries_all_fail_closed(self):
@@ -151,6 +153,7 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertEqual(status["boundaries"]["policy"], "deny_only")
         self.assertEqual(status["boundaries"]["llm"], "unavailable")
         self.assertEqual(status["boundaries"]["behavior_preferences"], "internal_typed_boundary")
+        self.assertEqual(status["boundaries"]["reminders"], "explicit_schedule_only_delivery_disabled")
         self.assertNotIn("contract_ids", status)
         self.assertNotIn("credentials", status)
 
