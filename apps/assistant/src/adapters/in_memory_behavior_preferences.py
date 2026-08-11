@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from apps.assistant.src.ports.behavior_preferences import StoredBehaviorPreferences
-
-
-class BehaviorPreferenceConflictError(RuntimeError):
-    pass
+from apps.assistant.src.ports.behavior_preferences import (
+    BehaviorPreferenceConflictError,
+    StoredBehaviorPreferences,
+)
 
 
 class InMemoryBehaviorPreferenceRepository:
