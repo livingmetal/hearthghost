@@ -6,5 +6,5 @@
     "outDir": ".test-dist",
     "rootDir": "src"
   },
-  "include": ["src/node", "src/character", "src/conversation", "src/attention", "src/voice/controller.ts"]
+  "include": ["src/node", "src/character", "src/conversation", "src/attention", "src/windows", "src/voice/controller.ts"]
 }
