@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from apps.assistant.src.modules.conversation_principal import ConversationPrincipalResolver
 from apps.assistant.src.modules.memory import MemoryCandidate, MemoryKind, MemoryManager, MemorySource
-from apps.assistant.src.modules.todo import TodoManager, TodoRecord
+from apps.assistant.src.modules.todo import TodoManager, TodoRecord, TodoState
 
 
 _NOTE_PATTERNS = (
@@ -22,6 +22,10 @@ _TODO_PATTERNS = (
 _COMPLETE_PATTERNS = (
     re.compile(r"^\s*할\s*일\s*완료\s*[:：]\s*(?P<todo_id>[0-9a-fA-F-]{36})\s*$"),
     re.compile(r"^\s*todo\s+done\s*[:：]\s*(?P<todo_id>[0-9a-fA-F-]{36})\s*$", re.IGNORECASE),
+)
+_LIST_PATTERNS = (
+    re.compile(r"^\s*할\s*일\s*목록\s*[.!?]?\s*$"),
+    re.compile(r"^\s*todo\s+list\s*[.!?]?\s*$", re.IGNORECASE),
 )
 
 
@@ -71,6 +75,15 @@ class ProductivityCommandService:
                 return ProductivityCommandResult(
                     True, True, "todo_created", f"할 일로 추가했어요. ID: {todo.todo_id}", todo
                 )
+            if kind == "list":
+                records = self._todos.list_scope(principal.scope, principal.scope_id, limit=10)
+                open_records = [record for record in records if record.state is TodoState.OPEN]
+                if not open_records:
+                    return ProductivityCommandResult(True, True, "todo_list_empty", "열린 할 일이 없어요.")
+                lines = ["열린 할 일이에요."]
+                for index, record in enumerate(open_records, start=1):
+                    lines.append(f"{index}. {record.text} ({record.todo_id})")
+                return ProductivityCommandResult(True, True, "todo_listed", "\n".join(lines))
             completed = self._todos.complete(value, scope=principal.scope, scope_id=principal.scope_id)
             if completed is None:
                 return ProductivityCommandResult(
@@ -86,6 +99,9 @@ class ProductivityCommandService:
 def _parse(text: object) -> tuple[str, str] | None:
     if not isinstance(text, str) or not text.strip() or "\x00" in text:
         return None
+    for pattern in _LIST_PATTERNS:
+        if pattern.fullmatch(text) is not None:
+            return "list", ""
     for kind, patterns in (("note", _NOTE_PATTERNS), ("todo", _TODO_PATTERNS), ("complete", _COMPLETE_PATTERNS)):
         for pattern in patterns:
             match = pattern.fullmatch(text)
