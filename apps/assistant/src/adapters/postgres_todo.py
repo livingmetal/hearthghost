@@ -5,27 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Callable
 
+from apps.assistant.src.adapters.postgres_schema import ensure_postgres_schema
 from apps.assistant.src.modules.memory import MemoryScope
 from apps.assistant.src.modules.todo import TodoRecord, TodoState
-
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS todo_records (
-    todo_id UUID PRIMARY KEY,
-    scope TEXT NOT NULL CHECK (scope IN ('user', 'household')),
-    scope_id TEXT NOT NULL,
-    text TEXT NOT NULL,
-    state TEXT NOT NULL CHECK (state IN ('open', 'completed')),
-    created_at TIMESTAMPTZ NOT NULL,
-    completed_at TIMESTAMPTZ NULL,
-    CHECK (
-        (state = 'open' AND completed_at IS NULL)
-        OR (state = 'completed' AND completed_at IS NOT NULL)
-    )
-);
-CREATE INDEX IF NOT EXISTS todo_scope_state_created_idx
-ON todo_records(scope, scope_id, state, created_at DESC, todo_id DESC);
-"""
 
 
 class PostgresTodoRepository:
@@ -38,7 +20,7 @@ class PostgresTodoRepository:
             connect = psycopg.connect
         self._dsn = dsn
         self._connect_factory = connect
-        self._initialize()
+        ensure_postgres_schema(dsn, connect=connect)
 
     def __repr__(self) -> str:
         return "PostgresTodoRepository(dsn=<redacted>)"
@@ -122,11 +104,6 @@ class PostgresTodoRepository:
             with connection.cursor() as cursor:
                 cursor.execute("DELETE FROM todo_records WHERE todo_id = %s", (todo_id,))
                 return cursor.rowcount == 1
-
-    def _initialize(self) -> None:
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(_SCHEMA)
 
     def _connect(self):
         return self._connect_factory(self._dsn, connect_timeout=5)
