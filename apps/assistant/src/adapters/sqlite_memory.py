@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import stat
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
@@ -33,14 +34,24 @@ ON memory_records(scope, scope_id, created_at DESC, memory_id DESC);
 
 
 class SqliteMemoryRepository:
-    """Persistent repository; file access is owner-only by construction."""
+    """Persistent repository requiring an owner-only storage directory."""
 
     def __init__(self, path: Path) -> None:
-        self._path = path.resolve()
+        requested = Path(path)
+        if requested.is_symlink():
+            raise ValueError("memory database path may not be a symlink")
+        parent = requested.parent
+        if parent.exists():
+            if not parent.is_dir():
+                raise ValueError("memory database parent must be a directory")
+            mode = stat.S_IMODE(parent.stat().st_mode)
+            if mode & 0o077:
+                raise ValueError("memory database parent must be owner-only")
+        else:
+            parent.mkdir(mode=0o700, parents=True, exist_ok=False)
+        self._path = requested.resolve()
         if self._path.exists() and not self._path.is_file():
             raise ValueError("memory database path must be a file")
-        self._path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(self._path.parent, 0o700)
         self._lock = RLock()
         self._initialize()
 
