@@ -22,19 +22,19 @@ from apps.assistant.src.adapters.in_memory_core import (
     InMemorySessionRepository,
     RejectingCredentialAuthenticator,
 )
-from apps.assistant.src.adapters.in_memory_conversation import (
-    InMemoryConversationRepository,
-)
+from apps.assistant.src.adapters.in_memory_conversation import InMemoryConversationRepository
 from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
+from apps.assistant.src.modules.behavior_preference_interpreter import (
+    BehaviorPreferenceInterpreter,
+    BehaviorPreferenceService,
+)
+from apps.assistant.src.modules.behavior_preferences import BehaviorPreferenceManager
 from apps.assistant.src.modules.conversation import ConversationManager
 from apps.assistant.src.modules.node_administration import NodeAdministration
 from apps.assistant.src.modules.node_security import NodeGatewaySecurity, SystemClock
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
-from apps.assistant.src.modules.privacy_gateway import (
-    DEFAULT_CLOUD_PRIVACY_POLICY,
-    PrivacyGateway,
-)
+from apps.assistant.src.modules.privacy_gateway import DEFAULT_CLOUD_PRIVACY_POLICY, PrivacyGateway
 from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
 from apps.assistant.src.ports.conversation import ConversationRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
@@ -59,6 +59,9 @@ class CoreComponents:
     conversation: ConversationManager
     privacy_gateway: PrivacyGateway
     orchestrator: ConversationOrchestrator
+    behavior_preferences: BehaviorPreferenceManager
+    preference_interpreter: BehaviorPreferenceInterpreter
+    preference_service: BehaviorPreferenceService
     registry: object
     credentials: object
     contracts: ContractCatalog
@@ -69,10 +72,7 @@ class CoreComponents:
     storage_kind: str = "ephemeral"
 
     def liveness(self) -> dict[str, object]:
-        return {
-            "service": "hearthghost-core",
-            "status": "alive",
-        }
+        return {"service": "hearthghost-core", "status": "alive"}
 
     def readiness(self) -> tuple[bool, dict[str, object]]:
         missing = []
@@ -103,18 +103,13 @@ class CoreComponents:
                 "node_administration": "loaded",
                 "registry": "loaded",
                 "contract_catalog": "loaded",
-                "node_transport": (
-                    "configured" if self.transport_configured else "deny_only"
-                ),
+                "node_transport": "configured" if self.transport_configured else "deny_only",
                 "administrator_authority": (
-                    "configured"
-                    if self.administrator_authority_configured
-                    else "deny_only"
+                    "configured" if self.administrator_authority_configured else "deny_only"
                 ),
-                "policy": (
-                    "configured" if self.policy_rules_configured else "deny_only"
-                ),
+                "policy": "configured" if self.policy_rules_configured else "deny_only",
                 "conversation": "text_only",
+                "behavior_preferences": "internal_typed_boundary",
                 "privacy_gateway": "text_allow_media_deny",
                 "llm": "configured" if self.llm_configured else "unavailable",
             },
@@ -141,16 +136,12 @@ def build_core(
     clock = SystemClock()
     registry = node_registry if node_registry is not None else InMemoryNodeRegistry()
     credentials = (
-        credential_repository
-        if credential_repository is not None
-        else InMemoryCredentialRepository()
+        credential_repository if credential_repository is not None else InMemoryCredentialRepository()
     )
     sessions = InMemorySessionRepository()
     replay = InMemoryReplayProtector()
     selected_authenticator = (
-        authenticator
-        if authenticator is not None
-        else RejectingCredentialAuthenticator()
+        authenticator if authenticator is not None else RejectingCredentialAuthenticator()
     )
     selected_authorizer = (
         administrator_authorizer
@@ -192,6 +183,18 @@ def build_core(
         privacy_gateway=privacy_gateway,
         llm_timeout_seconds=llm_timeout_seconds,
     )
+    behavior_preferences = BehaviorPreferenceManager(
+        conversation=conversation,
+        orchestrator=orchestrator,
+    )
+    preference_interpreter = BehaviorPreferenceInterpreter(
+        privacy_gateway=privacy_gateway,
+        timeout_seconds=llm_timeout_seconds,
+    )
+    preference_service = BehaviorPreferenceService(
+        interpreter=preference_interpreter,
+        manager=behavior_preferences,
+    )
     return CoreComponents(
         node_gateway=gateway,
         node_administration=administration,
@@ -199,6 +202,9 @@ def build_core(
         conversation=conversation,
         privacy_gateway=privacy_gateway,
         orchestrator=orchestrator,
+        behavior_preferences=behavior_preferences,
+        preference_interpreter=preference_interpreter,
+        preference_service=preference_service,
         registry=registry,
         credentials=credentials,
         contracts=ContractCatalog(contracts_root or REPOSITORY_ROOT / "contracts"),
@@ -217,11 +223,7 @@ class CoreStatusServer(ThreadingHTTPServer):
     request_queue_size = 8
     allow_reuse_address = False
 
-    def __init__(
-        self,
-        server_address: tuple[str, int],
-        components: CoreComponents,
-    ) -> None:
+    def __init__(self, server_address: tuple[str, int], components: CoreComponents) -> None:
         _require_loopback(server_address[0])
         self.components = components
         super().__init__(server_address, _status_handler())
@@ -240,34 +242,21 @@ def _status_handler() -> type[BaseHTTPRequestHandler]:
                 return
             if path == "/health/ready":
                 ready, body = self.server.components.readiness()
-                self._send(
-                    HTTPStatus.OK if ready else HTTPStatus.SERVICE_UNAVAILABLE,
-                    body,
-                )
+                self._send(HTTPStatus.OK if ready else HTTPStatus.SERVICE_UNAVAILABLE, body)
                 return
             if path == "/status":
                 self._send(HTTPStatus.OK, self.server.components.status())
                 return
-            self._send(
-                HTTPStatus.NOT_FOUND,
-                {"status": "not_found"},
-            )
+            self._send(HTTPStatus.NOT_FOUND, {"status": "not_found"})
 
         def do_POST(self) -> None:
-            self._send(
-                HTTPStatus.METHOD_NOT_ALLOWED,
-                {"status": "method_not_allowed"},
-            )
+            self._send(HTTPStatus.METHOD_NOT_ALLOWED, {"status": "method_not_allowed"})
 
         def log_message(self, format: str, *args: object) -> None:
             return
 
         def _send(self, status: HTTPStatus, body: dict[str, object]) -> None:
-            payload = json.dumps(
-                body,
-                separators=(",", ":"),
-                sort_keys=True,
-            ).encode("utf-8")
+            payload = json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(payload)))
@@ -284,9 +273,7 @@ def serve(
     *,
     bind_address: str = DEFAULT_BIND_ADDRESS,
     port: int = DEFAULT_STATUS_PORT,
-    server_factory: Callable[
-        [tuple[str, int], CoreComponents], CoreStatusServer
-    ] = CoreStatusServer,
+    server_factory: Callable[[tuple[str, int], CoreComponents], CoreStatusServer] = CoreStatusServer,
 ) -> None:
     _require_loopback(bind_address)
     if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
