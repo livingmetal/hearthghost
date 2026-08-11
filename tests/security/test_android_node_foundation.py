@@ -13,7 +13,7 @@ ANDROID_NAMESPACE = "{http://schemas.android.com/apk/res/android}"
 
 
 class AndroidNodeFoundationTests(unittest.TestCase):
-    def test_only_internet_permission_is_requested(self):
+    def test_only_reviewed_network_and_microphone_permissions_are_requested(self):
         root = ET.parse(
             ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
         ).getroot()
@@ -21,13 +21,16 @@ class AndroidNodeFoundationTests(unittest.TestCase):
             item.attrib[f"{ANDROID_NAMESPACE}name"]
             for item in root.findall("uses-permission")
         }
-        self.assertEqual(permissions, {"android.permission.INTERNET"})
+        self.assertEqual(
+            permissions,
+            {
+                "android.permission.INTERNET",
+                "android.permission.RECORD_AUDIO",
+            },
+        )
         application = root.find("application")
         self.assertIsNotNone(application)
-        self.assertEqual(
-            application.attrib[f"{ANDROID_NAMESPACE}allowBackup"],
-            "false",
-        )
+        self.assertEqual(application.attrib[f"{ANDROID_NAMESPACE}allowBackup"], "false")
         self.assertEqual(
             application.attrib[f"{ANDROID_NAMESPACE}usesCleartextTraffic"],
             "false",
@@ -52,15 +55,9 @@ class AndroidNodeFoundationTests(unittest.TestCase):
             / "hearthghost"
             / "client"
         )
-        identity = (source_root / "NodeIdentityStore.java").read_text(
-            encoding="utf-8"
-        )
-        connection = (source_root / "NodeConnection.java").read_text(
-            encoding="utf-8"
-        )
-        plugin = (source_root / "NodeTransportPlugin.java").read_text(
-            encoding="utf-8"
-        )
+        identity = (source_root / "NodeIdentityStore.java").read_text(encoding="utf-8")
+        connection = (source_root / "NodeConnection.java").read_text(encoding="utf-8")
+        plugin = (source_root / "NodeTransportPlugin.java").read_text(encoding="utf-8")
         self.assertIn('private static final String KEYSTORE = "AndroidKeyStore"', identity)
         self.assertIn("KeyGenParameterSpec.Builder", identity)
         self.assertIn("privateKey.getEncoded() != null", identity)

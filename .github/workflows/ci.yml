@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python security and runtime tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build Python test image
+        run: docker build --target test --tag hearthghost-python-test .
+      - name: Run Python tests without network
+        run: docker run --rm --network none hearthghost-python-test
+
+  client:
+    name: TypeScript and client tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build client test image
+        run: docker build --target client-test --tag hearthghost-client-test .
+      - name: Run packaged client tests without network
+        run: docker run --rm --network none hearthghost-client-test
+
+  android:
+    name: Android unit lint and debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build pinned Android toolchain and APK
+        run: docker build --file containers/android/Containerfile --tag hearthghost-android-build .
+      - name: Verify final image runs without network
+        run: docker run --rm --network none hearthghost-android-build
