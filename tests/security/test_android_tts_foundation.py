@@ -15,12 +15,24 @@ class AndroidTtsFoundationTests(unittest.TestCase):
     def test_tts_selects_embedded_voice_only(self):
         source = (SOURCE / "VoiceOutputPlugin.java").read_text(encoding="utf-8")
 
-        self.assertIn("!voice.isNetworkConnectionRequired()", source)
+        self.assertIn("voice.isNetworkConnectionRequired()", source)
         self.assertIn("TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED", source)
         self.assertIn("textToSpeech.setVoice(voice)", source)
-        self.assertIn('mode", "embedded_only"', source)
+        self.assertIn('mode\", \"embedded_only\"', source)
         self.assertNotIn("synthesizeToFile", source)
         self.assertNotIn("KEY_FEATURE_NETWORK_SYNTHESIS", source)
+
+    def test_tts_character_profiles_are_local_and_distinct(self):
+        source = (SOURCE / "VoiceOutputPlugin.java").read_text(encoding="utf-8")
+
+        self.assertIn('PROFILE_YOUNGHEE = "younghee"', source)
+        self.assertIn('PROFILE_CHEOLSU = "cheolsu"', source)
+        self.assertIn("new VoiceTuning(1.10f, 1.04f)", source)
+        self.assertIn("new VoiceTuning(0.88f, 0.94f)", source)
+        self.assertIn("candidates.size() > 1", source)
+        self.assertIn("candidates.get(1)", source)
+        self.assertIn("textToSpeech.setPitch", source)
+        self.assertIn("textToSpeech.setSpeechRate", source)
 
     def test_tts_has_no_network_or_provider_client(self):
         source = (SOURCE / "VoiceOutputPlugin.java").read_text(encoding="utf-8")
