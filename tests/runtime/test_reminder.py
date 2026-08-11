@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 from apps.assistant.src.adapters.in_memory_reminder import InMemoryReminderRepository
@@ -76,6 +77,44 @@ class ReminderTests(unittest.TestCase):
                 manager.schedule_for_todo(
                     todo, created_by_node_id="android-personal-01", explicit_user_request=True
                 )
+
+    def test_due_change_reschedules_existing_reminder_without_creating_another(self):
+        manager, repository = self.build()
+        todo = self.todo()
+        scheduled = manager.schedule_for_todo(
+            todo, created_by_node_id="android-personal-01", explicit_user_request=True
+        )
+        changed = replace(todo, due_at=NOW + timedelta(hours=5))
+        synced = manager.synchronize_for_todo(changed)
+        self.assertEqual(synced.reminder_id, scheduled.reminder_id)
+        self.assertEqual(synced.fire_at, changed.due_at)
+        self.assertEqual(len(repository.list_scope("user", "owner", limit=10)), 1)
+
+    def test_due_clear_completion_past_or_out_of_horizon_cancels_existing_reminder(self):
+        variants = (
+            self.todo(due_at=None),
+            self.todo(due_at=NOW - timedelta(seconds=1)),
+            self.todo(due_at=NOW + timedelta(days=367)),
+            TodoRecord(
+                todo_id="11111111-1111-1111-1111-111111111111",
+                scope=MemoryScope.USER,
+                scope_id="owner",
+                text="완료됨",
+                state=TodoState.COMPLETED,
+                created_at=NOW,
+                due_at=NOW + timedelta(hours=3),
+                completed_at=NOW,
+            ),
+        )
+        for changed in variants:
+            with self.subTest(changed=changed):
+                manager, _ = self.build()
+                manager.schedule_for_todo(
+                    self.todo(), created_by_node_id="android-personal-01", explicit_user_request=True
+                )
+                synced = manager.synchronize_for_todo(changed)
+                self.assertEqual(synced.state, ReminderState.CANCELLED)
+                self.assertEqual(synced.cancelled_at, NOW)
 
     def test_cancel_is_scope_bound_and_idempotent(self):
         manager, _ = self.build()
