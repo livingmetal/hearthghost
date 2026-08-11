@@ -20,7 +20,9 @@ from apps.assistant.src.modules.node_security import (
     SecurityReason,
 )
 from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
+from apps.assistant.src.modules.memory import MemoryScope
 from apps.assistant.src.modules.notification_delivery import NotificationAdapterResult
+from apps.assistant.src.modules.notification_target import StaticNotificationTargetResolver
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core, main
 
 
@@ -46,6 +48,7 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(core.preference_service)
         self.assertIsNotNone(core.reminders)
         self.assertIsNotNone(core.reminder_commands)
+        self.assertIsNotNone(core.notification_targets)
         self.assertIsNotNone(core.notification_delivery)
         self.assertIsNotNone(core.registry)
 
@@ -70,6 +73,7 @@ class CoreRuntimeTests(unittest.TestCase):
         policy = core.policy.evaluate({"proposal_id": "untrusted-input"})
         self.assertFalse(policy.allowed)
         self.assertEqual(policy.reason_code, "policy_not_configured")
+        self.assertIsNone(core.notification_targets.resolve("user", "owner"))
 
     def test_registry_state_changes_only_through_authorized_administration(self):
         core = build_core(administrator_authorizer=AllowingAdministratorAuthorizer())
@@ -156,12 +160,27 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertEqual(status["boundaries"]["llm"], "unavailable")
         self.assertEqual(status["boundaries"]["behavior_preferences"], "internal_typed_boundary")
         self.assertEqual(status["boundaries"]["reminders"], "explicit_schedule_only")
+        self.assertEqual(status["boundaries"]["notification_routing"], "deny_only")
         self.assertEqual(
             status["boundaries"]["notification_delivery"],
             "policy_node_local_gate_deny_adapter",
         )
         self.assertNotIn("contract_ids", status)
         self.assertNotIn("credentials", status)
+
+    def test_notification_routing_must_be_explicitly_injected(self):
+        resolver = StaticNotificationTargetResolver(
+            {(MemoryScope.USER, "owner"): "android-personal-01"}
+        )
+        core = build_core(notification_target_resolver=resolver)
+        self.assertEqual(
+            core.status()["boundaries"]["notification_routing"],
+            "explicit_principal_to_node",
+        )
+        self.assertEqual(
+            core.notification_targets.resolve("user", "owner"),
+            "android-personal-01",
+        )
 
     def test_notification_delivery_adapter_must_be_explicitly_injected(self):
         class ConfiguredAdapter:

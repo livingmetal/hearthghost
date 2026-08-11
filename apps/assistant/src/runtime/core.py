@@ -44,6 +44,7 @@ from apps.assistant.src.modules.memory_command import MemoryCommandService
 from apps.assistant.src.modules.node_administration import NodeAdministration
 from apps.assistant.src.modules.node_security import NodeGatewaySecurity, SystemClock
 from apps.assistant.src.modules.notification_delivery import NotificationDeliveryService
+from apps.assistant.src.modules.notification_target import DenyingNotificationTargetResolver
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
 from apps.assistant.src.modules.privacy_gateway import DEFAULT_CLOUD_PRIVACY_POLICY, PrivacyGateway
@@ -55,6 +56,7 @@ from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
 from apps.assistant.src.ports.conversation import ConversationRepository
 from apps.assistant.src.ports.memory import MemoryRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
+from apps.assistant.src.ports.notification_target import NotificationTargetResolver
 from apps.assistant.src.ports.policy import PolicyBoundary
 from apps.assistant.src.ports.llm import LLMPort
 from apps.assistant.src.ports.reminder import ReminderDeliveryPort, ReminderRepository
@@ -87,6 +89,7 @@ class CoreComponents:
     todos: TodoManager
     reminders: ReminderManager
     reminder_commands: ReminderCommandService
+    notification_targets: NotificationTargetResolver
     notification_delivery: NotificationDeliveryService
     productivity_commands: ProductivityCommandService
     registry: object
@@ -97,6 +100,7 @@ class CoreComponents:
     policy_rules_configured: bool
     llm_configured: bool
     memory_principals_configured: bool
+    notification_routing_configured: bool
     notification_delivery_configured: bool
     storage_kind: str = "ephemeral"
 
@@ -142,6 +146,11 @@ class CoreComponents:
                 "memory": "explicit_addressed_text_only",
                 "productivity": "explicit_note_todo_only",
                 "reminders": "explicit_schedule_only",
+                "notification_routing": (
+                    "explicit_principal_to_node"
+                    if self.notification_routing_configured
+                    else "deny_only"
+                ),
                 "notification_delivery": (
                     "policy_node_local_gate_adapter_configured"
                     if self.notification_delivery_configured
@@ -170,6 +179,7 @@ def build_core(
     todo_repository: TodoRepository | None = None,
     reminder_repository: ReminderRepository | None = None,
     reminder_delivery: ReminderDeliveryPort | None = None,
+    notification_target_resolver: NotificationTargetResolver | None = None,
     conversation_principal_resolver: ConversationPrincipalResolver | None = None,
     follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
     llm: LLMPort | None = None,
@@ -210,6 +220,11 @@ def build_core(
     )
     selected_reminder_delivery = (
         reminder_delivery if reminder_delivery is not None else DenyingReminderDeliveryAdapter()
+    )
+    selected_notification_targets = (
+        notification_target_resolver
+        if notification_target_resolver is not None
+        else DenyingNotificationTargetResolver()
     )
     selected_memory_principals = (
         conversation_principal_resolver
@@ -306,6 +321,7 @@ def build_core(
         todos=todos,
         reminders=reminders,
         reminder_commands=reminder_commands,
+        notification_targets=selected_notification_targets,
         notification_delivery=notification_delivery,
         productivity_commands=productivity_commands,
         registry=registry,
@@ -316,6 +332,7 @@ def build_core(
         policy_rules_configured=policy is not None,
         llm_configured=llm is not None,
         memory_principals_configured=conversation_principal_resolver is not None,
+        notification_routing_configured=notification_target_resolver is not None,
         notification_delivery_configured=reminder_delivery is not None,
         storage_kind=storage_kind,
     )
