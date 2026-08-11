@@ -80,6 +80,11 @@ class TodoManager:
             raise RuntimeError("todo repository returned invalid scope data")
         return records
 
+    def get(self, todo_id: str, *, scope: MemoryScope, scope_id: str) -> TodoRecord | None:
+        _validate_scope(scope, scope_id)
+        _validate_todo_id(todo_id)
+        return self._get_scoped(todo_id, scope=scope, scope_id=scope_id)
+
     def complete(self, todo_id: str, *, scope: MemoryScope, scope_id: str) -> TodoRecord | None:
         _validate_scope(scope, scope_id)
         _validate_todo_id(todo_id)
