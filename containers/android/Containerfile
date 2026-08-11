@@ -18,7 +18,7 @@ ARG ANDROID_COMMAND_LINE_TOOLS_SHA256=4e4c464f145a7512b57d088ac6c278c03c9eea6108
 
 ENV ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
-    PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/build-tools/36.0.0:${PATH}
+    PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:/opt/android-sdk/build-tools/36.0.0:${PATH}
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -38,6 +38,7 @@ RUN apt-get update \
     && rm /tmp/android-command-line-tools.zip \
     && yes | sdkmanager --licenses >/dev/null \
     && sdkmanager \
+        "platform-tools" \
         "platforms;android-36" \
         "build-tools;35.0.0" \
         "build-tools;36.0.0"
