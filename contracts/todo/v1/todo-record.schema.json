@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://hearthghost.local/contracts/todo/v1/todo-record.schema.json",
-  "title": "HearthGhost Todo Record",
+  "$id": "urn:hearthghost:contracts:todo:v1.0:todo-record",
+  "title": "Todo Record v1.0",
   "type": "object",
   "additionalProperties": false,
-  "required": ["todo_id", "scope", "scope_id", "text", "state", "created_at", "completed_at"],
+  "required": ["contract_version", "todo_id", "scope", "scope_id", "text", "state", "created_at", "completed_at"],
   "properties": {
+    "contract_version": {"const": "1.0"},
     "todo_id": {"type": "string", "format": "uuid"},
     "scope": {"type": "string", "enum": ["user", "household"]},
     "scope_id": {"type": "string", "minLength": 1, "maxLength": 128},
@@ -16,11 +17,11 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"state": {"const": "open"}}},
+      "if": {"properties": {"state": {"const": "open"}}, "required": ["state"]},
       "then": {"properties": {"completed_at": {"type": "null"}}}
     },
     {
-      "if": {"properties": {"state": {"const": "completed"}}},
+      "if": {"properties": {"state": {"const": "completed"}}, "required": ["state"]},
       "then": {"properties": {"completed_at": {"type": "string", "format": "date-time"}}}
     }
   ]
