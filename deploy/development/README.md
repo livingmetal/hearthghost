@@ -18,6 +18,28 @@ runtime exposes only `192.168.55.100:38443`; its status endpoint remains inside
 the container on loopback. The internal network has no Internet route. No
 OpenAI secret is mounted into this milestone.
 
+## Optional PostgreSQL persistence
+
+The runtime keeps file-backed development storage unless the operator explicitly
+selects an existing rootless Podman secret. Create the secret outside the
+repository without placing the DSN on a command line, then deploy with only its
+public secret name:
+
+```text
+podman secret create hearthghost-postgres-dsn /secure/operator/path/postgres-dsn
+HEARTHGHOST_POSTGRES_SECRET_NAME=hearthghost-postgres-dsn \
+  deploy/development/hearthghost-development.sh deploy
+```
+
+The DSN file must contain one `postgresql://...?...sslmode=require` line for the
+dedicated unprivileged HearthGhost role. The script rejects invalid or missing
+secret names, mounts the selected secret read-only at
+`/run/secrets/hearthghost-postgres-dsn`, and passes only that mounted path to the
+Core. The DSN is never put in Git, an image, a build argument, or an environment
+value. The PostgreSQL container must be attached to the internal development
+network separately; do not make that network non-internal merely to reach the
+database.
+
 ## One Android Node credential
 
 The Android app must generate its key in Android Keystore and export only a

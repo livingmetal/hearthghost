@@ -14,6 +14,8 @@ AUTHORITY_DIR="${DATA_ROOT}/authority"
 TLS_DIR="${DATA_ROOT}/runtime-tls"
 STATE_DIR="${DATA_ROOT}/state"
 ENROLLMENT_DIR="${DATA_ROOT}/enrollment"
+POSTGRES_SECRET_NAME="${HEARTHGHOST_POSTGRES_SECRET_NAME:-}"
+POSTGRES_SECRET_TARGET="hearthghost-postgres-dsn"
 
 require_repository_root() {
     test -f Dockerfile
@@ -62,9 +64,32 @@ create_network() {
     fi
 }
 
+configure_postgres_secret() {
+    POSTGRES_SECRET_ARGS=()
+    POSTGRES_RUNTIME_ARGS=()
+    if [[ -z "${POSTGRES_SECRET_NAME}" ]]; then
+        return
+    fi
+    if [[ ! "${POSTGRES_SECRET_NAME}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+        printf 'invalid HEARTHGHOST_POSTGRES_SECRET_NAME\n' >&2
+        exit 2
+    fi
+    if ! podman secret exists "${POSTGRES_SECRET_NAME}"; then
+        printf 'required Podman secret does not exist: %s\n' "${POSTGRES_SECRET_NAME}" >&2
+        exit 2
+    fi
+    POSTGRES_SECRET_ARGS=(
+        --secret "source=${POSTGRES_SECRET_NAME},type=mount,target=${POSTGRES_SECRET_TARGET},uid=10001,gid=10001,mode=0400"
+    )
+    POSTGRES_RUNTIME_ARGS=(
+        --postgres-dsn-secret "/run/secrets/${POSTGRES_SECRET_TARGET}"
+    )
+}
+
 deploy() {
     require_repository_root
     ip -brief address show | grep -Fq "${HOST_IP}/"
+    configure_postgres_secret
     build_image
     initialize
     create_network
@@ -87,11 +112,18 @@ deploy() {
         --cpus=1 \
         --mount "type=bind,src=${STATE_DIR},dst=/var/lib/hearthghost,rw,relabel=shared" \
         --mount "type=bind,src=${TLS_DIR},dst=/run/hearthghost-tls,ro,relabel=shared" \
+        "${POSTGRES_SECRET_ARGS[@]}" \
         --health-cmd 'python -m apps.assistant.src.runtime.healthcheck' \
         --health-interval=10s \
         --health-timeout=3s \
         --health-retries=3 \
-        "${IMAGE}"
+        "${IMAGE}" \
+        python -m apps.assistant.src.runtime.development_server \
+        --state /var/lib/hearthghost/state.json \
+        --certificate /run/hearthghost-tls/server.crt \
+        --private-key /run/hearthghost-tls/server.key \
+        --client-ca /run/hearthghost-tls/client-ca.crt \
+        "${POSTGRES_RUNTIME_ARGS[@]}"
 }
 
 admin() {
