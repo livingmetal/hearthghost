@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 
 from apps.assistant.src.modules.behavior_preference_interpreter import BehaviorPreferenceService
+from apps.assistant.src.modules.behavior_preferences import BehaviorPreferenceSnapshot
 from apps.assistant.src.modules.conversation_principal import ConversationPrincipalResolver
 
 
@@ -33,6 +34,7 @@ class BehaviorPreferenceCommandResult:
     applied: bool
     reason: str
     response_text: str | None = None
+    snapshot: BehaviorPreferenceSnapshot | None = None
 
 
 class BehaviorPreferenceCommandService:
@@ -60,6 +62,7 @@ class BehaviorPreferenceCommandService:
                 text,
                 scope=principal.scope.value,
                 scope_id=principal.scope_id,
+                updated_by_node_id=node_id,
             )
         except (TypeError, ValueError, RuntimeError):
             return BehaviorPreferenceCommandResult(
@@ -76,6 +79,7 @@ class BehaviorPreferenceCommandService:
                 True,
                 "preference_applied",
                 f"캐릭터 설정을 반영했어요. 이름: {persona.name}",
+                result.snapshot,
             )
         if result.reason == "not_preference":
             return BehaviorPreferenceCommandResult(False, False, "not_preference")
