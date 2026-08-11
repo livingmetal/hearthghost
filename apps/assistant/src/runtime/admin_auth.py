@@ -10,6 +10,7 @@ from pathlib import Path
 
 TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 MAX_AUTHORIZATION_HEADER = 256
+ALLOWED_SECRET_MODES = frozenset({0o400, 0o600})
 
 
 class AdministratorToken:
@@ -41,8 +42,8 @@ def read_administrator_token(path: str | os.PathLike[str]) -> AdministratorToken
         stat = file_path.stat()
     except OSError as error:
         raise RuntimeError("administrator token secret is unavailable") from error
-    if not file_path.is_file() or stat.st_mode & 0o077:
-        raise PermissionError("administrator token secret must be a regular owner-only file")
+    if not file_path.is_file() or (stat.st_mode & 0o777) not in ALLOWED_SECRET_MODES:
+        raise PermissionError("administrator token secret must be a regular mode-0400/0600 file")
     if stat.st_size < 44 or stat.st_size > 130:
         raise ValueError("administrator token secret size is invalid")
     try:
