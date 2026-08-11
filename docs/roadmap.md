@@ -28,6 +28,21 @@ proactive frequency. Preference payloads are strictly parsed before application;
 Hard Policy, Node trust, tool grants, credentials, and provider secrets are not
 representable through this boundary.
 
+Character experience work now makes the renderer-visible state follow the real
+interaction timeline instead of relying only on batched server response events.
+Touch produces a short `noticing` phase, local STT shows `listening`, in-flight
+requests show `thinking`, embedded TTS shows `speaking`, and idle/background returns
+the character to `sleeping`. The DOM fallback is an expressive animated character
+rather than a placeholder badge, while the renderer boundary remains semantic so a
+future VRM or other renderer cannot gain device/tool authority. The mobile layout is
+character-first and retains text, local voice, privacy status, and enrollment flows.
+
+Secretary foundation work now includes scoped PostgreSQL memory, notes, TODOs,
+timezone-aware due metadata, versioned migrations, reminder persistence, explicit
+principal-to-notification-Node routing, and a fail-closed notification delivery
+authority boundary. Real notification delivery, scheduler claiming, calendar
+integration, and household routing policy remain separate unfinished capabilities.
+
 ## Foundation
 
 Before feature milestones:
