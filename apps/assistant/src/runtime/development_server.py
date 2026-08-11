@@ -22,6 +22,7 @@ from apps.assistant.src.adapters.development_state import (
 from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
 from apps.assistant.src.adapters.node_gateway_protocol import NodeGatewayProtocol, NodeProtocolError, read_frame
 from apps.assistant.src.adapters.node_tls_transport import MutualTlsCredentialAuthenticator, MutualTlsServerAdapter, create_node_server_context
+from apps.assistant.src.adapters.postgres_behavior_preferences import PostgresBehaviorPreferenceRepository
 from apps.assistant.src.adapters.postgres_memory import PostgresMemoryRepository
 from apps.assistant.src.adapters.postgres_reminder import PostgresReminderRepository
 from apps.assistant.src.adapters.postgres_todo import PostgresTodoRepository
@@ -169,12 +170,14 @@ def main(arguments: list[str] | None = None) -> int:
     server_context = create_node_server_context(certificate_file=options.certificate, private_key_file=options.private_key, client_ca_file=options.client_ca)
     authenticator = MutualTlsCredentialAuthenticator(server_context=server_context, identities=PersistentCertificateIdentityResolver(state))
 
+    behavior_preference_repository = None
     memory_repository = None
     todo_repository = None
     reminder_repository = None
     storage_kind = "persistent_development_file"
     if options.postgres_dsn_secret:
         dsn = read_postgres_dsn(options.postgres_dsn_secret)
+        behavior_preference_repository = PostgresBehaviorPreferenceRepository(dsn)
         memory_repository = PostgresMemoryRepository(dsn)
         todo_repository = PostgresTodoRepository(dsn)
         reminder_repository = PostgresReminderRepository(dsn)
@@ -193,6 +196,7 @@ def main(arguments: list[str] | None = None) -> int:
         policy=UnconfiguredPolicyBoundary(),
         node_registry=registry,
         credential_repository=credentials,
+        behavior_preference_repository=behavior_preference_repository,
         memory_repository=memory_repository,
         todo_repository=todo_repository,
         reminder_repository=reminder_repository,
@@ -210,6 +214,8 @@ def main(arguments: list[str] | None = None) -> int:
         reminder_commands=components.reminder_commands,
         productivity_commands=components.productivity_commands,
         preference_commands=components.preference_commands,
+        behavior_preferences=components.behavior_preferences,
+        conversation_principals=components.memory_principals,
     )
     gateway_server = DevelopmentGatewayServer(bind_address=options.bind, port=options.port, tls=MutualTlsServerAdapter(server_context), node_protocol=node_protocol, conversation_protocol=conversation_protocol)
     status_server = CoreStatusServer((options.status_bind, options.status_port), components)
