@@ -8,6 +8,7 @@ from datetime import datetime
 
 from apps.assistant.src.modules.conversation_principal import ConversationPrincipalResolver
 from apps.assistant.src.modules.memory import MemoryCandidate, MemoryKind, MemoryManager, MemorySource
+from apps.assistant.src.modules.reminder import ReminderManager
 from apps.assistant.src.modules.todo import TodoManager, TodoRecord, TodoState
 
 
@@ -77,10 +78,18 @@ class ProductivityCommandResult:
 
 
 class ProductivityCommandService:
-    def __init__(self, *, memory: MemoryManager, todos: TodoManager, principals: ConversationPrincipalResolver) -> None:
+    def __init__(
+        self,
+        *,
+        memory: MemoryManager,
+        todos: TodoManager,
+        principals: ConversationPrincipalResolver,
+        reminders: ReminderManager | None = None,
+    ) -> None:
         self._memory = memory
         self._todos = todos
         self._principals = principals
+        self._reminders = reminders
 
     def handle(self, *, node_id: str, text: str, conversation_session_id: str) -> ProductivityCommandResult:
         parsed = _parse(text)
@@ -183,16 +192,26 @@ class ProductivityCommandService:
                 )
                 if updated is None:
                     return ProductivityCommandResult(True, False, "todo_not_found_in_scope", "이 범위의 열린 할 일에서 해당 항목을 찾지 못했어요.")
+                if self._reminders is not None:
+                    self._reminders.synchronize_for_todo(updated)
                 if kind == "due_clear":
                     return ProductivityCommandResult(True, True, "todo_due_cleared", "할 일 기한을 삭제했어요.", updated)
                 return ProductivityCommandResult(True, True, "todo_due_set", f"할 일 기한을 {updated.due_at.isoformat()}로 설정했어요.", updated)
 
             if kind == "delete":
+                current = self._todos.get(resolved, scope=principal.scope, scope_id=principal.scope_id)
+                if current is None:
+                    return ProductivityCommandResult(True, False, "todo_not_found_in_scope", "이 범위에서 해당 할 일을 찾지 못했어요.")
+                if self._reminders is not None:
+                    self._reminders.cancel_for_todo(current)
                 deleted = self._todos.delete(resolved, scope=principal.scope, scope_id=principal.scope_id)
                 return ProductivityCommandResult(True, deleted, "todo_deleted" if deleted else "todo_not_found_in_scope", "할 일을 삭제했어요." if deleted else "이 범위에서 해당 할 일을 찾지 못했어요.")
+
             completed = self._todos.complete(resolved, scope=principal.scope, scope_id=principal.scope_id)
             if completed is None:
                 return ProductivityCommandResult(True, False, "todo_not_found_in_scope", "이 범위에서 해당 할 일을 찾지 못했어요.")
+            if self._reminders is not None:
+                self._reminders.synchronize_for_todo(completed)
             return ProductivityCommandResult(True, True, "todo_completed", "할 일을 완료 처리했어요.", completed)
         except (TypeError, ValueError, RuntimeError):
             return ProductivityCommandResult(True, False, "productivity_rejected", "요청을 안전하게 저장하거나 변경할 수 없었어요.")
