@@ -13,6 +13,8 @@ from apps.assistant.src.ports.node_gateway import Clock
 
 MAX_TEXT_LENGTH = 4_000
 TEXT_CAPABILITY = "conversation.text"
+MIN_FOLLOW_UP_TIMEOUT = timedelta(seconds=5)
+MAX_FOLLOW_UP_TIMEOUT = timedelta(seconds=120)
 
 
 class ConversationState(str, Enum):
@@ -95,11 +97,16 @@ class ConversationManager:
         clock: Clock,
         follow_up_timeout: timedelta,
     ) -> None:
-        if follow_up_timeout <= timedelta(0):
-            raise ValueError("follow_up_timeout must be positive")
         self._repository = repository
         self._clock = clock
-        self._follow_up_timeout = follow_up_timeout
+        self._follow_up_timeout = _validate_follow_up_timeout(follow_up_timeout)
+
+    @property
+    def follow_up_timeout(self) -> timedelta:
+        return self._follow_up_timeout
+
+    def set_follow_up_timeout(self, value: timedelta) -> None:
+        self._follow_up_timeout = _validate_follow_up_timeout(value)
 
     def open(self, node: AdmittedConversationNode) -> ConversationResult:
         denied = self._validate_node(node)
@@ -312,6 +319,12 @@ class ConversationManager:
         reason: str,
     ) -> ConversationStateEvent:
         return ConversationStateEvent(session.session_id, session.state, now, reason)
+
+
+def _validate_follow_up_timeout(value: timedelta) -> timedelta:
+    if value < MIN_FOLLOW_UP_TIMEOUT or value > MAX_FOLLOW_UP_TIMEOUT:
+        raise ValueError("follow_up_timeout must be between 5 and 120 seconds")
+    return value
 
 
 def _normalize_text(text: object) -> str | None:
