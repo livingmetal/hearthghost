@@ -4,6 +4,10 @@ The command layer uses a conservative local cue filter so ordinary conversation
 does not invoke a second LLM classification request. A cue is not authority: the
 text still passes through the strict BehaviorPreferenceInterpreter and typed
 protocol before any preference is applied.
+
+Two exact local character-selection commands are deliberately deterministic so
+an Android selector can switch between the reviewed Younghee/Cheolsu profiles
+without paying for or trusting an LLM classification round trip.
 """
 
 from __future__ import annotations
@@ -12,18 +16,26 @@ import re
 from dataclasses import dataclass
 
 from apps.assistant.src.modules.behavior_preference_interpreter import BehaviorPreferenceService
-from apps.assistant.src.modules.behavior_preferences import BehaviorPreferenceSnapshot
+from apps.assistant.src.modules.behavior_preferences import (
+    BehaviorPreferenceChange,
+    BehaviorPreferenceSnapshot,
+)
 from apps.assistant.src.modules.conversation_principal import ConversationPrincipalResolver
+from apps.assistant.src.modules.persona import CHEOLSU_NAME, YOUNGHEE_NAME
 
 
 _PREFERENCE_CUES = re.compile(
     r"(?:"
-    r"이름|불러|말투|격식|존댓말|반말|농담|유머|답(?:변)?\s*(?:을\s*)?(?:짧|길)|"
+    r"캐릭터|이름|불러|말투|격식|존댓말|반말|농담|유머|답(?:변)?\s*(?:을\s*)?(?:짧|길)|"
     r"기다려|대화\s*시간|응답\s*길이|"
-    r"\bname\b|\bcall you\b|\bverbosity\b|\bconcise\b|\bdetailed\b|"
+    r"\bcharacter\b|\bname\b|\bcall you\b|\bverbosity\b|\bconcise\b|\bdetailed\b|"
     r"\bformal(?:ity)?\b|\bcasual\b|\bhumou?r\b|\bjoke|\binitiative\b|"
     r"\bfollow[- ]?up\b|\bproactive\b"
     r")",
+    re.IGNORECASE,
+)
+_CHARACTER_SELECTION = re.compile(
+    rf"^\s*(?:캐릭터|character)\s*[:=]\s*({YOUNGHEE_NAME}|{CHEOLSU_NAME})\s*$",
     re.IGNORECASE,
 )
 
@@ -48,7 +60,8 @@ class BehaviorPreferenceCommandService:
         self._principals = principals
 
     def handle(self, *, node_id: str, text: str) -> BehaviorPreferenceCommandResult:
-        if not _looks_like_preference(text):
+        selection = _parse_character_selection(text)
+        if selection is None and not _looks_like_preference(text):
             return BehaviorPreferenceCommandResult(False, False, "not_preference_command")
         try:
             principal = self._principals.resolve(node_id)
@@ -58,12 +71,20 @@ class BehaviorPreferenceCommandService:
             return _denied("principal_unresolved")
 
         try:
-            result = self._preferences.interpret_and_apply(
-                text,
-                scope=principal.scope.value,
-                scope_id=principal.scope_id,
-                updated_by_node_id=node_id,
-            )
+            if selection is not None:
+                result = self._preferences.apply_explicit(
+                    [BehaviorPreferenceChange("character.name", selection)],
+                    scope=principal.scope.value,
+                    scope_id=principal.scope_id,
+                    updated_by_node_id=node_id,
+                )
+            else:
+                result = self._preferences.interpret_and_apply(
+                    text,
+                    scope=principal.scope.value,
+                    scope_id=principal.scope_id,
+                    updated_by_node_id=node_id,
+                )
         except (TypeError, ValueError, RuntimeError):
             return BehaviorPreferenceCommandResult(
                 True,
@@ -74,11 +95,16 @@ class BehaviorPreferenceCommandService:
 
         if result.applied and result.snapshot is not None:
             persona = result.snapshot.persona
+            message = (
+                f"{persona.name} 캐릭터로 전환했어요."
+                if selection is not None
+                else f"캐릭터 설정을 반영했어요. 이름: {persona.name}"
+            )
             return BehaviorPreferenceCommandResult(
                 True,
                 True,
-                "preference_applied",
-                f"캐릭터 설정을 반영했어요. 이름: {persona.name}",
+                "character_profile_selected" if selection is not None else "preference_applied",
+                message,
                 result.snapshot,
             )
         if result.reason == "not_preference":
@@ -89,6 +115,20 @@ class BehaviorPreferenceCommandService:
             result.reason,
             "캐릭터 설정 요청으로 보이지만 안전하게 적용하지 못했어요.",
         )
+
+
+def _parse_character_selection(text: object) -> str | None:
+    if not isinstance(text, str) or len(text) > 100 or "\x00" in text:
+        return None
+    match = _CHARACTER_SELECTION.fullmatch(text)
+    if match is None:
+        return None
+    selected = match.group(1)
+    if selected == YOUNGHEE_NAME:
+        return YOUNGHEE_NAME
+    if selected == CHEOLSU_NAME:
+        return CHEOLSU_NAME
+    return None
 
 
 def _looks_like_preference(text: object) -> bool:
