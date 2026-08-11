@@ -150,6 +150,29 @@ MIGRATIONS = (
         FOR EACH ROW EXECUTE FUNCTION hearthghost_sync_todo_reminder();
         """,
     ),
+    Migration(
+        5,
+        "behavior_preference_records_v1",
+        """
+        CREATE TABLE IF NOT EXISTS behavior_preference_records (
+            scope TEXT NOT NULL CHECK (scope IN ('user', 'household')),
+            scope_id TEXT NOT NULL,
+            character_name TEXT NOT NULL CHECK (char_length(character_name) BETWEEN 1 AND 80),
+            humor TEXT NOT NULL CHECK (humor IN ('low', 'moderate', 'high')),
+            verbosity TEXT NOT NULL CHECK (verbosity IN ('concise', 'normal', 'detailed')),
+            formality TEXT NOT NULL CHECK (formality IN ('casual', 'neutral', 'formal')),
+            initiative TEXT NOT NULL CHECK (initiative IN ('low', 'moderate', 'high')),
+            followup_timeout_sec INTEGER NOT NULL CHECK (followup_timeout_sec BETWEEN 5 AND 120),
+            proactive_frequency TEXT NOT NULL CHECK (proactive_frequency IN ('off', 'low', 'moderate')),
+            revision BIGINT NOT NULL CHECK (revision > 0),
+            updated_at TIMESTAMPTZ NOT NULL,
+            updated_by_node_id TEXT NOT NULL,
+            PRIMARY KEY (scope, scope_id)
+        );
+        CREATE INDEX IF NOT EXISTS behavior_preference_updated_idx
+        ON behavior_preference_records(updated_at DESC, scope, scope_id);
+        """,
+    ),
 )
 
 
