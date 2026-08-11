@@ -46,6 +46,7 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(core.behavior_preferences)
         self.assertIsNotNone(core.preference_interpreter)
         self.assertIsNotNone(core.preference_service)
+        self.assertIsNotNone(core.preference_commands)
         self.assertIsNotNone(core.reminders)
         self.assertIsNotNone(core.reminder_commands)
         self.assertIsNotNone(core.notification_targets)
@@ -158,7 +159,10 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertEqual(status["storage"], "ephemeral")
         self.assertEqual(status["boundaries"]["policy"], "deny_only")
         self.assertEqual(status["boundaries"]["llm"], "unavailable")
-        self.assertEqual(status["boundaries"]["behavior_preferences"], "internal_typed_boundary")
+        self.assertEqual(
+            status["boundaries"]["behavior_preferences"],
+            "scoped_natural_language_and_typed_boundary",
+        )
         self.assertEqual(status["boundaries"]["reminders"], "explicit_schedule_only")
         self.assertEqual(status["boundaries"]["notification_routing"], "deny_only")
         self.assertEqual(
