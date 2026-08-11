@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -39,7 +40,7 @@ class FakeLLMAdapter:
 
         lowered = request.input_text.casefold()
         if "BEHAVIOR_PREFERENCE_INTERPRETER_V1" in request.instructions:
-            return self._preference_completion(lowered)
+            return self._preference_completion(request.input_text, lowered)
         if "ignore policy" in lowered or "reveal secret" in lowered:
             return LLMCompletion(
                 "I cannot change security policy, reveal secrets, or execute tools.",
@@ -57,8 +58,17 @@ class FakeLLMAdapter:
         return LLMCompletion(f"Fake HearthGhost response: {request.input_text}")
 
     @staticmethod
-    def _preference_completion(lowered: str) -> LLMCompletion:
+    def _preference_completion(original: str, lowered: str) -> LLMCompletion:
         changes: list[dict[str, object]] = []
+        name_match = re.fullmatch(
+            r"\s*(?:이름(?:을|은)?|name)\s*(?:[:：]|을|은|로|is|to)?\s*([\w가-힣 .'-]{1,80})\s*(?:로\s*)?(?:해|해줘|바꿔|바꿔줘|please)?\s*[.!]?\s*",
+            original,
+            flags=re.IGNORECASE,
+        )
+        if name_match is not None:
+            candidate = name_match.group(1).strip()
+            if candidate:
+                changes.append({"path": "character.name", "value": candidate})
         if "짧게" in lowered or "concise" in lowered:
             changes.append({"path": "character.verbosity", "value": "concise"})
         if "농담" in lowered and ("많" in lowered or "more" in lowered):
