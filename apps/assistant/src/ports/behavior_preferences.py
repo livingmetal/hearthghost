@@ -9,6 +9,10 @@ from typing import Protocol
 from apps.assistant.src.modules.persona import PersonaProfile
 
 
+class BehaviorPreferenceConflictError(RuntimeError):
+    """Optimistic-write conflict; callers must reload rather than overwrite."""
+
+
 @dataclass(frozen=True)
 class StoredBehaviorPreferences:
     scope: str
