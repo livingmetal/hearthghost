@@ -17,6 +17,16 @@ import type {
 export const ANDROID_NODE_ID = "android-development-01";
 export const ANDROID_CREDENTIAL_REFERENCE = "hearthghost.android.development.01";
 
+export interface RedactedReminderSchedule {
+  readonly reminderId: string;
+  readonly fireAt: string;
+}
+
+interface NativeReminderSyncResult {
+  readonly mode: "redacted_local_schedule";
+  readonly schedules: readonly RedactedReminderSchedule[];
+}
+
 interface NativeConnectResult {
   readonly authenticated: boolean;
   readonly nodeId: string;
@@ -64,6 +74,7 @@ interface NodeTransportNativePlugin {
   closeConversation(options: {
     readonly conversationSessionId: string;
   }): Promise<NativeConversationResult>;
+  syncReminders(): Promise<NativeReminderSyncResult>;
 }
 
 const NativeNodeTransport = registerPlugin<NodeTransportNativePlugin>(
@@ -122,6 +133,14 @@ export class AndroidNodePlatform
     });
     parseCharacterDisplayProfile(result.characterProfile);
     return result.events.map(parseCharacterSemanticEvent);
+  }
+
+  async syncReminders(): Promise<readonly RedactedReminderSchedule[]> {
+    const result = await NativeNodeTransport.syncReminders();
+    if (result.mode !== "redacted_local_schedule") {
+      throw new Error("Native reminder sync returned an invalid mode");
+    }
+    return result.schedules;
   }
 
   identityStatus(): Promise<NativeIdentityStatus> {
