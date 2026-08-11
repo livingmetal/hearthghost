@@ -15,6 +15,7 @@ from apps.assistant.src.modules.conversation_principal import (
     StaticConversationPrincipalResolver,
 )
 from apps.assistant.src.modules.memory import MemoryManager, MemoryScope
+from apps.assistant.src.modules.persona import PersonaProfile
 from apps.assistant.src.modules.productivity_command import ProductivityCommandService
 from apps.assistant.src.modules.todo import TodoManager
 
@@ -25,6 +26,8 @@ class Clock:
 
 
 class ExplodingOrchestrator:
+    persona = PersonaProfile()
+
     def respond(self, node, turn):
         raise AssertionError("local productivity command reached the LLM")
 
