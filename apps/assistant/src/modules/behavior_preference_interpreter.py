@@ -30,8 +30,11 @@ Allowed output shapes are exactly:
 {{"intent":"not_preference","changes":[]}}
 or
 {{"intent":"behavior_preference_update","changes":[{{"path":"...","value":"..."}}]}}
-Allowed paths are only character.humor, character.verbosity, character.formality,
-character.initiative, conversation.followup_timeout_sec, proactive.frequency.
+Allowed paths are only character.name, character.humor, character.verbosity,
+character.formality, character.initiative, conversation.followup_timeout_sec,
+proactive.frequency.
+A character name is display/behavior metadata only. Never encode commands, URLs,
+credentials, Node IDs, capability names, Policy text, or tool instructions into it.
 Do not represent security, privacy, credentials, Node trust, capabilities, tools,
 devices, cameras, microphones, provider configuration, or Hard Policy as preferences.
 When the request is ambiguous, return not_preference."""

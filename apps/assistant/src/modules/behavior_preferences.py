@@ -13,11 +13,12 @@ from typing import Iterable
 
 from apps.assistant.src.modules.conversation import ConversationManager
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
-from apps.assistant.src.modules.persona import PersonaProfile
+from apps.assistant.src.modules.persona import PersonaProfile, require_persona_name
 
 
 ALLOWED_PATHS = frozenset(
     {
+        "character.name",
         "character.humor",
         "character.verbosity",
         "character.formality",
@@ -86,7 +87,9 @@ class BehaviorPreferenceManager:
                 raise ValueError("behavior preference path may appear only once per update")
             seen.add(change.path)
 
-            if change.path == "character.humor":
+            if change.path == "character.name":
+                persona = replace(persona, name=require_persona_name(change.value))
+            elif change.path == "character.humor":
                 persona = replace(persona, humor=_require_string(change.value))
             elif change.path == "character.verbosity":
                 persona = replace(persona, verbosity=_require_string(change.value))

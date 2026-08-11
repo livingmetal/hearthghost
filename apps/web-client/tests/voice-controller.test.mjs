@@ -6,6 +6,8 @@ import { TextConversationController } from "../.test-dist/conversation/controlle
 import { ClientNode } from "../.test-dist/node/client-node.js";
 import { VoiceConversationController } from "../.test-dist/voice/controller.js";
 
+const characterProfile = { name: "HearthGhost" };
+
 class Clock {
   constructor() {
     this.now = 1_000;
@@ -33,6 +35,7 @@ class ConversationTransport {
     return {
       nodeSessionId,
       conversationSessionId: "conversation-voice",
+      characterProfile,
       events: [],
     };
   }
@@ -40,6 +43,7 @@ class ConversationTransport {
     return {
       conversationSessionId,
       responseText: `voice: ${text}`,
+      characterProfile,
       events: [],
     };
   }
@@ -86,6 +90,7 @@ test("on-device transcript enters the existing conversation path", async () => {
 
   assert.equal(result.responseText, "voice: 안녕 고스트");
   assert.equal(result.conversationSessionId, "conversation-voice");
+  assert.deepEqual(result.characterProfile, characterProfile);
   assert.equal(attention.snapshot().state, "engaged");
 });
 

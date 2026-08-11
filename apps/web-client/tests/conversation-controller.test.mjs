@@ -5,6 +5,7 @@ import { TextConversationController } from "../.test-dist/conversation/controlle
 import { ClientNode } from "../.test-dist/node/client-node.js";
 
 const credential = { kind: "platform-managed", reference: "test-alias" };
+const characterProfile = { name: "HearthGhost" };
 
 class NodePlatform {
   constructor() {
@@ -27,6 +28,7 @@ class ConversationTransport {
     return {
       nodeSessionId,
       conversationSessionId: "conversation-1",
+      characterProfile,
       events: [{ type: "character.state", payload: { state: "listening" } }],
     };
   }
@@ -34,6 +36,7 @@ class ConversationTransport {
     return {
       conversationSessionId,
       responseText: `fake: ${text}`,
+      characterProfile,
       events: [
         { type: "character.state", payload: { state: "thinking" } },
         { type: "character.state", payload: { state: "speaking" } },
@@ -62,7 +65,9 @@ test("text session remains distinct and emits semantic events", async () => {
   assert.equal(opened.nodeSessionId, "node-session-1");
   assert.equal(opened.conversationSessionId, "conversation-1");
   assert.notEqual(opened.nodeSessionId, opened.conversationSessionId);
+  assert.deepEqual(opened.characterProfile, characterProfile);
   assert.equal(response.responseText, "fake: hello");
+  assert.deepEqual(response.characterProfile, characterProfile);
   assert.deepEqual(events.map((event) => event.payload.state), [
     "listening",
     "thinking",

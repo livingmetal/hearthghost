@@ -10,6 +10,7 @@ from apps.assistant.src.modules.behavior_preferences import (
     ALLOWED_PATHS,
     BehaviorPreferenceChange,
 )
+from apps.assistant.src.modules.persona import require_persona_name
 
 
 CONTRACT_VERSION = "1.0"
@@ -83,6 +84,9 @@ def parse_behavior_preference_update(payload: object) -> BehaviorPreferencePropo
 
 
 def _validate_path_value(path: str, value: object) -> None:
+    if path == "character.name":
+        require_persona_name(value)
+        return
     choices = {
         "character.humor": {"low", "moderate", "high"},
         "character.verbosity": {"concise", "normal", "detailed"},

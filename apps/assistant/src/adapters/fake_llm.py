@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -39,7 +40,7 @@ class FakeLLMAdapter:
 
         lowered = request.input_text.casefold()
         if "BEHAVIOR_PREFERENCE_INTERPRETER_V1" in request.instructions:
-            return self._preference_completion(lowered)
+            return self._preference_completion(request.input_text, lowered)
         if "ignore policy" in lowered or "reveal secret" in lowered:
             return LLMCompletion(
                 "I cannot change security policy, reveal secrets, or execute tools.",
@@ -57,8 +58,11 @@ class FakeLLMAdapter:
         return LLMCompletion(f"Fake HearthGhost response: {request.input_text}")
 
     @staticmethod
-    def _preference_completion(lowered: str) -> LLMCompletion:
+    def _preference_completion(original: str, lowered: str) -> LLMCompletion:
         changes: list[dict[str, object]] = []
+        candidate = _fake_name_candidate(original)
+        if candidate is not None:
+            changes.append({"path": "character.name", "value": candidate})
         if "짧게" in lowered or "concise" in lowered:
             changes.append({"path": "character.verbosity", "value": "concise"})
         if "농담" in lowered and ("많" in lowered or "more" in lowered):
@@ -72,6 +76,28 @@ class FakeLLMAdapter:
             "changes": changes,
         }
         return LLMCompletion(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+_KOREAN_NAME_PATTERN = re.compile(
+    r"^\s*이름(?:을|은)?\s*(?:[:：]\s*)?(?P<name>[\w가-힣 .'-]{1,80}?)\s*"
+    r"(?:으?로\s*)?(?:바꿔줘|바꿔|해줘|해)\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+_ENGLISH_NAME_PATTERN = re.compile(
+    r"^\s*(?:name|call\s+yourself)\s*(?:[:：]|is|to)?\s*"
+    r"(?P<name>[\w .'-]{1,80}?)\s*(?:please\s*)?$",
+    re.IGNORECASE,
+)
+
+
+def _fake_name_candidate(value: str) -> str | None:
+    for pattern in (_KOREAN_NAME_PATTERN, _ENGLISH_NAME_PATTERN):
+        match = pattern.fullmatch(value)
+        if match is None:
+            continue
+        candidate = match.group("name").strip()
+        return candidate or None
+    return None
 
 
 class UnavailableLLMAdapter:

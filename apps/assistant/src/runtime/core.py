@@ -28,6 +28,7 @@ from apps.assistant.src.adapters.in_memory_memory import InMemoryMemoryRepositor
 from apps.assistant.src.adapters.in_memory_reminder import InMemoryReminderRepository
 from apps.assistant.src.adapters.in_memory_todo import InMemoryTodoRepository
 from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
+from apps.assistant.src.modules.behavior_preference_command import BehaviorPreferenceCommandService
 from apps.assistant.src.modules.behavior_preference_interpreter import (
     BehaviorPreferenceInterpreter,
     BehaviorPreferenceService,
@@ -83,6 +84,7 @@ class CoreComponents:
     behavior_preferences: BehaviorPreferenceManager
     preference_interpreter: BehaviorPreferenceInterpreter
     preference_service: BehaviorPreferenceService
+    preference_commands: BehaviorPreferenceCommandService
     memory: MemoryManager
     memory_commands: MemoryCommandService
     memory_principals: ConversationPrincipalResolver
@@ -142,7 +144,7 @@ class CoreComponents:
                 ),
                 "policy": "configured" if self.policy_rules_configured else "deny_only",
                 "conversation": "text_only",
-                "behavior_preferences": "internal_typed_boundary",
+                "behavior_preferences": "scoped_natural_language_and_typed_boundary",
                 "memory": "explicit_addressed_text_only",
                 "productivity": "explicit_note_todo_only",
                 "reminders": "explicit_schedule_only",
@@ -272,6 +274,10 @@ def build_core(
         interpreter=preference_interpreter,
         manager=behavior_preferences,
     )
+    preference_commands = BehaviorPreferenceCommandService(
+        preferences=preference_service,
+        principals=selected_memory_principals,
+    )
     memory = MemoryManager(
         repository=selected_memory_repository,
         clock=clock,
@@ -315,6 +321,7 @@ def build_core(
         behavior_preferences=behavior_preferences,
         preference_interpreter=preference_interpreter,
         preference_service=preference_service,
+        preference_commands=preference_commands,
         memory=memory,
         memory_commands=memory_commands,
         memory_principals=selected_memory_principals,

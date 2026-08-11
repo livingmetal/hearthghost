@@ -37,6 +37,7 @@ final class NodeConnection {
     private static final int MAX_FRAME_BYTES = 16 * 1024;
     private static final int MAX_TEXT_LENGTH = 4_000;
     private static final int MAX_RESPONSE_TEXT_LENGTH = 8_000;
+    private static final int MAX_CHARACTER_NAME_LENGTH = 80;
     private static final int MAX_EVENTS = 8;
     private static final int MAX_PROPOSALS = 8;
 
@@ -277,7 +278,8 @@ final class NodeConnection {
                 "conversation_session_id",
                 "response_text",
                 "events",
-                "proposed_actions"
+                "proposed_actions",
+                "character_profile"
             ),
             false
         );
@@ -292,6 +294,10 @@ final class NodeConnection {
         if (result.has("response_text")) {
             requiredBoundedString(result, "response_text", MAX_RESPONSE_TEXT_LENGTH);
         }
+        if (!result.has("character_profile")) {
+            throw new NodeTransportException("character_profile_missing");
+        }
+        validatedCharacterProfileOutput(result.getJSONObject("character_profile"));
         validateEvents(result.optJSONArray("events"));
         validateProposals(result.optJSONArray("proposed_actions"));
         return result;
@@ -320,7 +326,11 @@ final class NodeConnection {
         String conversationId = requiredIdentifier(result, "conversation_session_id");
         JSObject output = new JSObject()
             .put("conversationSessionId", conversationId)
-            .put("events", validatedEventsOutput(result.optJSONArray("events")));
+            .put("events", validatedEventsOutput(result.optJSONArray("events")))
+            .put(
+                "characterProfile",
+                validatedCharacterProfileOutput(result.getJSONObject("character_profile"))
+            );
         String resultNodeSession = optionalIdentifier(result, "node_session_id");
         if (resultNodeSession != null) {
             output.put("nodeSessionId", resultNodeSession);
@@ -332,6 +342,33 @@ final class NodeConnection {
             );
         }
         return output;
+    }
+
+    private JSObject validatedCharacterProfileOutput(JSONObject profile) throws Exception {
+        requireExactFields(profile, setOf("name"), true);
+        String name = requiredBoundedString(profile, "name", MAX_CHARACTER_NAME_LENGTH);
+        if (!name.equals(name.trim()) || hasUnsupportedCharacterNameCodePoint(name)) {
+            throw new NodeTransportException("character_profile_invalid");
+        }
+        return new JSObject().put("name", name);
+    }
+
+    private boolean hasUnsupportedCharacterNameCodePoint(String value) {
+        for (int offset = 0; offset < value.length();) {
+            int codePoint = value.codePointAt(offset);
+            int type = Character.getType(codePoint);
+            if (
+                type == Character.CONTROL
+                || type == Character.FORMAT
+                || type == Character.SURROGATE
+                || type == Character.PRIVATE_USE
+                || type == Character.UNASSIGNED
+            ) {
+                return true;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return false;
     }
 
     private void requireCommonResult(
