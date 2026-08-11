@@ -1,6 +1,6 @@
 # HG-017 Notes and Todo Follow-up Actions
 
-Status: implementation follow-up checklist. Items below are intentionally not treated as completed merely because the foundation code exists.
+Status: implementation follow-up checklist. Checked implementation items still require real-device/real-PostgreSQL validation where called out separately.
 
 ## Operator actions
 
@@ -13,17 +13,20 @@ Status: implementation follow-up checklist. Items below are intentionally not tr
 ## Functional validation
 
 - [ ] Android real-device: `메모해:` creates a NOTE in the expected scope and does not invoke the LLM.
-- [ ] Android real-device: `할 일:` creates an OPEN todo and returns its ID.
-- [ ] Android real-device: `할 일 완료: <UUID>` changes only a todo in the caller's resolved scope.
-- [ ] Verify a shared/unbound Node cannot write user-scoped notes or todos.
-- [ ] Verify a todo ID from another scope cannot be completed or deleted.
+- [ ] Android real-device: `할 일:` creates an OPEN todo and returns its short reference.
+- [ ] Android real-device: `할 일 목록` lists at most 10 open todos with short references.
+- [ ] Android real-device: `할 일 완료: <short-ref>` changes only a todo in the caller's resolved scope.
+- [ ] Android real-device: `할 일 삭제: <short-ref>` deletes only a todo in the caller's resolved scope.
+- [ ] Verify a shared/unbound Node cannot write or list user-scoped notes or todos.
+- [ ] Verify a todo reference from another scope cannot be completed or deleted.
 - [ ] Verify restart persistence against the real PostgreSQL service.
 
 ## Product follow-up
 
-- [ ] Add `할 일 목록` / `todo list` local commands with bounded result count.
-- [ ] Add user-friendly short references so people do not need to speak a UUID.
-- [ ] Add explicit todo deletion and note deletion commands with scope checks.
+- [x] Add `할 일 목록` / `todo list` local commands with bounded result count.
+- [x] Add user-friendly short references so people do not need to speak a UUID; 8-hex prefixes are accepted only when unique inside the resolved scope.
+- [x] Add explicit todo deletion with scope checks.
+- [ ] Add explicit note listing/deletion commands with scope checks.
 - [ ] Add due date and timezone fields only after an explicit date/time contract is defined.
 - [ ] Treat reminders/notifications as a separate policy-controlled capability, not as an automatic consequence of a todo.
 - [ ] Treat calendar writes as a separate authorization boundary. A todo must never silently create or modify a calendar event.
