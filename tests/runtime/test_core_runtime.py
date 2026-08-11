@@ -111,6 +111,7 @@ class CoreRuntimeTests(unittest.TestCase):
             AdministrationRequest(
                 operation_id=str(uuid4()),
                 correlation_id="grant-node-a",
+                action=AdministrationAction.GRANT_CAPABILITY,
                 node_id="node-a",
                 expected_revision=2,
                 capability="test.echo",
