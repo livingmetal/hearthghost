@@ -51,7 +51,7 @@ class ProductivityCommandTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].kind, MemoryKind.NOTE)
 
-    def test_todo_create_and_complete_are_scope_bound(self):
+    def test_todo_create_and_complete_with_short_ref_are_scope_bound(self):
         service, _, todos = self.build(self.personal_principals())
         created = service.handle(
             node_id="android-personal-01",
@@ -60,18 +60,71 @@ class ProductivityCommandTests(unittest.TestCase):
         )
         self.assertTrue(created.succeeded)
         self.assertEqual(created.todo.state, TodoState.OPEN)
+        self.assertIn(created.todo.todo_id[:8], created.response_text)
+
+        listed = service.handle(
+            node_id="android-personal-01",
+            text="할 일 목록",
+            conversation_session_id="conversation-1",
+        )
+        self.assertTrue(listed.succeeded)
+        self.assertEqual(listed.reason, "todo_listed")
+        self.assertIn(f"[{created.todo.todo_id[:8]}]", listed.response_text)
+        self.assertNotIn(created.todo.todo_id, listed.response_text)
+
         completed = service.handle(
             node_id="android-personal-01",
-            text=f"할 일 완료: {created.todo.todo_id}",
+            text=f"할 일 완료: {created.todo.todo_id[:8]}",
             conversation_session_id="conversation-1",
         )
         self.assertTrue(completed.succeeded)
         self.assertEqual(completed.todo.state, TodoState.COMPLETED)
         self.assertEqual(todos.list_scope(MemoryScope.USER, "owner")[0].state, TodoState.COMPLETED)
 
+    def test_todo_delete_with_short_ref(self):
+        service, _, todos = self.build(self.personal_principals())
+        created = service.handle(
+            node_id="android-personal-01",
+            text="todo: rotate certificate",
+            conversation_session_id="conversation-delete",
+        ).todo
+        deleted = service.handle(
+            node_id="android-personal-01",
+            text=f"할 일 삭제: {created.todo_id[:8]}",
+            conversation_session_id="conversation-delete",
+        )
+        self.assertTrue(deleted.succeeded)
+        self.assertEqual(deleted.reason, "todo_deleted")
+        self.assertEqual(todos.list_scope(MemoryScope.USER, "owner"), ())
+
+    def test_list_returns_only_open_todos(self):
+        service, _, _ = self.build(self.personal_principals())
+        first = service.handle(
+            node_id="android-personal-01",
+            text="할 일: 첫 번째",
+            conversation_session_id="conversation-list",
+        ).todo
+        service.handle(
+            node_id="android-personal-01",
+            text="할 일: 두 번째",
+            conversation_session_id="conversation-list",
+        )
+        service.handle(
+            node_id="android-personal-01",
+            text=f"할 일 완료: {first.todo_id}",
+            conversation_session_id="conversation-list",
+        )
+        listed = service.handle(
+            node_id="android-personal-01",
+            text="todo list",
+            conversation_session_id="conversation-list",
+        )
+        self.assertNotIn("첫 번째", listed.response_text)
+        self.assertIn("두 번째", listed.response_text)
+
     def test_unbound_node_cannot_create_note_or_todo(self):
         service, memory, todos = self.build(DenyingConversationPrincipalResolver())
-        for text in ("메모해: 비밀", "할 일: 비밀"):
+        for text in ("메모해: 비밀", "할 일: 비밀", "할 일 목록"):
             with self.subTest(text=text):
                 result = service.handle(
                     node_id="unknown-node",
