@@ -24,6 +24,7 @@ from apps.assistant.src.adapters.in_memory_core import (
 )
 from apps.assistant.src.adapters.in_memory_conversation import InMemoryConversationRepository
 from apps.assistant.src.adapters.in_memory_memory import InMemoryMemoryRepository
+from apps.assistant.src.adapters.in_memory_reminder import InMemoryReminderRepository
 from apps.assistant.src.adapters.in_memory_todo import InMemoryTodoRepository
 from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
 from apps.assistant.src.modules.behavior_preference_interpreter import (
@@ -45,6 +46,8 @@ from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
 from apps.assistant.src.modules.privacy_gateway import DEFAULT_CLOUD_PRIVACY_POLICY, PrivacyGateway
 from apps.assistant.src.modules.productivity_command import ProductivityCommandService
+from apps.assistant.src.modules.reminder import ReminderManager
+from apps.assistant.src.modules.reminder_command import ReminderCommandService
 from apps.assistant.src.modules.todo import TodoManager
 from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
 from apps.assistant.src.ports.conversation import ConversationRepository
@@ -52,6 +55,7 @@ from apps.assistant.src.ports.memory import MemoryRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
 from apps.assistant.src.ports.policy import PolicyBoundary
 from apps.assistant.src.ports.llm import LLMPort
+from apps.assistant.src.ports.reminder import ReminderRepository
 from apps.assistant.src.ports.todo import TodoRepository
 
 
@@ -79,6 +83,8 @@ class CoreComponents:
     memory_commands: MemoryCommandService
     memory_principals: ConversationPrincipalResolver
     todos: TodoManager
+    reminders: ReminderManager
+    reminder_commands: ReminderCommandService
     productivity_commands: ProductivityCommandService
     registry: object
     credentials: object
@@ -131,6 +137,7 @@ class CoreComponents:
                 "behavior_preferences": "internal_typed_boundary",
                 "memory": "explicit_addressed_text_only",
                 "productivity": "explicit_note_todo_only",
+                "reminders": "explicit_schedule_only_delivery_disabled",
                 "memory_principal": (
                     "configured" if self.memory_principals_configured else "deny_only"
                 ),
@@ -152,6 +159,7 @@ def build_core(
     conversation_repository: ConversationRepository | None = None,
     memory_repository: MemoryRepository | None = None,
     todo_repository: TodoRepository | None = None,
+    reminder_repository: ReminderRepository | None = None,
     conversation_principal_resolver: ConversationPrincipalResolver | None = None,
     follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
     llm: LLMPort | None = None,
@@ -186,6 +194,9 @@ def build_core(
     )
     selected_todo_repository = (
         todo_repository if todo_repository is not None else InMemoryTodoRepository()
+    )
+    selected_reminder_repository = (
+        reminder_repository if reminder_repository is not None else InMemoryReminderRepository()
     )
     selected_memory_principals = (
         conversation_principal_resolver
@@ -246,10 +257,20 @@ def build_core(
         repository=selected_todo_repository,
         clock=clock,
     )
+    reminders = ReminderManager(
+        repository=selected_reminder_repository,
+        clock=clock,
+    )
+    reminder_commands = ReminderCommandService(
+        reminders=reminders,
+        todos=todos,
+        principals=selected_memory_principals,
+    )
     productivity_commands = ProductivityCommandService(
         memory=memory,
         todos=todos,
         principals=selected_memory_principals,
+        reminders=reminders,
     )
     return CoreComponents(
         node_gateway=gateway,
@@ -265,6 +286,8 @@ def build_core(
         memory_commands=memory_commands,
         memory_principals=selected_memory_principals,
         todos=todos,
+        reminders=reminders,
+        reminder_commands=reminder_commands,
         productivity_commands=productivity_commands,
         registry=registry,
         credentials=credentials,
