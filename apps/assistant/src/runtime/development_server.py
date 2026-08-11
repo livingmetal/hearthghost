@@ -20,19 +20,13 @@ from apps.assistant.src.adapters.development_state import (
     PersistentNodeRegistry,
 )
 from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
-from apps.assistant.src.adapters.node_gateway_protocol import (
-    NodeGatewayProtocol,
-    NodeProtocolError,
-    read_frame,
-)
-from apps.assistant.src.adapters.node_tls_transport import (
-    MutualTlsCredentialAuthenticator,
-    MutualTlsServerAdapter,
-    create_node_server_context,
-)
+from apps.assistant.src.adapters.node_gateway_protocol import NodeGatewayProtocol, NodeProtocolError, read_frame
+from apps.assistant.src.adapters.node_tls_transport import MutualTlsCredentialAuthenticator, MutualTlsServerAdapter, create_node_server_context
+from apps.assistant.src.adapters.postgres_memory import PostgresMemoryRepository
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
-
+from apps.assistant.src.runtime.memory_configuration import parse_memory_principal_bindings
+from apps.assistant.src.runtime.postgres_configuration import DEFAULT_POSTGRES_DSN_FILE, read_postgres_dsn
 
 DEFAULT_GATEWAY_BIND = "10.89.0.10"
 DEFAULT_GATEWAY_PORT = 8443
@@ -44,18 +38,7 @@ MAX_CONNECTIONS = 8
 
 
 class DevelopmentGatewayServer:
-    """Bounded threaded listener; each connection is processed in wire order."""
-
-    def __init__(
-        self,
-        *,
-        bind_address: str,
-        port: int,
-        tls: MutualTlsServerAdapter,
-        node_protocol: NodeGatewayProtocol,
-        conversation_protocol: ConversationProtocol,
-        socket_timeout_seconds: float = DEFAULT_SOCKET_TIMEOUT_SECONDS,
-    ) -> None:
+    def __init__(self, *, bind_address: str, port: int, tls: MutualTlsServerAdapter, node_protocol: NodeGatewayProtocol, conversation_protocol: ConversationProtocol, socket_timeout_seconds: float = DEFAULT_SOCKET_TIMEOUT_SECONDS) -> None:
         parsed = ipaddress.ip_address(bind_address)
         if parsed.is_unspecified or parsed.is_loopback or parsed.is_multicast:
             raise ValueError("Gateway requires one explicit non-loopback address")
@@ -79,10 +62,7 @@ class DevelopmentGatewayServer:
             listener.listen(MAX_CONNECTIONS)
             listener.settimeout(0.5)
             self._listener = listener
-            with ThreadPoolExecutor(
-                max_workers=MAX_CONNECTIONS,
-                thread_name_prefix="node-connection",
-            ) as executor:
+            with ThreadPoolExecutor(max_workers=MAX_CONNECTIONS, thread_name_prefix="node-connection") as executor:
                 while not self._stopping.is_set():
                     try:
                         connected, _ = listener.accept()
@@ -115,11 +95,7 @@ class DevelopmentGatewayServer:
                 if not isinstance(document, dict):
                     raise NodeProtocolError("Node command must be an object")
                 message_type = document.get("message_type")
-                if message_type in {
-                    "session.open",
-                    "capability.request",
-                    "session.close",
-                }:
+                if message_type in {"session.open", "capability.request", "session.close"}:
                     if message_type == "session.open" and open_session_id is not None:
                         raise NodeProtocolError("connection already has a Node session")
                     result = self._node_protocol.handle_document(channel, document)
@@ -128,11 +104,7 @@ class DevelopmentGatewayServer:
                     elif message_type == "session.close" and result.accepted:
                         open_session_id = None
                         return
-                elif message_type in {
-                    "conversation.open",
-                    "conversation.text",
-                    "conversation.close",
-                }:
+                elif message_type in {"conversation.open", "conversation.text", "conversation.close"}:
                     self._conversation_protocol.handle_document(channel, document)
                 else:
                     raise NodeProtocolError("unsupported Node command type")
@@ -141,10 +113,7 @@ class DevelopmentGatewayServer:
         finally:
             if channel is not None and open_session_id is not None:
                 try:
-                    self._node_protocol.close_bound_session(
-                        channel,
-                        open_session_id,
-                    )
+                    self._node_protocol.close_bound_session(channel, open_session_id)
                 except Exception:
                     pass
             try:
@@ -163,63 +132,50 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_GATEWAY_PORT)
     parser.add_argument("--status-bind", default=DEFAULT_STATUS_BIND)
     parser.add_argument("--status-port", type=int, default=DEFAULT_STATUS_PORT)
+    parser.add_argument("--postgres-dsn-secret", default=None, metavar="PATH", help=f"PostgreSQL DSN secret file; production default is {DEFAULT_POSTGRES_DSN_FILE}")
+    parser.add_argument("--memory-principal", action="append", default=[], metavar="NODE_ID=SCOPE:SCOPE_ID")
     options = parser.parse_args(arguments)
 
     state = DevelopmentStateFile(Path(options.state))
     registry = PersistentNodeRegistry(state)
     credentials = PersistentCredentialRepository(state)
-    server_context = create_node_server_context(
-        certificate_file=options.certificate,
-        private_key_file=options.private_key,
-        client_ca_file=options.client_ca,
-    )
-    authenticator = MutualTlsCredentialAuthenticator(
-        server_context=server_context,
-        identities=PersistentCertificateIdentityResolver(state),
-    )
+    server_context = create_node_server_context(certificate_file=options.certificate, private_key_file=options.private_key, client_ca_file=options.client_ca)
+    authenticator = MutualTlsCredentialAuthenticator(server_context=server_context, identities=PersistentCertificateIdentityResolver(state))
+
+    memory_repository = None
+    storage_kind = "persistent_development_file"
+    if options.postgres_dsn_secret:
+        memory_repository = PostgresMemoryRepository(read_postgres_dsn(options.postgres_dsn_secret))
+        storage_kind = "persistent_postgresql"
+    memory_principals = parse_memory_principal_bindings(options.memory_principal) if options.memory_principal else None
+
     unreachable_admin_context = object()
     components = build_core(
         authenticator=authenticator,
-        administrator_authorizer=LocalDevelopmentAdministratorAuthorizer(
-            unreachable_admin_context,
-            "local-development-cli",
-        ),
+        administrator_authorizer=LocalDevelopmentAdministratorAuthorizer(unreachable_admin_context, "local-development-cli"),
         policy=UnconfiguredPolicyBoundary(),
         node_registry=registry,
         credential_repository=credentials,
+        memory_repository=memory_repository,
+        conversation_principal_resolver=memory_principals,
         llm=FakeLLMAdapter(),
-        storage_kind="persistent_development_file",
+        storage_kind=storage_kind,
     )
     node_protocol = NodeGatewayProtocol(components.node_gateway)
     conversation_protocol = ConversationProtocol(
         gateway=components.node_gateway,
         conversation=components.conversation,
         orchestrator=components.orchestrator,
+        memory_commands=components.memory_commands,
     )
-    gateway_server = DevelopmentGatewayServer(
-        bind_address=options.bind,
-        port=options.port,
-        tls=MutualTlsServerAdapter(server_context),
-        node_protocol=node_protocol,
-        conversation_protocol=conversation_protocol,
-    )
-    status_server = CoreStatusServer(
-        (options.status_bind, options.status_port),
-        components,
-    )
-    status_thread = threading.Thread(
-        target=status_server.serve_forever,
-        kwargs={"poll_interval": 0.25},
-        name="loopback-status",
-        daemon=True,
-    )
+    gateway_server = DevelopmentGatewayServer(bind_address=options.bind, port=options.port, tls=MutualTlsServerAdapter(server_context), node_protocol=node_protocol, conversation_protocol=conversation_protocol)
+    status_server = CoreStatusServer((options.status_bind, options.status_port), components)
+    status_thread = threading.Thread(target=status_server.serve_forever, kwargs={"poll_interval": 0.25}, name="loopback-status", daemon=True)
     status_thread.start()
 
     prior_handlers: dict[int, object] = {}
-
     def stop(signum: int, frame: object) -> None:
         gateway_server.shutdown()
-
     for signum in (signal.SIGINT, signal.SIGTERM):
         prior_handlers[signum] = signal.signal(signum, stop)
     try:
