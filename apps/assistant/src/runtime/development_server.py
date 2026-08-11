@@ -26,6 +26,8 @@ from apps.assistant.src.adapters.postgres_behavior_preferences import PostgresBe
 from apps.assistant.src.adapters.postgres_memory import PostgresMemoryRepository
 from apps.assistant.src.adapters.postgres_reminder import PostgresReminderRepository
 from apps.assistant.src.adapters.postgres_todo import PostgresTodoRepository
+from apps.assistant.src.adapters.reminder_sync_protocol import ReminderSyncProtocol
+from apps.assistant.src.modules.node_security import SystemClock
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.runtime.admin_dashboard import AdminDashboardServer
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
@@ -44,7 +46,17 @@ MAX_CONNECTIONS = 8
 
 
 class DevelopmentGatewayServer:
-    def __init__(self, *, bind_address: str, port: int, tls: MutualTlsServerAdapter, node_protocol: NodeGatewayProtocol, conversation_protocol: ConversationProtocol, socket_timeout_seconds: float = DEFAULT_SOCKET_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        *,
+        bind_address: str,
+        port: int,
+        tls: MutualTlsServerAdapter,
+        node_protocol: NodeGatewayProtocol,
+        conversation_protocol: ConversationProtocol,
+        reminder_sync_protocol: ReminderSyncProtocol | None = None,
+        socket_timeout_seconds: float = DEFAULT_SOCKET_TIMEOUT_SECONDS,
+    ) -> None:
         parsed = ipaddress.ip_address(bind_address)
         if parsed.is_unspecified or parsed.is_loopback or parsed.is_multicast:
             raise ValueError("Gateway requires one explicit non-loopback address")
@@ -56,6 +68,7 @@ class DevelopmentGatewayServer:
         self._tls = tls
         self._node_protocol = node_protocol
         self._conversation_protocol = conversation_protocol
+        self._reminder_sync_protocol = reminder_sync_protocol
         self._socket_timeout = socket_timeout_seconds
         self._stopping = threading.Event()
         self._listener: socket.socket | None = None
@@ -112,6 +125,10 @@ class DevelopmentGatewayServer:
                         return
                 elif message_type in {"conversation.open", "conversation.text", "conversation.close"}:
                     self._conversation_protocol.handle_document(channel, document)
+                elif message_type == "reminder.sync":
+                    if self._reminder_sync_protocol is None:
+                        raise NodeProtocolError("reminder sync is not configured")
+                    self._reminder_sync_protocol.handle_document(channel, document)
                 else:
                     raise NodeProtocolError("unsupported Node command type")
         except (OSError, ssl.SSLError, NodeProtocolError, ValueError):
@@ -183,11 +200,7 @@ def main(arguments: list[str] | None = None) -> int:
         reminder_repository = PostgresReminderRepository(dsn)
         storage_kind = "persistent_postgresql"
     memory_principals = parse_memory_principal_bindings(options.memory_principal) if options.memory_principal else None
-    notification_targets = (
-        parse_notification_target_bindings(options.notification_target)
-        if options.notification_target
-        else None
-    )
+    notification_targets = parse_notification_target_bindings(options.notification_target) if options.notification_target else None
 
     unreachable_admin_context = object()
     components = build_core(
@@ -217,15 +230,26 @@ def main(arguments: list[str] | None = None) -> int:
         behavior_preferences=components.behavior_preferences,
         conversation_principals=components.memory_principals,
     )
-    gateway_server = DevelopmentGatewayServer(bind_address=options.bind, port=options.port, tls=MutualTlsServerAdapter(server_context), node_protocol=node_protocol, conversation_protocol=conversation_protocol)
+    reminder_sync_protocol = ReminderSyncProtocol(
+        gateway=components.node_gateway,
+        reminders=components.reminders,
+        principals=components.memory_principals,
+        targets=components.notification_targets,
+        clock=SystemClock(),
+    )
+    gateway_server = DevelopmentGatewayServer(
+        bind_address=options.bind,
+        port=options.port,
+        tls=MutualTlsServerAdapter(server_context),
+        node_protocol=node_protocol,
+        conversation_protocol=conversation_protocol,
+        reminder_sync_protocol=reminder_sync_protocol,
+    )
     status_server = CoreStatusServer((options.status_bind, options.status_port), components)
     dashboard_server: AdminDashboardServer | None = None
     try:
         if options.admin_dashboard_port is not None:
-            dashboard_server = AdminDashboardServer(
-                (DEFAULT_ADMIN_DASHBOARD_BIND, options.admin_dashboard_port),
-                components,
-            )
+            dashboard_server = AdminDashboardServer((DEFAULT_ADMIN_DASHBOARD_BIND, options.admin_dashboard_port), components)
     except Exception:
         status_server.server_close()
         raise
