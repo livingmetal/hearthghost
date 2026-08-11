@@ -7,8 +7,8 @@ internal sealed record WindowsClientOptions(
     string CoreHost,
     int CorePort,
     string NodeId,
-    string NodeCertificateThumbprint,
-    string AuthorityCertificateThumbprint)
+    string? NodeCertificateThumbprint,
+    string? AuthorityCertificateThumbprint)
 {
     internal const string CredentialReference = "hearthghost.windows.current-user-store";
     internal const string Alpn = "hearthghost-node/1";
@@ -20,9 +20,9 @@ internal sealed record WindowsClientOptions(
                 ?? "http://127.0.0.1:5173/windows.html");
         string host = Required("HEARTHGHOST_WINDOWS_CORE_HOST", "192.168.55.100");
         string nodeId = Required("HEARTHGHOST_WINDOWS_NODE_ID", "windows-development-01");
-        string nodeThumbprint = NormalizeThumbprint(
+        string? nodeThumbprint = NormalizeOptionalThumbprint(
             Environment.GetEnvironmentVariable("HEARTHGHOST_WINDOWS_CERT_THUMBPRINT"));
-        string caThumbprint = NormalizeThumbprint(
+        string? caThumbprint = NormalizeOptionalThumbprint(
             Environment.GetEnvironmentVariable("HEARTHGHOST_WINDOWS_CA_THUMBPRINT"));
         int port = ParsePort(Environment.GetEnvironmentVariable("HEARTHGHOST_WINDOWS_CORE_PORT") ?? "38443");
         return new WindowsClientOptions(webUi, host, port, nodeId, nodeThumbprint, caThumbprint);
@@ -61,12 +61,11 @@ internal sealed record WindowsClientOptions(
         return value;
     }
 
-    private static string NormalizeThumbprint(string? value)
+    private static string? NormalizeOptionalThumbprint(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            throw new InvalidOperationException(
-                "Windows Node and CA certificate thumbprints must be configured in the environment");
+            return null;
         }
         string normalized = string.Concat(value.Where(character => !char.IsWhiteSpace(character))).ToUpperInvariant();
         if (normalized.Length != 40 || normalized.Any(character => !Uri.IsHexDigit(character)))
