@@ -16,9 +16,14 @@ import {
   AndroidVoiceInput,
   type VoiceInputStatus,
 } from "./voice/android-voice.js";
+import {
+  AndroidVoiceOutput,
+  type VoiceOutputStatus,
+} from "./voice/android-tts.js";
 import { VoiceConversationController } from "./voice/controller.js";
 
 const ATTENTION_TIMEOUT_MILLIS = 20_000;
+const VOICE_LOCALE = "ko-KR";
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (root === null) {
@@ -33,7 +38,9 @@ const platform: NodePlatformPort = androidPlatform
 const node = new ClientNode(platform);
 const attention = new AttentionController(ATTENTION_TIMEOUT_MILLIS);
 const voiceInput = androidPlatform === null ? null : new AndroidVoiceInput();
+const voiceOutput = androidPlatform === null ? null : new AndroidVoiceOutput();
 let voiceStatus: VoiceInputStatus | null = null;
+let ttsStatus: VoiceOutputStatus | null = null;
 
 root.innerHTML = `
   <main class="app-shell">
@@ -42,6 +49,7 @@ root.innerHTML = `
       <span data-attention-status>Attention: sleeping</span>
       <span>Camera: denied</span>
       <span data-microphone-status>Microphone: inactive</span>
+      <span data-speech-status>Speech: text only</span>
       <span>Cloud media: denied</span>
     </header>
     <section class="character-viewport" aria-label="Character viewport">
@@ -79,6 +87,7 @@ const speakButton = root.querySelector<HTMLButtonElement>("[data-speak]");
 const nodeStatus = root.querySelector<HTMLElement>("[data-node-status]");
 const attentionStatus = root.querySelector<HTMLElement>("[data-attention-status]");
 const microphoneStatus = root.querySelector<HTMLElement>("[data-microphone-status]");
+const speechStatus = root.querySelector<HTMLElement>("[data-speech-status]");
 const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
@@ -133,6 +142,11 @@ function showSnapshot(): void {
       microphoneStatus.textContent = "Microphone: ready / local only";
     }
   }
+  if (speechStatus !== null) {
+    speechStatus.textContent = ttsStatus?.initialized && ttsStatus.localVoiceAvailable
+      ? "Speech: embedded TTS ready"
+      : "Speech: text fallback";
+  }
   const conversationAllowed = node.canUseCapability("conversation.text")
     && attentionSnapshot.state === "engaged";
   if (sendButton !== null) {
@@ -149,15 +163,42 @@ function showSnapshot(): void {
 async function refreshVoiceStatus(): Promise<void> {
   if (voiceInput === null) {
     voiceStatus = null;
-    showSnapshot();
-    return;
+  } else {
+    try {
+      voiceStatus = await voiceInput.status();
+    } catch {
+      voiceStatus = null;
+    }
   }
-  try {
-    voiceStatus = await voiceInput.status();
-  } catch {
-    voiceStatus = null;
+  if (voiceOutput === null) {
+    ttsStatus = null;
+  } else {
+    try {
+      ttsStatus = await voiceOutput.status(VOICE_LOCALE);
+    } catch {
+      ttsStatus = null;
+    }
   }
   showSnapshot();
+}
+
+async function speakReplyLocally(text: string): Promise<boolean> {
+  if (voiceOutput === null) {
+    return false;
+  }
+  try {
+    ttsStatus = await voiceOutput.status(VOICE_LOCALE);
+    if (!ttsStatus.initialized || !ttsStatus.localVoiceAvailable) {
+      showSnapshot();
+      return false;
+    }
+    await voiceOutput.speak(text, VOICE_LOCALE);
+    showSnapshot();
+    return true;
+  } catch {
+    await refreshVoiceStatus();
+    return false;
+  }
 }
 
 connectButton?.addEventListener("click", async () => {
@@ -219,7 +260,8 @@ speakButton?.addEventListener("click", () => {
         }
         return;
       }
-      await voiceInput.start("ko-KR");
+      await voiceOutput?.stop();
+      await voiceInput.start(VOICE_LOCALE);
       voiceStatus = { ...voiceStatus, listening: true };
       showSnapshot();
       if (notice !== null) {
@@ -281,11 +323,15 @@ if (voiceInput !== null && voiceConversation !== null) {
       voiceStatus = voiceStatus === null ? null : { ...voiceStatus, listening: false };
       try {
         const snapshot = await voiceConversation.acceptTranscript(event);
+        const reply = snapshot.responseText ?? "";
         if (response !== null) {
-          response.textContent = snapshot.responseText ?? "";
+          response.textContent = reply;
         }
+        const spoken = reply !== "" && await speakReplyLocally(reply);
         if (notice !== null) {
-          notice.textContent = `On-device transcript accepted: ${event.text}`;
+          notice.textContent = spoken
+            ? `On-device transcript accepted and reply spoken locally: ${event.text}`
+            : `On-device transcript accepted; local TTS unavailable, showing text: ${event.text}`;
         }
       } catch (error) {
         if (notice !== null) {
@@ -374,6 +420,7 @@ const attentionTimer = window.setInterval(() => {
   }
   showSnapshot();
   void voiceInput?.cancel();
+  void voiceOutput?.stop();
   void conversation?.end();
   if (notice !== null) {
     notice.textContent = "Attention timed out. Ghost returned to sleep.";
@@ -389,6 +436,7 @@ document.addEventListener("visibilitychange", () => {
     attention.sleep();
     void (async () => {
       await voiceInput?.cancel();
+      await voiceOutput?.stop();
       await conversation?.end();
       await node.suspend();
       await refreshVoiceStatus();
