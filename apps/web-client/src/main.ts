@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
 import "./styles.css";
+import "./persona.css";
 import { AttentionController } from "./attention/controller.js";
 import { CharacterExperienceController } from "./character/experience.js";
 import type { CharacterDisplayProfile } from "./character/profile.js";
@@ -126,11 +127,12 @@ const viewportElement = root.querySelector<HTMLElement>(".character-viewport");
 if (viewportElement === null) {
   throw new Error("CharacterViewport element is missing");
 }
+const characterViewportElement = viewportElement;
 const rendererKind = document.documentElement.dataset.characterRenderer === "vrm"
   ? "vrm"
   : "dom";
 const viewport = new CharacterViewport(
-  viewportElement,
+  characterViewportElement,
   await loadCharacterRenderer(rendererKind),
 );
 await viewport.mount();
@@ -153,7 +155,7 @@ function applyCharacterProfile(profile: CharacterDisplayProfile | null): void {
   if (characterName !== null) {
     characterName.textContent = profile.name;
   }
-  viewportElement.setAttribute("aria-label", `${profile.name} character viewport`);
+  characterViewportElement.setAttribute("aria-label", `${profile.name} character viewport`);
 }
 
 function currentCharacterName(): string {
