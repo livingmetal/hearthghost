@@ -15,6 +15,19 @@ text smoke path has validated the real OpenAI adapter through Privacy Gateway
 with an external server secret; normal development and tests remain fake-first,
 credential-optional, and network-isolated.
 
+HG-013 adds the first Android Node foundation with device-held Keystore identity,
+CSR-based administrator enrollment, fixed TLS 1.3/mTLS transport, and a reproducible
+debug APK build. Physical-device enrollment and the first real Android text-only
+conversation remain HG-014 work.
+
+Post-HG-013 client work now includes bounded touch attention, fail-closed sleep on
+idle/background, persona preferences kept subordinate to security instructions,
+and a typed Behavior Preference boundary. The behavior contract and runtime are
+kept aligned for humor, verbosity, formality, initiative, follow-up timeout, and
+proactive frequency. Preference payloads are strictly parsed before application;
+Hard Policy, Node trust, tool grants, credentials, and provider secrets are not
+representable through this boundary.
+
 ## Foundation
 
 Before feature milestones:

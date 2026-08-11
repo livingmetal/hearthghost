@@ -34,6 +34,15 @@ Node administration is also narrower than action authorization. Enrollment,
 trust, and capability grants mutate registry state but never constitute a Policy
 allow or Tool execution permission.
 
+Persona and Behavior Preferences are narrower again. Character humor,
+verbosity, formality, initiative, follow-up timeout, and proactive frequency may
+be changed only through typed, contract-bounded values. These preferences are
+kept subordinate to orchestration security instructions and cannot represent or
+modify Hard Policy, Node trust, capability grants, tool authorization,
+credentials, secrets, or provider configuration. External preference payloads
+must be strictly parsed into typed changes before runtime application; an LLM
+must never edit preference or policy files directly.
+
 The tracked module layout is documented under `src/`. Node network listeners
 remain intentionally absent; the only HG-005 listener is read-only status on
 literal loopback.

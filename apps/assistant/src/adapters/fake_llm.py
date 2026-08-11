@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -37,6 +38,8 @@ class FakeLLMAdapter:
             raise LLMProviderError("fake provider failed")
 
         lowered = request.input_text.casefold()
+        if "BEHAVIOR_PREFERENCE_INTERPRETER_V1" in request.instructions:
+            return self._preference_completion(lowered)
         if "ignore policy" in lowered or "reveal secret" in lowered:
             return LLMCompletion(
                 "I cannot change security policy, reveal secrets, or execute tools.",
@@ -52,6 +55,23 @@ class FakeLLMAdapter:
                 ),
             )
         return LLMCompletion(f"Fake HearthGhost response: {request.input_text}")
+
+    @staticmethod
+    def _preference_completion(lowered: str) -> LLMCompletion:
+        changes: list[dict[str, object]] = []
+        if "짧게" in lowered or "concise" in lowered:
+            changes.append({"path": "character.verbosity", "value": "concise"})
+        if "농담" in lowered and ("많" in lowered or "more" in lowered):
+            changes.append({"path": "character.humor", "value": "high"})
+        if "30초" in lowered or "30 seconds" in lowered:
+            changes.append({"path": "conversation.followup_timeout_sec", "value": 30})
+        if "카메라" in lowered or "camera" in lowered or "policy" in lowered:
+            changes = []
+        payload = {
+            "intent": "behavior_preference_update" if changes else "not_preference",
+            "changes": changes,
+        }
+        return LLMCompletion(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 
 class UnavailableLLMAdapter:

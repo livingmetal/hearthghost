@@ -149,6 +149,27 @@ class ConversationTests(unittest.TestCase):
         self.assertEqual(self.node.node_session_id, "node-session-1")
         self.assertTrue(self.node.admitted)
 
+    def test_runtime_timeout_update_changes_future_expiration_boundary(self):
+        opened = self.conversation.open(self.node)
+        self.conversation.set_follow_up_timeout(timedelta(seconds=45))
+        self.clock.current += timedelta(seconds=30)
+
+        early = self.conversation.expire(opened.session.session_id)
+        self.assertFalse(early.accepted)
+        self.assertEqual(early.session.state, ConversationState.LISTENING)
+
+        self.clock.current += timedelta(seconds=15)
+        expired = self.conversation.expire(opened.session.session_id)
+        self.assertTrue(expired.accepted)
+        self.assertEqual(expired.reason, ConversationReason.TIMED_OUT)
+
+    def test_timeout_update_is_bounded_by_behavior_contract(self):
+        for value in (timedelta(seconds=4), timedelta(seconds=121)):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    self.conversation.set_follow_up_timeout(value)
+        self.assertEqual(self.conversation.follow_up_timeout, timedelta(seconds=30))
+
     def test_early_expiration_attempt_does_not_end_session(self):
         opened = self.conversation.open(self.node)
         self.clock.current += timedelta(seconds=29)
