@@ -72,6 +72,36 @@ MIGRATIONS = (
         WHERE state = 'open' AND due_at IS NOT NULL;
         """,
     ),
+    Migration(
+        4,
+        "reminder_records_v1",
+        """
+        CREATE TABLE IF NOT EXISTS reminder_records (
+            reminder_id UUID PRIMARY KEY,
+            scope TEXT NOT NULL CHECK (scope IN ('user', 'household')),
+            scope_id TEXT NOT NULL,
+            todo_id UUID NOT NULL,
+            fire_at TIMESTAMPTZ NOT NULL,
+            source TEXT NOT NULL CHECK (source = 'todo_due'),
+            created_by_node_id TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            state TEXT NOT NULL CHECK (state IN ('scheduled', 'cancelled')),
+            cancelled_at TIMESTAMPTZ NULL,
+            CHECK (
+                (state = 'scheduled' AND cancelled_at IS NULL)
+                OR (state = 'cancelled' AND cancelled_at IS NOT NULL)
+            )
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS reminder_one_active_per_todo_idx
+        ON reminder_records(scope, scope_id, todo_id)
+        WHERE state = 'scheduled';
+        CREATE INDEX IF NOT EXISTS reminder_due_idx
+        ON reminder_records(fire_at, reminder_id)
+        WHERE state = 'scheduled';
+        CREATE INDEX IF NOT EXISTS reminder_scope_created_idx
+        ON reminder_records(scope, scope_id, created_at DESC, reminder_id DESC);
+        """,
+    ),
 )
 
 
