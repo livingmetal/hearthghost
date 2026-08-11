@@ -121,6 +121,9 @@ def _compose_instructions(persona: PersonaProfile) -> str:
     return f"{SECURITY_INSTRUCTIONS}\n\nBehavior preferences:\n{persona.conversation_instructions()}"
 
 
+HEARTHGHOST_INSTRUCTIONS = _compose_instructions(PersonaProfile())
+
+
 def _safe_failure_text(reason: PrivacyReason) -> str:
     if reason is PrivacyReason.PROVIDER_TIMEOUT:
         return "The language service timed out. Please try again."
