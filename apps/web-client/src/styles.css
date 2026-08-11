@@ -64,6 +64,7 @@ body {
 }
 
 input,
+textarea,
 button {
   min-height: 2.75rem;
   border-radius: 0.75rem;
@@ -76,6 +77,14 @@ input {
   flex: 1;
 }
 
+textarea {
+  width: 100%;
+  min-height: 7rem;
+  resize: vertical;
+  background: #f3f5ef;
+  color: #17211f;
+}
+
 button {
   background: #b8d8ca;
   color: #17211f;
@@ -85,6 +94,25 @@ button {
 .notice {
   min-height: 1.4em;
   color: #d7c5a2;
+}
+
+.response {
+  display: block;
+  min-height: 2.8rem;
+  margin-block: 0.5rem;
+  white-space: pre-wrap;
+}
+
+.provisioning {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #354b45;
+  border-radius: 0.75rem;
+}
+
+.provisioning label {
+  display: block;
+  margin-top: 0.75rem;
 }
 
 @media (orientation: landscape) and (min-width: 700px) {

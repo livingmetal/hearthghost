@@ -1,0 +1,69 @@
+FROM docker.io/library/node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066 AS web
+
+WORKDIR /workspace
+
+COPY apps/web-client/package.json apps/web-client/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+
+COPY apps/web-client ./
+RUN npm run check \
+    && npm test \
+    && npm run build \
+    && npx cap sync android
+
+FROM docker.io/library/eclipse-temurin:21-jdk-jammy@sha256:d9dcea0a0dfd3e0b654e5f610c7b840ff8f8ea1300fe7948f2b910bef1aa78dd AS android-sdk
+
+ARG ANDROID_COMMAND_LINE_TOOLS=15859902
+ARG ANDROID_COMMAND_LINE_TOOLS_SHA256=4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583
+
+ENV ANDROID_HOME=/opt/android-sdk \
+    ANDROID_SDK_ROOT=/opt/android-sdk \
+    PATH=/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/build-tools/36.0.0:${PATH}
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p "${ANDROID_HOME}/cmdline-tools" \
+    && curl --fail --location --show-error \
+        "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_COMMAND_LINE_TOOLS}_latest.zip" \
+        --output /tmp/android-command-line-tools.zip \
+    && echo "${ANDROID_COMMAND_LINE_TOOLS_SHA256}  /tmp/android-command-line-tools.zip" \
+        | sha256sum --check --strict \
+    && unzip -q /tmp/android-command-line-tools.zip -d "${ANDROID_HOME}/cmdline-tools" \
+    && mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" \
+        "${ANDROID_HOME}/cmdline-tools/latest" \
+    && rm /tmp/android-command-line-tools.zip \
+    && yes | sdkmanager --licenses >/dev/null \
+    && sdkmanager \
+        "platforms;android-36" \
+        "build-tools;35.0.0" \
+        "build-tools;36.0.0"
+
+FROM android-sdk AS android-build
+
+ARG HEARTHGHOST_ANDROID_UID=10001
+ARG HEARTHGHOST_ANDROID_GID=10001
+
+RUN groupadd --gid "${HEARTHGHOST_ANDROID_GID}" android-builder \
+    && useradd --uid "${HEARTHGHOST_ANDROID_UID}" \
+        --gid "${HEARTHGHOST_ANDROID_GID}" \
+        --no-create-home \
+        --shell /usr/sbin/nologin \
+        android-builder
+
+WORKDIR /workspace
+COPY --from=web --chown=android-builder:android-builder /workspace ./
+
+ENV GRADLE_USER_HOME=/tmp/hearthghost-gradle \
+    HOME=/tmp/hearthghost-home \
+    GRADLE_OPTS=-Duser.home=/tmp/hearthghost-home
+USER android-builder
+
+RUN mkdir -p "${HOME}" \
+    && cd android \
+    && sh ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+
+CMD ["sh", "-c", "sha256sum android/app/build/outputs/apk/debug/app-debug.apk"]

@@ -5,6 +5,12 @@
 *.key
 *.p12
 *.pfx
+*.jks
+*.keystore
+*.csr
+*.crt
+*.cer
+*.pem
 secrets/
 
 # Development caches and build output
@@ -15,6 +21,8 @@ node_modules/
 .test-dist/
 dist/
 build/
+*.apk
+*.aab
 coverage/
 
 # Editors and operating systems
