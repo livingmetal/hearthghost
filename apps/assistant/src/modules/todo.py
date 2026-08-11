@@ -100,12 +100,12 @@ class TodoManager:
         scope_id: str,
         due_at: datetime | None,
     ) -> TodoRecord | None:
-        """Set or clear due metadata without granting scheduling authority."""
+        """Set or clear due metadata on an open todo only."""
         _validate_scope(scope, scope_id)
         _validate_todo_id(todo_id)
         _validate_optional_due_at(due_at)
         current = self._get_scoped(todo_id, scope=scope, scope_id=scope_id)
-        if current is None:
+        if current is None or current.state is not TodoState.OPEN:
             return None
         updated = replace(current, due_at=due_at)
         self._replace(updated)
