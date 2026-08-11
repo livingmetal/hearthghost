@@ -34,6 +34,10 @@ _TODO_PATTERNS = (
     re.compile(r"^\s*todo\s*[:：]\s*(?P<text>.+?)\s*$", re.IGNORECASE | re.DOTALL),
 )
 _TODO_REF = r"(?P<todo_ref>(?:[0-9a-fA-F]{8}|[0-9a-fA-F-]{36}))"
+_VIEW_PATTERNS = (
+    re.compile(rf"^\s*할\s*일\s*보기\s*[:：]\s*{_TODO_REF}\s*$"),
+    re.compile(rf"^\s*todo\s+view\s*[:：]\s*{_TODO_REF}\s*$", re.IGNORECASE),
+)
 _COMPLETE_PATTERNS = (
     re.compile(rf"^\s*할\s*일\s*완료\s*[:：]\s*{_TODO_REF}\s*$"),
     re.compile(rf"^\s*todo\s+done\s*[:：]\s*{_TODO_REF}\s*$", re.IGNORECASE),
@@ -155,6 +159,21 @@ class ProductivityCommandService:
             if resolved is _AMBIGUOUS:
                 return ProductivityCommandResult(True, False, "todo_reference_ambiguous", "짧은 할 일 ID가 겹쳐 처리하지 않았어요. 전체 ID를 사용해 주세요.")
 
+            if kind == "view":
+                todo = self._todos.get(resolved, scope=principal.scope, scope_id=principal.scope_id)
+                if todo is None:
+                    return ProductivityCommandResult(True, False, "todo_not_found_in_scope", "이 범위에서 해당 할 일을 찾지 못했어요.")
+                due_text = todo.due_at.isoformat() if todo.due_at is not None else "없음"
+                completed_text = todo.completed_at.isoformat() if todo.completed_at is not None else "없음"
+                response = (
+                    f"[{_short_ref(todo.todo_id)}] {todo.text}\n"
+                    f"상태: {todo.state.value}\n"
+                    f"생성: {todo.created_at.isoformat()}\n"
+                    f"기한: {due_text}\n"
+                    f"완료: {completed_text}"
+                )
+                return ProductivityCommandResult(True, True, "todo_viewed", response, todo)
+
             if kind in {"due_set", "due_clear"}:
                 updated = self._todos.set_due(
                     resolved,
@@ -188,6 +207,10 @@ def _parse(text: object) -> ParsedProductivityCommand | None:
     for pattern in _LIST_PATTERNS:
         if pattern.fullmatch(text) is not None:
             return ParsedProductivityCommand("list", "")
+    for pattern in _VIEW_PATTERNS:
+        match = pattern.fullmatch(text)
+        if match is not None:
+            return ParsedProductivityCommand("view", match.group("todo_ref").lower())
     for pattern in _DUE_CLEAR_PATTERNS:
         match = pattern.fullmatch(text)
         if match is not None:
