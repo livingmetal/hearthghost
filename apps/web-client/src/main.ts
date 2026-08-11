@@ -4,6 +4,12 @@ import "./styles.css";
 import "./persona.css";
 import "./history.css";
 import { AttentionController } from "./attention/controller.js";
+import {
+  characterById,
+  characterByName,
+  selectionCommand,
+  type HearthGhostCharacterDefinition,
+} from "./character/catalog.js";
 import { CharacterExperienceController } from "./character/experience.js";
 import type { CharacterDisplayProfile } from "./character/profile.js";
 import { loadCharacterRenderer } from "./character/renderer-loader.js";
@@ -24,6 +30,7 @@ import {
 import {
   AndroidVoiceOutput,
   type VoiceOutputStatus,
+  type VoiceProfileId,
 } from "./voice/android-tts.js";
 import { VoiceConversationController } from "./voice/controller.js";
 
@@ -47,6 +54,8 @@ const voiceInput = androidPlatform === null ? null : new AndroidVoiceInput();
 const voiceOutput = androidPlatform === null ? null : new AndroidVoiceOutput();
 let voiceStatus: VoiceInputStatus | null = null;
 let ttsStatus: VoiceOutputStatus | null = null;
+let activeCharacter: HearthGhostCharacterDefinition | null = null;
+let renderedCharacterId: string | null = null;
 
 root.innerHTML = `
   <main class="app-shell">
@@ -75,6 +84,11 @@ root.innerHTML = `
       <div class="character-identity" aria-live="polite">
         <span class="character-identity-label">Character</span>
         <strong data-character-name>HearthGhost</strong>
+        <select class="character-select" data-character-select aria-label="Character profile" disabled>
+          <option value="">Default</option>
+          <option value="younghee">영희 · Avatar A</option>
+          <option value="cheolsu">철수 · Avatar C</option>
+        </select>
       </div>
       <section class="character-viewport" aria-label="HearthGhost character viewport"></section>
       <div class="response-layer">
@@ -121,6 +135,7 @@ const attentionStatus = root.querySelector<HTMLElement>("[data-attention-status]
 const microphoneStatus = root.querySelector<HTMLElement>("[data-microphone-status]");
 const speechStatus = root.querySelector<HTMLElement>("[data-speech-status]");
 const characterName = root.querySelector<HTMLElement>("[data-character-name]");
+const characterSelect = root.querySelector<HTMLSelectElement>("[data-character-select]");
 const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
@@ -157,7 +172,11 @@ const voiceConversation = conversation === null
   ? null
   : new VoiceConversationController(attention, conversation);
 
-function applyCharacterProfile(profile: CharacterDisplayProfile | null): void {
+function currentVoiceProfile(): VoiceProfileId {
+  return activeCharacter?.voice.id ?? "default";
+}
+
+async function applyCharacterProfile(profile: CharacterDisplayProfile | null): Promise<void> {
   if (profile === null) {
     return;
   }
@@ -165,6 +184,37 @@ function applyCharacterProfile(profile: CharacterDisplayProfile | null): void {
     characterName.textContent = profile.name;
   }
   characterViewportElement.setAttribute("aria-label", `${profile.name} character viewport`);
+
+  const selected = characterByName(profile.name);
+  activeCharacter = selected;
+  if (characterSelect !== null) {
+    characterSelect.value = selected?.id ?? "";
+  }
+
+  if (selected === null) {
+    if (renderedCharacterId !== null) {
+      await viewport.replaceRenderer(await loadCharacterRenderer("dom"));
+      renderedCharacterId = null;
+    }
+    await refreshVoiceStatus();
+    return;
+  }
+  if (renderedCharacterId === selected.id) {
+    await refreshVoiceStatus();
+    return;
+  }
+
+  try {
+    await viewport.replaceRenderer(await loadCharacterRenderer("vrm", selected.assetUrl));
+    renderedCharacterId = selected.id;
+  } catch {
+    await viewport.replaceRenderer(await loadCharacterRenderer("dom"));
+    renderedCharacterId = null;
+    if (notice !== null) {
+      notice.textContent = `${selected.sample} VRM is not bundled yet. ${selected.name} persona and voice are active with the fallback character.`;
+    }
+  }
+  await refreshVoiceStatus();
 }
 
 function currentCharacterName(): string {
@@ -208,8 +258,9 @@ function showSnapshot(): void {
     }
   }
   if (speechStatus !== null) {
+    const profileLabel = activeCharacter?.name ?? "default";
     speechStatus.textContent = ttsStatus?.initialized && ttsStatus.localVoiceAvailable
-      ? "Speech: embedded TTS ready"
+      ? `Speech: ${profileLabel} embedded TTS ready`
       : "Speech: text fallback";
   }
   const conversationAllowed = node.canUseCapability("conversation.text")
@@ -222,6 +273,9 @@ function showSnapshot(): void {
       || voiceInput === null
       || voiceStatus?.onDeviceAvailable === false
       || voiceStatus?.listening === true;
+  }
+  if (characterSelect !== null) {
+    characterSelect.disabled = !conversationAllowed || conversation === null;
   }
   wakeButton?.classList.toggle("is-awake", attentionSnapshot.state === "engaged");
 }
@@ -240,7 +294,7 @@ async function refreshVoiceStatus(): Promise<void> {
     ttsStatus = null;
   } else {
     try {
-      ttsStatus = await voiceOutput.status(VOICE_LOCALE);
+      ttsStatus = await voiceOutput.status(VOICE_LOCALE, currentVoiceProfile());
     } catch {
       ttsStatus = null;
     }
@@ -253,13 +307,14 @@ async function speakReplyLocally(text: string): Promise<boolean> {
     return false;
   }
   try {
-    ttsStatus = await voiceOutput.status(VOICE_LOCALE);
+    const voiceProfile = currentVoiceProfile();
+    ttsStatus = await voiceOutput.status(VOICE_LOCALE, voiceProfile);
     if (!ttsStatus.initialized || !ttsStatus.localVoiceAvailable) {
       showSnapshot();
       return false;
     }
     character.beginSpeaking();
-    await voiceOutput.speak(text, VOICE_LOCALE);
+    await voiceOutput.speak(text, VOICE_LOCALE, voiceProfile);
     character.engage();
     showSnapshot();
     return true;
@@ -329,6 +384,49 @@ wakeButton?.addEventListener("click", () => {
     notice.textContent = `${currentCharacterName()} noticed you. Address text or start local speech.`;
   }
   messageInput?.focus();
+});
+
+characterSelect?.addEventListener("change", () => {
+  void (async () => {
+    const requested = characterById(characterSelect.value);
+    if (requested === null) {
+      characterSelect.value = activeCharacter?.id ?? "";
+      return;
+    }
+    if (conversation === null || !attention.canAcceptConversationInput()) {
+      characterSelect.value = activeCharacter?.id ?? "";
+      character.showConcern();
+      if (notice !== null) {
+        notice.textContent = "Wake the trusted character session before changing profiles.";
+      }
+      return;
+    }
+    try {
+      if (conversation.snapshot().conversationSessionId === null) {
+        const opened = await conversation.open();
+        await applyCharacterProfile(opened.characterProfile);
+      }
+      character.beginThinking();
+      const snapshot = await conversation.submit(selectionCommand(requested));
+      await applyCharacterProfile(snapshot.characterProfile);
+      attention.recordAddressedActivity();
+      character.acknowledgeSuccess();
+      const reply = snapshot.responseText ?? `${requested.name} 캐릭터로 전환했어요.`;
+      if (response !== null) {
+        response.textContent = reply;
+      }
+      if (notice !== null) {
+        notice.textContent = `${requested.name}: ${requested.sample} / local voice profile selected.`;
+      }
+      showSnapshot();
+    } catch (error) {
+      characterSelect.value = activeCharacter?.id ?? "";
+      character.showConcern();
+      if (notice !== null) {
+        notice.textContent = error instanceof Error ? error.message : "Character selection failed";
+      }
+    }
+  })();
 });
 
 for (const templateButton of root.querySelectorAll<HTMLButtonElement>("[data-template]")) {
@@ -408,11 +506,11 @@ form?.addEventListener("submit", (event) => {
     try {
       if (conversation.snapshot().conversationSessionId === null) {
         const opened = await conversation.open();
-        applyCharacterProfile(opened.characterProfile);
+        await applyCharacterProfile(opened.characterProfile);
       }
       character.beginThinking();
       const snapshot = await conversation.submit(submittedText);
-      applyCharacterProfile(snapshot.characterProfile);
+      await applyCharacterProfile(snapshot.characterProfile);
       attention.recordAddressedActivity();
       showSnapshot();
       const reply = snapshot.responseText ?? "";
@@ -446,7 +544,7 @@ if (voiceInput !== null && voiceConversation !== null) {
       character.beginThinking();
       try {
         const snapshot = await voiceConversation.acceptTranscript(event);
-        applyCharacterProfile(snapshot.characterProfile);
+        await applyCharacterProfile(snapshot.characterProfile);
         const reply = snapshot.responseText ?? "";
         if (reply !== "") {
           appendHistory("user", event.text.trim());
@@ -461,7 +559,7 @@ if (voiceInput !== null && voiceConversation !== null) {
         }
         if (notice !== null) {
           notice.textContent = spoken
-            ? "Reply spoken using an embedded Android voice."
+            ? `Reply spoken using the ${activeCharacter?.name ?? "default"} embedded Android voice profile.`
             : "Local TTS unavailable. Reply remains text only.";
         }
       } catch (error) {
