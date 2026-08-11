@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:memory:v1.0:memory-record",
+  "title": "Memory Record v1.0",
+  "description": "One explicit addressed-text long-term memory. Passive audio, image, video, and sensor sources are intentionally not representable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "memory_id",
+    "scope",
+    "scope_id",
+    "kind",
+    "text",
+    "source",
+    "source_conversation_session_id",
+    "created_at"
+  ],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "memory_id": { "type": "string", "format": "uuid" },
+    "scope": { "enum": ["user", "household"] },
+    "scope_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+    "kind": { "enum": ["semantic", "user_preference", "note"] },
+    "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "source": { "const": "addressed_text" },
+    "source_conversation_session_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}
