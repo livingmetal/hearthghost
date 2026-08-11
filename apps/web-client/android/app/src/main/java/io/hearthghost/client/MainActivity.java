@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NodeTransportPlugin.class);
         registerPlugin(VoiceInputPlugin.class);
+        registerPlugin(VoiceOutputPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
