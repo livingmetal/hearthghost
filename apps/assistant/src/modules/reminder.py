@@ -157,8 +157,11 @@ class ReminderManager:
             record = self._repository.find_active_for_todo(todo.scope.value, todo.scope_id, todo.todo_id)
         except Exception as error:
             raise RuntimeError("reminder repository unavailable") from error
-        if record is not None and not _valid_scoped_record(record, todo.scope, todo.scope_id):
-            raise RuntimeError("reminder repository returned invalid scope data")
+        if record is not None and (
+            not _valid_scoped_record(record, todo.scope, todo.scope_id)
+            or record.todo_id != todo.todo_id
+        ):
+            raise RuntimeError("reminder repository returned invalid todo data")
         return record
 
     def _replace(self, record: ReminderRecord) -> None:
