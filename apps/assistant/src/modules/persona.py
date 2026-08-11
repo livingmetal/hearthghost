@@ -17,9 +17,9 @@ class PersonaProfile:
         if not self.name.strip() or len(self.name) > 80:
             raise ValueError("persona name must contain 1 to 80 characters")
         _require_choice("humor", self.humor, {"low", "moderate", "high"})
-        _require_choice("verbosity", self.verbosity, {"short", "normal", "detailed"})
+        _require_choice("verbosity", self.verbosity, {"concise", "normal", "detailed"})
         _require_choice("formality", self.formality, {"casual", "neutral", "formal"})
-        _require_choice("initiative", self.initiative, {"low", "moderate"})
+        _require_choice("initiative", self.initiative, {"low", "moderate", "high"})
 
     def conversation_instructions(self) -> str:
         return "\n".join(
