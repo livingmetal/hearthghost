@@ -11,7 +11,13 @@ from apps.assistant.src.modules.conversation_principal import (
     PrincipalAssurance,
     StaticConversationPrincipalResolver,
 )
-from apps.assistant.src.modules.memory import MemoryKind, MemoryManager, MemoryScope
+from apps.assistant.src.modules.memory import (
+    MemoryCandidate,
+    MemoryKind,
+    MemoryManager,
+    MemoryScope,
+    MemorySource,
+)
 from apps.assistant.src.modules.productivity_command import ProductivityCommandService
 from apps.assistant.src.modules.todo import TodoManager, TodoState
 
@@ -38,18 +44,61 @@ class ProductivityCommandTests(unittest.TestCase):
         )
         return StaticConversationPrincipalResolver({"android-personal-01": principal})
 
-    def test_note_reuses_scoped_memory_note_kind(self):
+    def test_note_create_list_and_delete_use_short_ref(self):
         service, memory, _ = self.build(self.personal_principals())
-        result = service.handle(
+        created = service.handle(
             node_id="android-personal-01",
             text="메모해: 서버실 UPS 배터리 점검",
-            conversation_session_id="conversation-1",
+            conversation_session_id="conversation-note",
         )
-        self.assertTrue(result.succeeded)
-        self.assertEqual(result.reason, "note_stored")
+        self.assertTrue(created.succeeded)
+        self.assertEqual(created.reason, "note_stored")
         records = memory.list_scope(MemoryScope.USER, "owner")
         self.assertEqual(len(records), 1)
-        self.assertEqual(records[0].kind, MemoryKind.NOTE)
+        note = records[0]
+        self.assertEqual(note.kind, MemoryKind.NOTE)
+        self.assertIn(note.memory_id[:8], created.response_text)
+
+        listed = service.handle(
+            node_id="android-personal-01",
+            text="메모 목록",
+            conversation_session_id="conversation-note",
+        )
+        self.assertTrue(listed.succeeded)
+        self.assertEqual(listed.reason, "note_listed")
+        self.assertIn(f"[{note.memory_id[:8]}]", listed.response_text)
+        self.assertNotIn(note.memory_id, listed.response_text)
+
+        deleted = service.handle(
+            node_id="android-personal-01",
+            text=f"메모 삭제: {note.memory_id[:8]}",
+            conversation_session_id="conversation-note",
+        )
+        self.assertTrue(deleted.succeeded)
+        self.assertEqual(deleted.reason, "note_deleted")
+        self.assertEqual(memory.list_scope(MemoryScope.USER, "owner"), ())
+
+    def test_note_delete_full_uuid_cannot_delete_semantic_memory(self):
+        service, memory, _ = self.build(self.personal_principals())
+        semantic = memory.remember(
+            MemoryCandidate(
+                scope=MemoryScope.USER,
+                scope_id="owner",
+                kind=MemoryKind.SEMANTIC,
+                text="내 선호 색은 회색",
+                source=MemorySource.ADDRESSED_TEXT,
+                source_conversation_session_id="conversation-semantic",
+                explicit_user_request=True,
+            )
+        )
+        result = service.handle(
+            node_id="android-personal-01",
+            text=f"메모 삭제: {semantic.memory_id}",
+            conversation_session_id="conversation-semantic",
+        )
+        self.assertFalse(result.succeeded)
+        self.assertEqual(result.reason, "note_not_found_in_scope")
+        self.assertEqual(memory.list_scope(MemoryScope.USER, "owner")[0].memory_id, semantic.memory_id)
 
     def test_todo_create_and_complete_with_short_ref_are_scope_bound(self):
         service, _, todos = self.build(self.personal_principals())
@@ -122,9 +171,9 @@ class ProductivityCommandTests(unittest.TestCase):
         self.assertNotIn("첫 번째", listed.response_text)
         self.assertIn("두 번째", listed.response_text)
 
-    def test_unbound_node_cannot_create_note_or_todo(self):
+    def test_unbound_node_cannot_create_or_list_private_data(self):
         service, memory, todos = self.build(DenyingConversationPrincipalResolver())
-        for text in ("메모해: 비밀", "할 일: 비밀", "할 일 목록"):
+        for text in ("메모해: 비밀", "메모 목록", "할 일: 비밀", "할 일 목록"):
             with self.subTest(text=text):
                 result = service.handle(
                     node_id="unknown-node",
