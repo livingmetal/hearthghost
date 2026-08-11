@@ -34,7 +34,7 @@ class AndroidTtsFoundationTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, source)
 
-    def test_manifest_declares_tts_service_visibility_without_new_network_permission(self):
+    def test_manifest_declares_tts_service_visibility_without_tts_specific_network_permission(self):
         manifest = ET.parse(ANDROID / "AndroidManifest.xml").getroot()
         actions = {
             item.attrib.get(f"{ANDROID_NAMESPACE}name")
@@ -50,8 +50,15 @@ class AndroidTtsFoundationTests(unittest.TestCase):
         }
         self.assertEqual(
             permissions,
-            {"android.permission.INTERNET", "android.permission.RECORD_AUDIO"},
+            {
+                "android.permission.INTERNET",
+                "android.permission.RECORD_AUDIO",
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
+            },
         )
+        self.assertNotIn("android.permission.SCHEDULE_EXACT_ALARM", permissions)
+        self.assertNotIn("android.permission.USE_EXACT_ALARM", permissions)
 
 
 if __name__ == "__main__":
