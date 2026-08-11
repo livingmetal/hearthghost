@@ -26,8 +26,8 @@ _NOTE_DELETE_PATTERNS = (
     re.compile(rf"^\s*note\s+delete\s*[:：]\s*{_ITEM_REF}\s*$", re.IGNORECASE),
 )
 _TODO_DUE_PATTERNS = (
-    re.compile(r"^\s*할\s*일\s*\[(?P<due>[^\]]{10,64})\]\s*[:：]\s*(?P<text>.+?)\s*$", re.DOTALL),
-    re.compile(r"^\s*todo\s*\[(?P<due>[^\]]{10,64})\]\s*[:：]\s*(?P<text>.+?)\s*$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^\s*할\s*일\s*\[(?P<due>[^\]]{1,128})\]\s*[:：]\s*(?P<text>.*?)\s*$", re.DOTALL),
+    re.compile(r"^\s*todo\s*\[(?P<due>[^\]]{1,128})\]\s*[:：]\s*(?P<text>.*?)\s*$", re.IGNORECASE | re.DOTALL),
 )
 _TODO_PATTERNS = (
     re.compile(r"^\s*할\s*일\s*[:：]\s*(?P<text>.+?)\s*$", re.DOTALL),
@@ -74,6 +74,13 @@ class ProductivityCommandService:
         parsed = _parse(text)
         if parsed is None:
             return ProductivityCommandResult(False, False, "not_productivity_command")
+        if parsed.kind == "invalid_due":
+            return ProductivityCommandResult(
+                True,
+                False,
+                "todo_due_invalid",
+                "기한은 시간대가 포함된 ISO-8601 형식으로 입력해 주세요. 예: 2026-08-12T09:00+09:00",
+            )
         kind, value = parsed.kind, parsed.value
         try:
             principal = self._principals.resolve(node_id)
