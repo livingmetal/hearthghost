@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hearthghost.local/contracts/todo/v1/todo-record.schema.json",
+  "title": "HearthGhost Todo Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["todo_id", "scope", "scope_id", "text", "state", "created_at", "completed_at"],
+  "properties": {
+    "todo_id": {"type": "string", "format": "uuid"},
+    "scope": {"type": "string", "enum": ["user", "household"]},
+    "scope_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "text": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "state": {"type": "string", "enum": ["open", "completed"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "open"}}},
+      "then": {"properties": {"completed_at": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"state": {"const": "completed"}}},
+      "then": {"properties": {"completed_at": {"type": "string", "format": "date-time"}}}
+    }
+  ]
+}
