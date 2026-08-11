@@ -2,11 +2,13 @@ import { Capacitor } from "@capacitor/core";
 
 import "./styles.css";
 import "./persona.css";
+import "./history.css";
 import { AttentionController } from "./attention/controller.js";
 import { CharacterExperienceController } from "./character/experience.js";
 import type { CharacterDisplayProfile } from "./character/profile.js";
 import { loadCharacterRenderer } from "./character/renderer-loader.js";
 import { CharacterViewport } from "./character/viewport.js";
+import { EphemeralSessionHistory, SessionHistoryView } from "./conversation/history.js";
 import { TextConversationController } from "./conversation/controller.js";
 import { BrowserDevelopmentNodePlatform } from "./node/browser-platform.js";
 import {
@@ -82,6 +84,7 @@ root.innerHTML = `
 
     <section class="interaction-panel">
       <p class="notice" data-notice>Secure text transport is disconnected.</p>
+      <section class="session-history" data-session-history aria-label="Ephemeral conversation history"></section>
       <div class="quick-actions" aria-label="Quick message templates">
         <button type="button" class="chip" data-template="메모해: ">Memo</button>
         <button type="button" class="chip" data-template="할 일: ">Todo</button>
@@ -123,11 +126,17 @@ const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
 const sendButton = root.querySelector<HTMLButtonElement>("[data-send]");
 const messageInput = root.querySelector<HTMLInputElement>("#message");
+const historyHost = root.querySelector<HTMLElement>("[data-session-history]");
 const viewportElement = root.querySelector<HTMLElement>(".character-viewport");
+if (historyHost === null) {
+  throw new Error("Session history element is missing");
+}
 if (viewportElement === null) {
   throw new Error("CharacterViewport element is missing");
 }
 const characterViewportElement = viewportElement;
+const history = new EphemeralSessionHistory();
+const historyView = new SessionHistoryView(historyHost);
 const rendererKind = document.documentElement.dataset.characterRenderer === "vrm"
   ? "vrm"
   : "dom";
@@ -160,6 +169,15 @@ function applyCharacterProfile(profile: CharacterDisplayProfile | null): void {
 
 function currentCharacterName(): string {
   return characterName?.textContent?.trim() || "Ghost";
+}
+
+function appendHistory(role: "user" | "assistant", text: string): void {
+  historyView.render(history.append(role, text));
+}
+
+function clearSessionHistory(): void {
+  history.clear();
+  historyView.clear();
 }
 
 function showSnapshot(): void {
@@ -254,6 +272,7 @@ async function speakReplyLocally(text: string): Promise<boolean> {
 
 connectButton?.addEventListener("click", () => {
   void (async () => {
+    clearSessionHistory();
     try {
       await node.connect({
         kind: "platform-managed",
@@ -385,18 +404,24 @@ form?.addEventListener("submit", (event) => {
       }
       return;
     }
+    const submittedText = messageInput.value.trim();
     try {
       if (conversation.snapshot().conversationSessionId === null) {
         const opened = await conversation.open();
         applyCharacterProfile(opened.characterProfile);
       }
       character.beginThinking();
-      const snapshot = await conversation.submit(messageInput.value);
+      const snapshot = await conversation.submit(submittedText);
       applyCharacterProfile(snapshot.characterProfile);
       attention.recordAddressedActivity();
       showSnapshot();
+      const reply = snapshot.responseText ?? "";
+      if (reply !== "") {
+        appendHistory("user", submittedText);
+        appendHistory("assistant", reply);
+      }
       if (response !== null) {
-        response.textContent = snapshot.responseText ?? "";
+        response.textContent = reply;
       }
       character.engage();
       if (notice !== null) {
@@ -423,6 +448,10 @@ if (voiceInput !== null && voiceConversation !== null) {
         const snapshot = await voiceConversation.acceptTranscript(event);
         applyCharacterProfile(snapshot.characterProfile);
         const reply = snapshot.responseText ?? "";
+        if (reply !== "") {
+          appendHistory("user", event.text.trim());
+          appendHistory("assistant", reply);
+        }
         if (response !== null) {
           response.textContent = reply;
         }
@@ -526,6 +555,7 @@ const attentionTimer = window.setInterval(() => {
     return;
   }
   character.sleep();
+  clearSessionHistory();
   showSnapshot();
   void voiceInput?.cancel();
   void voiceOutput?.stop();
@@ -535,7 +565,10 @@ const attentionTimer = window.setInterval(() => {
   }
 }, 1_000);
 
-window.addEventListener("pagehide", () => window.clearInterval(attentionTimer), {
+window.addEventListener("pagehide", () => {
+  window.clearInterval(attentionTimer);
+  clearSessionHistory();
+}, {
   once: true,
 });
 
@@ -543,6 +576,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     attention.sleep();
     character.sleep();
+    clearSessionHistory();
     void (async () => {
       await voiceInput?.cancel();
       await voiceOutput?.stop();
