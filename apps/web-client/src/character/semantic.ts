@@ -1,5 +1,6 @@
 export const CHARACTER_STATES = [
   "sleeping",
+  "noticing",
   "listening",
   "thinking",
   "speaking",
