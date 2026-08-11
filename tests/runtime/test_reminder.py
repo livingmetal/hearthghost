@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from apps.assistant.src.adapters.in_memory_reminder import InMemoryReminderRepository
 from apps.assistant.src.modules.memory import MemoryScope
-from apps.assistant.src.modules.reminder import ReminderManager, ReminderState
+from apps.assistant.src.modules.reminder import ReminderManager, ReminderRecord, ReminderSource, ReminderState
 from apps.assistant.src.modules.todo import TodoRecord, TodoState
 
 
@@ -115,6 +115,31 @@ class ReminderTests(unittest.TestCase):
                 synced = manager.synchronize_for_todo(changed)
                 self.assertEqual(synced.state, ReminderState.CANCELLED)
                 self.assertEqual(synced.cancelled_at, NOW)
+
+    def test_repository_cannot_swap_another_todo_reminder_inside_same_scope(self):
+        requested = self.todo()
+        mismatched = ReminderRecord(
+            reminder_id="22222222-2222-2222-2222-222222222222",
+            scope=MemoryScope.USER,
+            scope_id="owner",
+            todo_id="33333333-3333-3333-3333-333333333333",
+            fire_at=requested.due_at,
+            source=ReminderSource.TODO_DUE,
+            created_by_node_id="android-personal-01",
+            created_at=NOW,
+        )
+
+        class MismatchedRepository(InMemoryReminderRepository):
+            def find_active_for_todo(self, scope, scope_id, todo_id):
+                return mismatched
+
+        manager = ReminderManager(repository=MismatchedRepository(), clock=Clock())
+        with self.assertRaisesRegex(RuntimeError, "invalid todo data"):
+            manager.schedule_for_todo(
+                requested,
+                created_by_node_id="android-personal-01",
+                explicit_user_request=True,
+            )
 
     def test_cancel_is_scope_bound_and_idempotent(self):
         manager, _ = self.build()
