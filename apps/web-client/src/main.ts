@@ -12,6 +12,11 @@ import type { NodePlatformPort } from "./node/platform.js";
 import { loadCharacterRenderer } from "./character/renderer-loader.js";
 import { CharacterViewport } from "./character/viewport.js";
 import { TextConversationController } from "./conversation/controller.js";
+import {
+  AndroidVoiceInput,
+  type VoiceInputStatus,
+} from "./voice/android-voice.js";
+import { VoiceConversationController } from "./voice/controller.js";
 
 const ATTENTION_TIMEOUT_MILLIS = 20_000;
 
@@ -27,6 +32,8 @@ const platform: NodePlatformPort = androidPlatform
   ?? new BrowserDevelopmentNodePlatform();
 const node = new ClientNode(platform);
 const attention = new AttentionController(ATTENTION_TIMEOUT_MILLIS);
+const voiceInput = androidPlatform === null ? null : new AndroidVoiceInput();
+let voiceStatus: VoiceInputStatus | null = null;
 
 root.innerHTML = `
   <main class="app-shell">
@@ -34,17 +41,18 @@ root.innerHTML = `
       <span data-node-status>Node: disconnected</span>
       <span data-attention-status>Attention: sleeping</span>
       <span>Camera: denied</span>
-      <span>Microphone: inactive</span>
+      <span data-microphone-status>Microphone: inactive</span>
       <span>Cloud media: denied</span>
     </header>
     <section class="character-viewport" aria-label="Character viewport">
     </section>
     <section class="interaction-panel">
-      <label for="message">Text conversation</label>
+      <label for="message">Conversation</label>
       <form class="text-row" data-conversation>
-        <input id="message" autocomplete="off" placeholder="Touch wake, then type" />
+        <input id="message" autocomplete="off" placeholder="Touch wake, then type or speak" />
         <button type="button" data-connect>Connect securely</button>
         <button type="button" data-wake>Wake Ghost</button>
+        <button type="button" data-speak disabled>Speak</button>
         <button type="submit" data-send disabled>Send</button>
       </form>
       <p class="notice" data-notice>Secure text transport is disconnected.</p>
@@ -67,8 +75,10 @@ root.innerHTML = `
 
 const connectButton = root.querySelector<HTMLButtonElement>("[data-connect]");
 const wakeButton = root.querySelector<HTMLButtonElement>("[data-wake]");
+const speakButton = root.querySelector<HTMLButtonElement>("[data-speak]");
 const nodeStatus = root.querySelector<HTMLElement>("[data-node-status]");
 const attentionStatus = root.querySelector<HTMLElement>("[data-attention-status]");
+const microphoneStatus = root.querySelector<HTMLElement>("[data-microphone-status]");
 const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
@@ -92,6 +102,9 @@ const conversation = androidPlatform === null
       androidPlatform,
       (event) => viewport.present(event),
     );
+const voiceConversation = conversation === null
+  ? null
+  : new VoiceConversationController(attention, conversation);
 
 function showSnapshot(): void {
   const snapshot = node.snapshot();
@@ -105,10 +118,46 @@ function showSnapshot(): void {
       ? `Attention: engaged (${remainingSeconds}s)`
       : "Attention: sleeping";
   }
-  if (sendButton !== null) {
-    sendButton.disabled = !node.canUseCapability("conversation.text")
-      || attentionSnapshot.state !== "engaged";
+  if (microphoneStatus !== null) {
+    if (voiceStatus === null) {
+      microphoneStatus.textContent = voiceInput === null
+        ? "Microphone: unavailable"
+        : "Microphone: inactive";
+    } else if (!voiceStatus.onDeviceAvailable) {
+      microphoneStatus.textContent = "Microphone: on-device STT unavailable";
+    } else if (voiceStatus.listening) {
+      microphoneStatus.textContent = "Microphone: on-device listening";
+    } else if (voiceStatus.permission !== "granted") {
+      microphoneStatus.textContent = "Microphone: permission required";
+    } else {
+      microphoneStatus.textContent = "Microphone: ready / local only";
+    }
   }
+  const conversationAllowed = node.canUseCapability("conversation.text")
+    && attentionSnapshot.state === "engaged";
+  if (sendButton !== null) {
+    sendButton.disabled = !conversationAllowed;
+  }
+  if (speakButton !== null) {
+    speakButton.disabled = !conversationAllowed
+      || voiceInput === null
+      || voiceStatus?.onDeviceAvailable === false
+      || voiceStatus?.listening === true;
+  }
+}
+
+async function refreshVoiceStatus(): Promise<void> {
+  if (voiceInput === null) {
+    voiceStatus = null;
+    showSnapshot();
+    return;
+  }
+  try {
+    voiceStatus = await voiceInput.status();
+  } catch {
+    voiceStatus = null;
+  }
+  showSnapshot();
 }
 
 connectButton?.addEventListener("click", async () => {
@@ -139,9 +188,50 @@ wakeButton?.addEventListener("click", () => {
   attention.wakeByTouch();
   showSnapshot();
   if (notice !== null) {
-    notice.textContent = "Ghost is listening for addressed text.";
+    notice.textContent = "Ghost is listening for addressed text or speech.";
   }
   root.querySelector<HTMLInputElement>("#message")?.focus();
+});
+
+speakButton?.addEventListener("click", () => {
+  void (async () => {
+    if (
+      voiceInput === null
+      || voiceConversation === null
+      || !attention.canAcceptConversationInput()
+    ) {
+      if (notice !== null) {
+        notice.textContent = "Wake Ghost before starting on-device speech recognition.";
+      }
+      showSnapshot();
+      return;
+    }
+    try {
+      voiceStatus = await voiceInput.status();
+      if (!voiceStatus.onDeviceAvailable) {
+        throw new Error("This Android device has no on-device speech recognizer.");
+      }
+      if (voiceStatus.permission !== "granted") {
+        voiceStatus = await voiceInput.requestMicrophonePermission();
+        showSnapshot();
+        if (notice !== null) {
+          notice.textContent = "Microphone permission granted. Tap Speak again to begin local recognition.";
+        }
+        return;
+      }
+      await voiceInput.start("ko-KR");
+      voiceStatus = { ...voiceStatus, listening: true };
+      showSnapshot();
+      if (notice !== null) {
+        notice.textContent = "Listening locally. Raw microphone audio is not sent to Core or cloud.";
+      }
+    } catch (error) {
+      await refreshVoiceStatus();
+      if (notice !== null) {
+        notice.textContent = error instanceof Error ? error.message : "Voice input failed";
+      }
+    }
+  })();
 });
 
 form?.addEventListener("submit", (event) => {
@@ -185,16 +275,44 @@ form?.addEventListener("submit", (event) => {
   })();
 });
 
+if (voiceInput !== null && voiceConversation !== null) {
+  void voiceInput.onTranscript((event) => {
+    void (async () => {
+      voiceStatus = voiceStatus === null ? null : { ...voiceStatus, listening: false };
+      try {
+        const snapshot = await voiceConversation.acceptTranscript(event);
+        if (response !== null) {
+          response.textContent = snapshot.responseText ?? "";
+        }
+        if (notice !== null) {
+          notice.textContent = `On-device transcript accepted: ${event.text}`;
+        }
+      } catch (error) {
+        if (notice !== null) {
+          notice.textContent = error instanceof Error ? error.message : "Voice transcript rejected";
+        }
+      } finally {
+        await refreshVoiceStatus();
+      }
+    })();
+  });
+  void voiceInput.onError((event) => {
+    void (async () => {
+      await refreshVoiceStatus();
+      if (notice !== null) {
+        notice.textContent = `Voice input stopped: ${event.reason}`;
+      }
+    })();
+  });
+  void refreshVoiceStatus();
+}
+
 if (androidPlatform !== null) {
   const provisioning = root.querySelector<HTMLDetailsElement>("[data-provision]");
   const identityStatus = root.querySelector<HTMLElement>("[data-identity-status]");
   const csr = root.querySelector<HTMLTextAreaElement>("[data-csr]");
-  const nodeCertificate = root.querySelector<HTMLTextAreaElement>(
-    "[data-node-certificate]",
-  );
-  const authorityCertificate = root.querySelector<HTMLTextAreaElement>(
-    "[data-authority-certificate]",
-  );
+  const nodeCertificate = root.querySelector<HTMLTextAreaElement>("[data-node-certificate]");
+  const authorityCertificate = root.querySelector<HTMLTextAreaElement>("[data-authority-certificate]");
   if (provisioning !== null) {
     provisioning.hidden = false;
   }
@@ -255,6 +373,7 @@ const attentionTimer = window.setInterval(() => {
     return;
   }
   showSnapshot();
+  void voiceInput?.cancel();
   void conversation?.end();
   if (notice !== null) {
     notice.textContent = "Attention timed out. Ghost returned to sleep.";
@@ -269,8 +388,10 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     attention.sleep();
     void (async () => {
+      await voiceInput?.cancel();
       await conversation?.end();
       await node.suspend();
+      await refreshVoiceStatus();
       showSnapshot();
     })();
     viewport.suspend();
@@ -278,6 +399,7 @@ document.addEventListener("visibilitychange", () => {
     viewport.resume();
     void (async () => {
       await node.resume();
+      await refreshVoiceStatus();
       showSnapshot();
     })();
   }
