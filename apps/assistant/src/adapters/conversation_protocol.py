@@ -20,15 +20,22 @@ from apps.assistant.src.modules.conversation import (
     TEXT_CAPABILITY,
 )
 from apps.assistant.src.modules.memory_command import MemoryCommandService
-from apps.assistant.src.modules.node_security import CAPABILITY_PATTERN, IDENTIFIER_PATTERN, CapabilityRequest
+from apps.assistant.src.modules.node_security import (
+    CAPABILITY_PATTERN,
+    IDENTIFIER_PATTERN,
+    CapabilityRequest,
+)
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
+from apps.assistant.src.modules.productivity_command import ProductivityCommandService
 from apps.assistant.src.ports.llm import ProposedAction
 from apps.assistant.src.ports.node_gateway import NodeGatewaySecurityBoundary
+
 
 MAX_TEXT_LENGTH = 4_000
 MAX_RESPONSE_TEXT_LENGTH = 8_000
 MAX_EVENTS = 8
 MAX_PROPOSALS = 8
+
 
 @dataclass(frozen=True)
 class ConversationCommand:
@@ -38,6 +45,7 @@ class ConversationCommand:
     sequence: int
     conversation_session_id: str | None = None
     text: str | None = None
+
 
 @dataclass(frozen=True)
 class ConversationWireResult:
@@ -71,12 +79,24 @@ class ConversationWireResult:
             document["proposed_actions"] = list(self.proposed_actions)
         return document
 
+
 class ConversationProtocol:
-    def __init__(self, *, gateway: NodeGatewaySecurityBoundary, conversation: ConversationManager, orchestrator: ConversationOrchestrator, memory_commands: MemoryCommandService | None = None) -> None:
+    """Admit every command through Node Gateway before conversation dispatch."""
+
+    def __init__(
+        self,
+        *,
+        gateway: NodeGatewaySecurityBoundary,
+        conversation: ConversationManager,
+        orchestrator: ConversationOrchestrator,
+        memory_commands: MemoryCommandService | None = None,
+        productivity_commands: ProductivityCommandService | None = None,
+    ) -> None:
         self._gateway = gateway
         self._conversation = conversation
         self._orchestrator = orchestrator
         self._memory_commands = memory_commands
+        self._productivity_commands = productivity_commands
 
     def handle_next(self, channel: ssl.SSLSocket) -> ConversationWireResult:
         if not isinstance(channel, ssl.SSLSocket):
@@ -121,19 +141,28 @@ class ConversationProtocol:
                 conversation_session_id=accepted.turn.session_id,
             )
             if memory_result.recognized:
-                response_text = "기억했어요." if memory_result.stored else "기억 범위를 안전하게 확인할 수 없어 저장하지 않았어요."
-                completed = self._conversation.complete_response(node, accepted.turn.session_id, response_text)
-                if not completed.accepted:
-                    return ConversationWireResult(command.request_id, False, completed.reason.value)
-                events = accepted.events + completed.events
-                return ConversationWireResult(
-                    request_id=command.request_id,
-                    accepted=True,
+                text = "기억했어요." if memory_result.stored else "기억 범위를 안전하게 확인할 수 없어 저장하지 않았어요."
+                return self._complete_local(
+                    node=node,
+                    command=command,
+                    accepted=accepted,
                     reason_code=memory_result.reason,
-                    node_session_id=command.node_session_id,
-                    conversation_session_id=command.conversation_session_id,
-                    response_text=response_text,
-                    events=tuple(_state_event(event) for event in events),
+                    response_text=text,
+                )
+
+        if self._productivity_commands is not None:
+            productivity_result = self._productivity_commands.handle(
+                node_id=node.node_id,
+                text=accepted.turn.text,
+                conversation_session_id=accepted.turn.session_id,
+            )
+            if productivity_result.recognized:
+                return self._complete_local(
+                    node=node,
+                    command=command,
+                    accepted=accepted,
+                    reason_code=productivity_result.reason,
+                    response_text=productivity_result.response_text or "요청을 처리하지 않았어요.",
                 )
 
         response = self._orchestrator.respond(node, accepted.turn)
@@ -151,8 +180,33 @@ class ConversationProtocol:
             proposed_actions=tuple(_wire_proposal(proposal) for proposal in response.proposed_actions),
         )
 
+    def _complete_local(
+        self,
+        *,
+        node: AdmittedConversationNode,
+        command: ConversationCommand,
+        accepted,
+        reason_code: str,
+        response_text: str,
+    ) -> ConversationWireResult:
+        completed = self._conversation.complete_response(node, accepted.turn.session_id, response_text)
+        if not completed.accepted:
+            return ConversationWireResult(command.request_id, False, completed.reason.value)
+        events = accepted.events + completed.events
+        return ConversationWireResult(
+            request_id=command.request_id,
+            accepted=True,
+            reason_code=reason_code,
+            node_session_id=command.node_session_id,
+            conversation_session_id=command.conversation_session_id,
+            response_text=response_text,
+            events=tuple(_state_event(event) for event in events),
+        )
+
+
 def read_conversation_command(channel) -> ConversationCommand:
     return parse_conversation_command(read_frame(channel))
+
 
 def parse_conversation_command(document: object) -> ConversationCommand:
     if not isinstance(document, dict):
@@ -187,6 +241,7 @@ def parse_conversation_command(document: object) -> ConversationCommand:
     if not isinstance(text, str) or not 1 <= len(text) <= MAX_TEXT_LENGTH:
         raise NodeProtocolError("conversation.text requires bounded text")
     return ConversationCommand(message_type, request_id, node_session_id, sequence, conversation_session_id, text)
+
 
 def read_conversation_result(channel) -> ConversationWireResult:
     document = read_frame(channel)
@@ -224,6 +279,7 @@ def read_conversation_result(channel) -> ConversationWireResult:
         _read_proposals(document.get("proposed_actions", [])),
     )
 
+
 def _conversation_result(command, result) -> ConversationWireResult:
     session = result.session
     return ConversationWireResult(
@@ -235,11 +291,14 @@ def _conversation_result(command, result) -> ConversationWireResult:
         events=tuple(_state_event(event) for event in result.events),
     )
 
+
 def _state_event(event: ConversationStateEvent) -> dict[str, object]:
     return {"type": "character.state", "payload": {"state": event.state.value}}
 
+
 def _wire_proposal(proposal: ProposedAction) -> dict[str, object]:
     return {"name": proposal.name, "arguments": dict(proposal.arguments), "authorization_status": "pending_policy", "execution_status": "not_executed"}
+
 
 def _read_events(value: object) -> tuple[dict[str, object], ...]:
     if not isinstance(value, list) or len(value) > MAX_EVENTS:
@@ -257,6 +316,7 @@ def _read_events(value: object) -> tuple[dict[str, object], ...]:
             raise NodeProtocolError("Conversation result contains invalid semantic event")
         events.append(event)
     return tuple(events)
+
 
 def _read_proposals(value: object) -> tuple[dict[str, object], ...]:
     if not isinstance(value, list) or len(value) > MAX_PROPOSALS:
@@ -277,9 +337,11 @@ def _read_proposals(value: object) -> tuple[dict[str, object], ...]:
         proposals.append(proposal)
     return tuple(proposals)
 
+
 def _require_exact_fields(document: dict[str, object], expected: set[str]) -> None:
     if set(document) != expected:
         raise NodeProtocolError("Conversation fields do not match its message type")
+
 
 def _valid_uuid(value: object) -> bool:
     if not isinstance(value, str):
@@ -288,6 +350,7 @@ def _valid_uuid(value: object) -> bool:
         return str(UUID(value)) == value
     except (ValueError, AttributeError):
         return False
+
 
 def _valid_identifier(value: object) -> bool:
     return isinstance(value, str) and IDENTIFIER_PATTERN.fullmatch(value) is not None
