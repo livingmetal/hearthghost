@@ -34,8 +34,9 @@ class PostgresReminderRepository:
                     """
                     INSERT INTO reminder_records (
                         reminder_id, scope, scope_id, todo_id, fire_at, source,
-                        created_by_node_id, created_at, state, cancelled_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        created_by_node_id, created_at, state, cancelled_at,
+                        delivery_state, next_attempt_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
                     """,
                     (
                         record.reminder_id,
@@ -48,6 +49,7 @@ class PostgresReminderRepository:
                         record.created_at,
                         record.state.value,
                         record.cancelled_at,
+                        record.fire_at if record.state is ReminderState.SCHEDULED else None,
                     ),
                 )
 
@@ -113,13 +115,60 @@ class PostgresReminderRepository:
                 cursor.execute(
                     """
                     UPDATE reminder_records
-                    SET fire_at = %s, state = %s, cancelled_at = %s
+                    SET fire_at = %s,
+                        state = %s,
+                        cancelled_at = %s,
+                        delivery_state = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN 'pending'
+                            ELSE delivery_state
+                        END,
+                        claim_token = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN NULL
+                            ELSE claim_token
+                        END,
+                        claim_owner = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN NULL
+                            ELSE claim_owner
+                        END,
+                        claim_until = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN NULL
+                            ELSE claim_until
+                        END,
+                        attempt_count = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN 0
+                            ELSE attempt_count
+                        END,
+                        next_attempt_at = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN %s
+                            ELSE next_attempt_at
+                        END,
+                        delivered_at = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN NULL
+                            ELSE delivered_at
+                        END,
+                        last_attempt_at = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN NULL
+                            ELSE last_attempt_at
+                        END,
+                        last_delivery_reason = CASE
+                            WHEN %s = 'scheduled' AND fire_at IS DISTINCT FROM %s THEN NULL
+                            ELSE last_delivery_reason
+                        END
                     WHERE reminder_id = %s AND scope = %s AND scope_id = %s
                     """,
                     (
                         record.fire_at,
                         record.state.value,
                         record.cancelled_at,
+                        record.state.value, record.fire_at,
+                        record.state.value, record.fire_at,
+                        record.state.value, record.fire_at,
+                        record.state.value, record.fire_at,
+                        record.state.value, record.fire_at,
+                        record.state.value, record.fire_at, record.fire_at,
+                        record.state.value, record.fire_at,
+                        record.state.value, record.fire_at,
+                        record.state.value, record.fire_at,
                         record.reminder_id,
                         record.scope.value,
                         record.scope_id,

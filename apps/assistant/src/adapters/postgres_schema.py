@@ -1,8 +1,7 @@
 """Versioned HearthGhost PostgreSQL schema migrations.
 
 Migrations are serialized with a transaction-scoped advisory lock. Existing
-MVP tables are adopted by idempotent CREATE TABLE IF NOT EXISTS migrations;
-no destructive inference or downgrade is attempted.
+MVP tables are adopted by idempotent migrations; no downgrade is attempted.
 """
 
 from __future__ import annotations
@@ -171,6 +170,132 @@ MIGRATIONS = (
         );
         CREATE INDEX IF NOT EXISTS behavior_preference_updated_idx
         ON behavior_preference_records(updated_at DESC, scope, scope_id);
+        """,
+    ),
+    Migration(
+        6,
+        "reminder_delivery_lease_v1",
+        """
+        ALTER TABLE reminder_records
+            ADD COLUMN IF NOT EXISTS delivery_state TEXT NOT NULL DEFAULT 'pending',
+            ADD COLUMN IF NOT EXISTS claim_token UUID NULL,
+            ADD COLUMN IF NOT EXISTS claim_owner TEXT NULL,
+            ADD COLUMN IF NOT EXISTS claim_until TIMESTAMPTZ NULL,
+            ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NULL,
+            ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ NULL,
+            ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMPTZ NULL,
+            ADD COLUMN IF NOT EXISTS last_delivery_reason TEXT NULL;
+
+        UPDATE reminder_records
+        SET next_attempt_at = fire_at
+        WHERE state = 'scheduled'
+          AND delivery_state = 'pending'
+          AND next_attempt_at IS NULL;
+
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'reminder_delivery_state_check'
+            ) THEN
+                ALTER TABLE reminder_records
+                ADD CONSTRAINT reminder_delivery_state_check CHECK (
+                    delivery_state IN ('pending', 'claimed', 'delivered', 'exhausted')
+                    AND attempt_count >= 0
+                    AND (last_delivery_reason IS NULL OR char_length(last_delivery_reason) <= 128)
+                    AND (
+                        state = 'cancelled'
+                        OR (
+                            delivery_state = 'pending'
+                            AND claim_token IS NULL
+                            AND claim_owner IS NULL
+                            AND claim_until IS NULL
+                            AND delivered_at IS NULL
+                            AND next_attempt_at IS NOT NULL
+                        )
+                        OR (
+                            delivery_state = 'claimed'
+                            AND claim_token IS NOT NULL
+                            AND claim_owner IS NOT NULL
+                            AND claim_until IS NOT NULL
+                            AND delivered_at IS NULL
+                        )
+                        OR (
+                            delivery_state = 'delivered'
+                            AND claim_token IS NULL
+                            AND claim_owner IS NULL
+                            AND claim_until IS NULL
+                            AND next_attempt_at IS NULL
+                            AND delivered_at IS NOT NULL
+                        )
+                        OR (
+                            delivery_state = 'exhausted'
+                            AND claim_token IS NULL
+                            AND claim_owner IS NULL
+                            AND claim_until IS NULL
+                            AND next_attempt_at IS NULL
+                            AND delivered_at IS NULL
+                        )
+                    )
+                );
+            END IF;
+        END;
+        $$;
+
+        CREATE INDEX IF NOT EXISTS reminder_delivery_pending_idx
+        ON reminder_records(next_attempt_at, fire_at, reminder_id)
+        WHERE state = 'scheduled' AND delivery_state = 'pending';
+        CREATE INDEX IF NOT EXISTS reminder_delivery_claim_expiry_idx
+        ON reminder_records(claim_until, reminder_id)
+        WHERE state = 'scheduled' AND delivery_state = 'claimed';
+
+        CREATE OR REPLACE FUNCTION hearthghost_sync_todo_reminder()
+        RETURNS TRIGGER LANGUAGE plpgsql AS $$
+        BEGIN
+            IF NEW.state <> 'open'
+               OR NEW.due_at IS NULL
+               OR NEW.due_at <= CURRENT_TIMESTAMP
+               OR NEW.due_at > CURRENT_TIMESTAMP + INTERVAL '366 days' THEN
+                UPDATE reminder_records
+                SET state = 'cancelled',
+                    cancelled_at = CURRENT_TIMESTAMP,
+                    claim_token = NULL,
+                    claim_owner = NULL,
+                    claim_until = NULL,
+                    next_attempt_at = NULL,
+                    delivery_state = CASE
+                        WHEN delivery_state = 'delivered' THEN 'delivered'
+                        ELSE 'exhausted'
+                    END,
+                    last_delivery_reason = CASE
+                        WHEN delivery_state = 'delivered' THEN last_delivery_reason
+                        ELSE 'todo_unschedulable'
+                    END
+                WHERE todo_id = NEW.todo_id
+                  AND scope = NEW.scope
+                  AND scope_id = NEW.scope_id
+                  AND state = 'scheduled';
+            ELSIF NEW.due_at IS DISTINCT FROM OLD.due_at THEN
+                UPDATE reminder_records
+                SET fire_at = NEW.due_at,
+                    delivery_state = 'pending',
+                    claim_token = NULL,
+                    claim_owner = NULL,
+                    claim_until = NULL,
+                    attempt_count = 0,
+                    next_attempt_at = NEW.due_at,
+                    delivered_at = NULL,
+                    last_attempt_at = NULL,
+                    last_delivery_reason = NULL
+                WHERE todo_id = NEW.todo_id
+                  AND scope = NEW.scope
+                  AND scope_id = NEW.scope_id
+                  AND state = 'scheduled';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
         """,
     ),
 )
