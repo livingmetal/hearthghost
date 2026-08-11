@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from apps.assistant.src.adapters.conversation_protocol import ConversationProtocol
+from apps.assistant.src.adapters.development_advertisement_admin import DevelopmentAuditedAdvertisementStore
 from apps.assistant.src.adapters.development_state import (
     DevelopmentStateFile,
     LocalDevelopmentAdministratorAuthorizer,
@@ -27,8 +28,11 @@ from apps.assistant.src.adapters.postgres_memory import PostgresMemoryRepository
 from apps.assistant.src.adapters.postgres_reminder import PostgresReminderRepository
 from apps.assistant.src.adapters.postgres_todo import PostgresTodoRepository
 from apps.assistant.src.adapters.reminder_sync_protocol import ReminderSyncProtocol
+from apps.assistant.src.modules.capability_administration import CapabilityAdvertisementAdministration
 from apps.assistant.src.modules.node_security import SystemClock
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
+from apps.assistant.src.runtime.admin_api import AdminApiServer
+from apps.assistant.src.runtime.admin_auth import read_administrator_token
 from apps.assistant.src.runtime.admin_dashboard import AdminDashboardServer
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
 from apps.assistant.src.runtime.memory_configuration import parse_memory_principal_bindings
@@ -40,6 +44,7 @@ DEFAULT_GATEWAY_PORT = 8443
 DEFAULT_STATUS_BIND = "127.0.0.1"
 DEFAULT_STATUS_PORT = 8080
 DEFAULT_ADMIN_DASHBOARD_BIND = "127.0.0.1"
+DEFAULT_ADMIN_API_BIND = "127.0.0.1"
 DEFAULT_SOCKET_TIMEOUT_SECONDS = 60.0
 DEFAULT_HANDSHAKE_TIMEOUT_SECONDS = 5.0
 MAX_CONNECTIONS = 8
@@ -162,6 +167,19 @@ def main(arguments: list[str] | None = None) -> int:
         metavar="PORT",
         help="enable the read-only operator dashboard on 127.0.0.1 only; disabled by default",
     )
+    parser.add_argument(
+        "--admin-api-port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="enable the authenticated write API/console on 127.0.0.1; requires --admin-token-secret",
+    )
+    parser.add_argument(
+        "--admin-token-secret",
+        default=None,
+        metavar="PATH",
+        help="owner-only bearer token secret file for the loopback administrator API",
+    )
     parser.add_argument("--postgres-dsn-secret", default=None, metavar="PATH", help=f"PostgreSQL DSN secret file; production default is {DEFAULT_POSTGRES_DSN_FILE}")
     parser.add_argument("--memory-principal", action="append", default=[], metavar="NODE_ID=SCOPE:SCOPE_ID")
     parser.add_argument(
@@ -172,14 +190,7 @@ def main(arguments: list[str] | None = None) -> int:
         help="explicit principal-to-notification-Node route; no creator-origin inference",
     )
     options = parser.parse_args(arguments)
-    if options.admin_dashboard_port is not None and not 1 <= options.admin_dashboard_port <= 65535:
-        parser.error("--admin-dashboard-port must be between 1 and 65535")
-    if (
-        options.admin_dashboard_port is not None
-        and options.status_bind == DEFAULT_ADMIN_DASHBOARD_BIND
-        and options.admin_dashboard_port == options.status_port
-    ):
-        parser.error("--admin-dashboard-port must differ from --status-port on 127.0.0.1")
+    _validate_admin_listener_options(parser, options)
 
     state = DevelopmentStateFile(Path(options.state))
     registry = PersistentNodeRegistry(state)
@@ -202,10 +213,15 @@ def main(arguments: list[str] | None = None) -> int:
     memory_principals = parse_memory_principal_bindings(options.memory_principal) if options.memory_principal else None
     notification_targets = parse_notification_target_bindings(options.notification_target) if options.notification_target else None
 
-    unreachable_admin_context = object()
+    admin_context = object()
+    administrator_actor = "local-admin-api" if options.admin_token_secret else "local-development-cli"
+    administrator_authorizer = LocalDevelopmentAdministratorAuthorizer(
+        admin_context,
+        administrator_actor,
+    )
     components = build_core(
         authenticator=authenticator,
-        administrator_authorizer=LocalDevelopmentAdministratorAuthorizer(unreachable_admin_context, "local-development-cli"),
+        administrator_authorizer=administrator_authorizer,
         policy=UnconfiguredPolicyBoundary(),
         node_registry=registry,
         credential_repository=credentials,
@@ -246,25 +262,38 @@ def main(arguments: list[str] | None = None) -> int:
         reminder_sync_protocol=reminder_sync_protocol,
     )
     status_server = CoreStatusServer((options.status_bind, options.status_port), components)
+
     dashboard_server: AdminDashboardServer | None = None
+    admin_api_server: AdminApiServer | None = None
     try:
         if options.admin_dashboard_port is not None:
             dashboard_server = AdminDashboardServer((DEFAULT_ADMIN_DASHBOARD_BIND, options.admin_dashboard_port), components)
+        if options.admin_api_port is not None:
+            token = read_administrator_token(options.admin_token_secret)
+            advertisement_administration = CapabilityAdvertisementAdministration(
+                authorized_context=admin_context,
+                actor_id=administrator_actor,
+                store=DevelopmentAuditedAdvertisementStore(state),
+                clock=SystemClock(),
+            )
+            admin_api_server = AdminApiServer(
+                (DEFAULT_ADMIN_API_BIND, options.admin_api_port),
+                token=token,
+                admin_context=admin_context,
+                node_administration=components.node_administration,
+                registry=registry,
+                advertisement_administration=advertisement_administration,
+            )
     except Exception:
         status_server.server_close()
+        if dashboard_server is not None:
+            dashboard_server.server_close()
         raise
 
     status_thread = threading.Thread(target=status_server.serve_forever, kwargs={"poll_interval": 0.25}, name="loopback-status", daemon=True)
     status_thread.start()
-    dashboard_thread: threading.Thread | None = None
-    if dashboard_server is not None:
-        dashboard_thread = threading.Thread(
-            target=dashboard_server.serve_forever,
-            kwargs={"poll_interval": 0.5},
-            name="loopback-admin-dashboard",
-            daemon=True,
-        )
-        dashboard_thread.start()
+    dashboard_thread = _start_optional_server_thread(dashboard_server, "loopback-admin-dashboard", 0.5)
+    admin_api_thread = _start_optional_server_thread(admin_api_server, "loopback-admin-api", 0.25)
 
     prior_handlers: dict[int, object] = {}
 
@@ -276,17 +305,52 @@ def main(arguments: list[str] | None = None) -> int:
     try:
         gateway_server.serve_forever()
     finally:
-        status_server.shutdown()
-        status_server.server_close()
-        status_thread.join(timeout=2)
-        if dashboard_server is not None:
-            dashboard_server.shutdown()
-            dashboard_server.server_close()
-        if dashboard_thread is not None:
-            dashboard_thread.join(timeout=2)
+        _shutdown_http_server(status_server, status_thread)
+        _shutdown_http_server(dashboard_server, dashboard_thread)
+        _shutdown_http_server(admin_api_server, admin_api_thread)
         for signum, handler in prior_handlers.items():
             signal.signal(signum, handler)
     return 0
+
+
+def _validate_admin_listener_options(parser: argparse.ArgumentParser, options: argparse.Namespace) -> None:
+    for name in ("admin_dashboard_port", "admin_api_port"):
+        value = getattr(options, name)
+        if value is not None and not 1 <= value <= 65535:
+            parser.error(f"--{name.replace('_', '-')} must be between 1 and 65535")
+    if (options.admin_api_port is None) != (options.admin_token_secret is None):
+        parser.error("--admin-api-port and --admin-token-secret must be configured together")
+    loopback_ports: list[int] = []
+    if options.status_bind == "127.0.0.1":
+        loopback_ports.append(options.status_port)
+    if options.admin_dashboard_port is not None:
+        loopback_ports.append(options.admin_dashboard_port)
+    if options.admin_api_port is not None:
+        loopback_ports.append(options.admin_api_port)
+    if len(loopback_ports) != len(set(loopback_ports)):
+        parser.error("status, dashboard and administrator API ports must be distinct on 127.0.0.1")
+
+
+def _start_optional_server_thread(server, name: str, poll_interval: float) -> threading.Thread | None:
+    if server is None:
+        return None
+    thread = threading.Thread(
+        target=server.serve_forever,
+        kwargs={"poll_interval": poll_interval},
+        name=name,
+        daemon=True,
+    )
+    thread.start()
+    return thread
+
+
+def _shutdown_http_server(server, thread: threading.Thread | None) -> None:
+    if server is None:
+        return
+    server.shutdown()
+    server.server_close()
+    if thread is not None:
+        thread.join(timeout=2)
 
 
 if __name__ == "__main__":
