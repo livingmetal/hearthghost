@@ -53,3 +53,25 @@ jobs:
         run: docker build --file containers/android/Containerfile --tag hearthghost-android-build .
       - name: Verify final image runs without network
         run: docker run --rm --network none hearthghost-android-build
+
+  windows:
+    name: Windows WebView2 client build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+          dotnet-quality: ga
+      - name: Restore Windows client
+        run: dotnet restore apps/windows-client/HearthGhost.WindowsClient.csproj
+      - name: Build Windows client
+        run: dotnet build apps/windows-client/HearthGhost.WindowsClient.csproj --configuration Release --no-restore -warnaserror
