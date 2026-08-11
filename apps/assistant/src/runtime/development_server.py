@@ -31,6 +31,7 @@ from apps.assistant.src.adapters.node_tls_transport import (
     create_node_server_context,
 )
 from apps.assistant.src.adapters.sqlite_memory import SqliteMemoryRepository
+from apps.assistant.src.adapters.sqlite_todo import SqliteTodoRepository
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
 from apps.assistant.src.runtime.memory_configuration import parse_memory_principal_bindings
@@ -167,7 +168,7 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--status-port", type=int, default=DEFAULT_STATUS_PORT)
     parser.add_argument(
         "--memory-db",
-        help="optional SQLite path for persistent explicit text memory",
+        help="optional owner-only SQLite path for explicit memory, notes, and todos",
     )
     parser.add_argument(
         "--memory-principal",
@@ -175,7 +176,7 @@ def main(arguments: list[str] | None = None) -> int:
         default=[],
         metavar="NODE_ID=SCOPE:SCOPE_ID",
         help=(
-            "explicit memory binding, for example "
+            "explicit personal-data binding, for example "
             "android-personal-01=user:owner or kitchen=household:home"
         ),
     )
@@ -193,9 +194,15 @@ def main(arguments: list[str] | None = None) -> int:
         server_context=server_context,
         identities=PersistentCertificateIdentityResolver(state),
     )
+    personal_data_path = Path(options.memory_db) if options.memory_db else None
     memory_repository = (
-        SqliteMemoryRepository(Path(options.memory_db))
-        if options.memory_db
+        SqliteMemoryRepository(personal_data_path)
+        if personal_data_path is not None
+        else None
+    )
+    todo_repository = (
+        SqliteTodoRepository(personal_data_path)
+        if personal_data_path is not None
         else None
     )
     memory_principals = (
@@ -214,11 +221,12 @@ def main(arguments: list[str] | None = None) -> int:
         node_registry=registry,
         credential_repository=credentials,
         memory_repository=memory_repository,
+        todo_repository=todo_repository,
         conversation_principal_resolver=memory_principals,
         llm=FakeLLMAdapter(),
         storage_kind=(
-            "persistent_development_file_and_memory"
-            if memory_repository is not None
+            "persistent_development_file_and_personal_data"
+            if personal_data_path is not None
             else "persistent_development_file"
         ),
     )
@@ -228,6 +236,7 @@ def main(arguments: list[str] | None = None) -> int:
         conversation=components.conversation,
         orchestrator=components.orchestrator,
         memory_commands=components.memory_commands,
+        productivity_commands=components.productivity_commands,
     )
     gateway_server = DevelopmentGatewayServer(
         bind_address=options.bind,
