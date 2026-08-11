@@ -23,6 +23,7 @@ from apps.assistant.src.adapters.in_memory_core import (
     RejectingCredentialAuthenticator,
 )
 from apps.assistant.src.adapters.in_memory_conversation import InMemoryConversationRepository
+from apps.assistant.src.adapters.in_memory_memory import InMemoryMemoryRepository
 from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
 from apps.assistant.src.modules.behavior_preference_interpreter import (
     BehaviorPreferenceInterpreter,
@@ -30,6 +31,13 @@ from apps.assistant.src.modules.behavior_preference_interpreter import (
 )
 from apps.assistant.src.modules.behavior_preferences import BehaviorPreferenceManager
 from apps.assistant.src.modules.conversation import ConversationManager
+from apps.assistant.src.modules.conversation_principal import (
+    ConversationPrincipalResolver,
+    DenyingConversationPrincipalResolver,
+)
+from apps.assistant.src.modules.explicit_memory import ExplicitMemoryParser
+from apps.assistant.src.modules.memory import MemoryManager
+from apps.assistant.src.modules.memory_command import MemoryCommandService
 from apps.assistant.src.modules.node_administration import NodeAdministration
 from apps.assistant.src.modules.node_security import NodeGatewaySecurity, SystemClock
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
@@ -37,6 +45,7 @@ from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
 from apps.assistant.src.modules.privacy_gateway import DEFAULT_CLOUD_PRIVACY_POLICY, PrivacyGateway
 from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
 from apps.assistant.src.ports.conversation import ConversationRepository
+from apps.assistant.src.ports.memory import MemoryRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
 from apps.assistant.src.ports.policy import PolicyBoundary
 from apps.assistant.src.ports.llm import LLMPort
@@ -62,6 +71,9 @@ class CoreComponents:
     behavior_preferences: BehaviorPreferenceManager
     preference_interpreter: BehaviorPreferenceInterpreter
     preference_service: BehaviorPreferenceService
+    memory: MemoryManager
+    memory_commands: MemoryCommandService
+    memory_principals: ConversationPrincipalResolver
     registry: object
     credentials: object
     contracts: ContractCatalog
@@ -69,6 +81,7 @@ class CoreComponents:
     administrator_authority_configured: bool
     policy_rules_configured: bool
     llm_configured: bool
+    memory_principals_configured: bool
     storage_kind: str = "ephemeral"
 
     def liveness(self) -> dict[str, object]:
@@ -110,6 +123,10 @@ class CoreComponents:
                 "policy": "configured" if self.policy_rules_configured else "deny_only",
                 "conversation": "text_only",
                 "behavior_preferences": "internal_typed_boundary",
+                "memory": "explicit_addressed_text_only",
+                "memory_principal": (
+                    "configured" if self.memory_principals_configured else "deny_only"
+                ),
                 "privacy_gateway": "text_allow_media_deny",
                 "llm": "configured" if self.llm_configured else "unavailable",
             },
@@ -126,6 +143,8 @@ def build_core(
     node_registry: object | None = None,
     credential_repository: object | None = None,
     conversation_repository: ConversationRepository | None = None,
+    memory_repository: MemoryRepository | None = None,
+    conversation_principal_resolver: ConversationPrincipalResolver | None = None,
     follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
     llm: LLMPort | None = None,
     llm_timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS,
@@ -153,6 +172,14 @@ def build_core(
         conversation_repository
         if conversation_repository is not None
         else InMemoryConversationRepository()
+    )
+    selected_memory_repository = (
+        memory_repository if memory_repository is not None else InMemoryMemoryRepository()
+    )
+    selected_memory_principals = (
+        conversation_principal_resolver
+        if conversation_principal_resolver is not None
+        else DenyingConversationPrincipalResolver()
     )
     gateway = NodeGatewaySecurity(
         authenticator=selected_authenticator,
@@ -195,6 +222,15 @@ def build_core(
         interpreter=preference_interpreter,
         manager=behavior_preferences,
     )
+    memory = MemoryManager(
+        repository=selected_memory_repository,
+        clock=clock,
+    )
+    memory_commands = MemoryCommandService(
+        parser=ExplicitMemoryParser(),
+        memory=memory,
+        principals=selected_memory_principals,
+    )
     return CoreComponents(
         node_gateway=gateway,
         node_administration=administration,
@@ -205,6 +241,9 @@ def build_core(
         behavior_preferences=behavior_preferences,
         preference_interpreter=preference_interpreter,
         preference_service=preference_service,
+        memory=memory,
+        memory_commands=memory_commands,
+        memory_principals=selected_memory_principals,
         registry=registry,
         credentials=credentials,
         contracts=ContractCatalog(contracts_root or REPOSITORY_ROOT / "contracts"),
@@ -212,6 +251,7 @@ def build_core(
         administrator_authority_configured=administrator_authorizer is not None,
         policy_rules_configured=policy is not None,
         llm_configured=llm is not None,
+        memory_principals_configured=conversation_principal_resolver is not None,
         storage_kind=storage_kind,
     )
 
