@@ -11,7 +11,7 @@ class ContainerFoundationTests(unittest.TestCase):
         self.compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
         self.dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
 
-    def test_test_image_is_non_root_and_dependency_free(self):
+    def test_test_image_is_non_root_with_dependencies_installed_only_in_runtime_base(self):
         self.assertIn(
             "FROM python:3.13-slim-bookworm AS runtime-base",
             self.dockerfile,
@@ -22,8 +22,12 @@ class ContainerFoundationTests(unittest.TestCase):
             'CMD ["python", "-m", "unittest", "discover"',
             self.dockerfile,
         )
-        self.assertNotIn("apt-get", self.dockerfile)
-        self.assertNotIn("pip install", self.dockerfile)
+        runtime_base, later_stages = self.dockerfile.split("FROM runtime-base AS test", maxsplit=1)
+        self.assertIn("apt-get install", runtime_base)
+        self.assertIn("libpq5", runtime_base)
+        self.assertIn("pip install --no-cache-dir -r /tmp/requirements-runtime.txt", runtime_base)
+        self.assertNotIn("apt-get", later_stages)
+        self.assertNotIn("pip install", later_stages)
         self.assertNotIn("EXPOSE", self.dockerfile)
         self.assertNotIn("VOLUME", self.dockerfile)
 
