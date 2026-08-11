@@ -40,6 +40,24 @@ value. The PostgreSQL container must be attached to the internal development
 network separately; do not make that network non-internal merely to reach the
 database.
 
+## Explicit conversation principal binding
+
+Memory, notes, todos and behavior preferences fail closed until an administrator
+binds a Node to one exact user or household scope. Select one development
+binding explicitly when deploying; the script has no permissive default and
+does not infer scope from an authenticated Node:
+
+```text
+HEARTHGHOST_POSTGRES_SECRET_NAME=hearthghost-postgres-dsn \
+HEARTHGHOST_MEMORY_PRINCIPAL_BINDING=windows-development-01=user:windows-development-user \
+  deploy/development/hearthghost-development.sh deploy
+```
+
+The binding contains no credential, but it is an authorization decision. Use a
+separate Node ID and reviewed binding for every additional laptop or phone. The
+value is passed as the existing `--memory-principal NODE_ID=SCOPE:SCOPE_ID`
+runtime argument and is never converted into a Node trust or capability grant.
+
 ## One Android Node credential
 
 The Android app must generate its key in Android Keystore and export only a

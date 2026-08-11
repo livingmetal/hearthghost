@@ -16,6 +16,7 @@ STATE_DIR="${DATA_ROOT}/state"
 ENROLLMENT_DIR="${DATA_ROOT}/enrollment"
 POSTGRES_SECRET_NAME="${HEARTHGHOST_POSTGRES_SECRET_NAME:-}"
 POSTGRES_SECRET_TARGET="hearthghost-postgres-dsn"
+MEMORY_PRINCIPAL_BINDING="${HEARTHGHOST_MEMORY_PRINCIPAL_BINDING:-}"
 
 require_repository_root() {
     test -f Dockerfile
@@ -86,10 +87,25 @@ configure_postgres_secret() {
     )
 }
 
+configure_memory_principal() {
+    MEMORY_PRINCIPAL_ARGS=()
+    if [[ -z "${MEMORY_PRINCIPAL_BINDING}" ]]; then
+        return
+    fi
+    if [[ ! "${MEMORY_PRINCIPAL_BINDING}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}=(user|household):[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+        printf 'invalid HEARTHGHOST_MEMORY_PRINCIPAL_BINDING\n' >&2
+        exit 2
+    fi
+    MEMORY_PRINCIPAL_ARGS=(
+        --memory-principal "${MEMORY_PRINCIPAL_BINDING}"
+    )
+}
+
 deploy() {
     require_repository_root
     ip -brief address show | grep -Fq "${HOST_IP}/"
     configure_postgres_secret
+    configure_memory_principal
     build_image
     initialize
     create_network
@@ -123,7 +139,8 @@ deploy() {
         --certificate /run/hearthghost-tls/server.crt \
         --private-key /run/hearthghost-tls/server.key \
         --client-ca /run/hearthghost-tls/client-ca.crt \
-        "${POSTGRES_RUNTIME_ARGS[@]}"
+        "${POSTGRES_RUNTIME_ARGS[@]}" \
+        "${MEMORY_PRINCIPAL_ARGS[@]}"
 }
 
 admin() {
