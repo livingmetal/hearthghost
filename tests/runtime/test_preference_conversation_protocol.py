@@ -84,6 +84,67 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
         self.assertEqual(len(self.llm.requests), 1)
         self.assertIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", self.llm.requests[0].instructions)
 
+    def test_exact_character_selection_skips_interpreter_and_anchors_next_llm_turn(self):
+        selected = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                2,
+                self.conversation_id,
+                "캐릭터: 영희",
+            ),
+        )
+        self.assertTrue(selected.accepted)
+        self.assertEqual(selected.reason_code, "character_profile_selected")
+        self.assertEqual(selected.character_profile, {"name": "영희"})
+        self.assertIn("영희 캐릭터로 전환", selected.response_text)
+        self.assertEqual(len(self.llm.requests), 0)
+
+        ordinary = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                3,
+                self.conversation_id,
+                "오늘 저녁 뭐부터 하면 좋을까?",
+            ),
+        )
+        self.assertTrue(ordinary.accepted)
+        self.assertEqual(ordinary.character_profile, {"name": "영희"})
+        self.assertEqual(len(self.llm.requests), 1)
+        instructions = self.llm.requests[0].instructions
+        self.assertIn("Character identity: Younghee", instructions)
+        self.assertIn("bright, quick, personable Korean cadence", instructions)
+        self.assertNotIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", instructions)
+
+    def test_exact_cheolsu_selection_is_scoped_and_does_not_change_spouse(self):
+        selected = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                2,
+                self.conversation_id,
+                "캐릭터: 철수",
+            ),
+        )
+        self.assertTrue(selected.accepted)
+        self.assertEqual(selected.character_profile, {"name": "철수"})
+        self.assertEqual(len(self.llm.requests), 0)
+        self.assertEqual(
+            self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona.name,
+            "철수",
+        )
+        self.assertEqual(
+            self.core.behavior_preferences.snapshot(scope="user", scope_id="spouse").persona.name,
+            "HearthGhost",
+        )
+
     def test_followup_preference_updates_only_current_principal_session(self):
         result = self.protocol._dispatch(
             self.node,
