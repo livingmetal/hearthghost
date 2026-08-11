@@ -285,6 +285,37 @@ class OpenAIAdapterTests(unittest.TestCase):
                 }
             )
 
+    def test_environment_can_lower_but_not_raise_the_output_token_cap(self):
+        captured = {}
+
+        def open_call(request, timeout):
+            captured["body"] = json.loads(request.data)
+            return FakeHTTPResponse(
+                b'{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"short"}]}]}'
+            )
+
+        adapter = OpenAIResponsesAdapter.from_environment(
+            {
+                "OPENAI_API_KEY": "fake-environment-key",
+                "OPENAI_MAX_OUTPUT_TOKENS": "256",
+            },
+            open_call=open_call,
+        )
+        adapter.generate(llm_request(), timeout_seconds=1)
+
+        self.assertEqual(captured["body"]["max_output_tokens"], 256)
+
+        for invalid in ("0", "1025", "not-a-number"):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                OpenAIConfigurationError, "OPENAI_MAX_OUTPUT_TOKENS"
+            ):
+                OpenAIResponsesAdapter.from_environment(
+                    {
+                        "OPENAI_API_KEY": "fake-environment-key",
+                        "OPENAI_MAX_OUTPUT_TOKENS": invalid,
+                    }
+                )
+
     def test_timeout_is_typed_and_secret_is_never_rendered_or_logged(self):
         secret = "test-development-secret"
 

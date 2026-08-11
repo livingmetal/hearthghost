@@ -27,6 +27,7 @@ from apps.assistant.src.ports.llm import (
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_OPENAI_MODEL = "gpt-5.6"
 DEFAULT_MAX_OUTPUT_TOKENS = 1_024
+MAX_OUTPUT_TOKENS = 1_024
 MAX_RESPONSE_BYTES = 1_048_576
 MAX_API_KEY_BYTES = 16_384
 
@@ -61,9 +62,10 @@ class OpenAIResponsesAdapter:
             not isinstance(max_output_tokens, int)
             or isinstance(max_output_tokens, bool)
             or max_output_tokens <= 0
+            or max_output_tokens > MAX_OUTPUT_TOKENS
         ):
             raise OpenAIConfigurationError(
-                "OpenAI adapter requires a positive output-token limit"
+                f"OpenAI adapter requires an output-token limit between 1 and {MAX_OUTPUT_TOKENS}"
             )
         self._api_key = api_key.strip()
         self._model = model.strip()
@@ -86,9 +88,13 @@ class OpenAIResponsesAdapter:
             )
         if api_key_file:
             api_key = _read_api_key_file(api_key_file)
+        max_output_tokens = _read_max_output_tokens(
+            selected.get("OPENAI_MAX_OUTPUT_TOKENS", "")
+        )
         return cls(
             api_key=api_key,
             model=selected.get("OPENAI_MODEL", DEFAULT_OPENAI_MODEL),
+            max_output_tokens=max_output_tokens,
             open_call=open_call,
         )
 
@@ -175,6 +181,23 @@ def _read_api_key_file(path_value: str) -> str:
         raise OpenAIConfigurationError(
             "OpenAI API key secret file must be UTF-8 text"
         ) from error
+
+
+def _read_max_output_tokens(value: str) -> int:
+    selected = value.strip()
+    if not selected:
+        return DEFAULT_MAX_OUTPUT_TOKENS
+    try:
+        parsed = int(selected, 10)
+    except ValueError as error:
+        raise OpenAIConfigurationError(
+            "OPENAI_MAX_OUTPUT_TOKENS must be an integer between 1 and 1024"
+        ) from error
+    if not 1 <= parsed <= MAX_OUTPUT_TOKENS:
+        raise OpenAIConfigurationError(
+            "OPENAI_MAX_OUTPUT_TOKENS must be an integer between 1 and 1024"
+        )
+    return parsed
 
 
 def _extract_output_text(payload: object) -> str:

@@ -19,7 +19,6 @@ from apps.assistant.src.adapters.development_state import (
     PersistentCredentialRepository,
     PersistentNodeRegistry,
 )
-from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
 from apps.assistant.src.adapters.node_gateway_protocol import NodeGatewayProtocol, NodeProtocolError, read_frame
 from apps.assistant.src.adapters.node_tls_transport import MutualTlsCredentialAuthenticator, MutualTlsServerAdapter, create_node_server_context
 from apps.assistant.src.adapters.postgres_behavior_preferences import PostgresBehaviorPreferenceRepository
@@ -31,6 +30,7 @@ from apps.assistant.src.modules.node_security import SystemClock
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.runtime.admin_dashboard import AdminDashboardServer
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
+from apps.assistant.src.runtime.llm_selection import select_llm_adapter
 from apps.assistant.src.runtime.memory_configuration import parse_memory_principal_bindings
 from apps.assistant.src.runtime.notification_configuration import parse_notification_target_bindings
 from apps.assistant.src.runtime.postgres_configuration import DEFAULT_POSTGRES_DSN_FILE, read_postgres_dsn
@@ -165,6 +165,12 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--postgres-dsn-secret", default=None, metavar="PATH", help=f"PostgreSQL DSN secret file; production default is {DEFAULT_POSTGRES_DSN_FILE}")
     parser.add_argument("--memory-principal", action="append", default=[], metavar="NODE_ID=SCOPE:SCOPE_ID")
     parser.add_argument(
+        "--llm-adapter",
+        choices=("fake", "openai"),
+        default="fake",
+        help="explicit server-side LLM adapter selection; defaults to network-free fake",
+    )
+    parser.add_argument(
         "--notification-target",
         action="append",
         default=[],
@@ -201,6 +207,7 @@ def main(arguments: list[str] | None = None) -> int:
         storage_kind = "persistent_postgresql"
     memory_principals = parse_memory_principal_bindings(options.memory_principal) if options.memory_principal else None
     notification_targets = parse_notification_target_bindings(options.notification_target) if options.notification_target else None
+    selected_llm = select_llm_adapter(options.llm_adapter)
 
     unreachable_admin_context = object()
     components = build_core(
@@ -215,7 +222,7 @@ def main(arguments: list[str] | None = None) -> int:
         reminder_repository=reminder_repository,
         notification_target_resolver=notification_targets,
         conversation_principal_resolver=memory_principals,
-        llm=FakeLLMAdapter(),
+        llm=selected_llm,
         storage_kind=storage_kind,
     )
     node_protocol = NodeGatewayProtocol(components.node_gateway)

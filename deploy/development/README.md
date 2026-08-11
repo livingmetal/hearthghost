@@ -1,6 +1,6 @@
 # Rootless development runtime
 
-HG-012 deploys one fake-LLM Core/Node Gateway as the unprivileged `kaiser`
+HG-012 deploys one Core/Node Gateway as the unprivileged `kaiser`
 account on WTR PRO. ADR-0006 defines the listener and persistence boundaries.
 
 From the repository root on WTR PRO:
@@ -15,8 +15,36 @@ The script creates only user-scoped files under
 `~/.local/share/hearthghost-development` and rootless Podman objects. The CA
 private key remains in `authority/` and is never mounted into the runtime. The
 runtime exposes only `192.168.55.100:38443`; its status endpoint remains inside
-the container on loopback. The internal network has no Internet route. No
-OpenAI secret is mounted into this milestone.
+the container on loopback. The default `fake` adapter keeps the internal network
+without an Internet route and mounts no provider credential.
+
+## Opt-in live text provider
+
+Live conversation is an explicit operator choice. The existing server-side
+Podman secret is selected by public name; its value never appears in the
+repository, image, build arguments, client, or command line:
+
+```text
+HEARTHGHOST_POSTGRES_SECRET_NAME=hearthghost-postgres-dsn \
+HEARTHGHOST_MEMORY_PRINCIPAL_BINDING=windows-development-01=user:windows-development-user \
+HEARTHGHOST_LLM_ADAPTER=openai \
+HEARTHGHOST_OPENAI_SECRET_NAME=hearthghost-openai-api-key \
+HEARTHGHOST_OPENAI_MODEL=gpt-5.6-luna \
+HEARTHGHOST_OPENAI_MAX_OUTPUT_TOKENS=256 \
+  deploy/development/hearthghost-development.sh deploy
+```
+
+OpenAI mode mounts the credential as a read-only secret file and gives only the
+Core container an outbound network attachment. It does not publish another
+listener; the Node endpoint remains `192.168.55.100:38443`. Every ordinary
+conversation Send can make one API request. The default live deployment cap is
+256 output tokens per request, while the adapter enforces an absolute maximum
+of 1,024. Actual billing depends on input and generated tokens, so this bound is
+not a daily spending limit.
+
+Fake remains the default. A provider secret is never mounted in fake mode, and
+selecting OpenAI without a valid existing secret fails instead of silently
+falling back. Provider values remain server-side only and are never logged.
 
 ## Optional PostgreSQL persistence
 

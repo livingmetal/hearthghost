@@ -17,6 +17,11 @@ ENROLLMENT_DIR="${DATA_ROOT}/enrollment"
 POSTGRES_SECRET_NAME="${HEARTHGHOST_POSTGRES_SECRET_NAME:-}"
 POSTGRES_SECRET_TARGET="hearthghost-postgres-dsn"
 MEMORY_PRINCIPAL_BINDING="${HEARTHGHOST_MEMORY_PRINCIPAL_BINDING:-}"
+LLM_ADAPTER="${HEARTHGHOST_LLM_ADAPTER:-fake}"
+OPENAI_SECRET_NAME="${HEARTHGHOST_OPENAI_SECRET_NAME:-}"
+OPENAI_SECRET_TARGET="openai-api-key"
+OPENAI_MODEL="${HEARTHGHOST_OPENAI_MODEL:-gpt-5.6-luna}"
+OPENAI_MAX_OUTPUT_TOKENS="${HEARTHGHOST_OPENAI_MAX_OUTPUT_TOKENS:-256}"
 
 require_repository_root() {
     test -f Dockerfile
@@ -101,11 +106,53 @@ configure_memory_principal() {
     )
 }
 
+configure_llm() {
+    OPENAI_SECRET_ARGS=()
+    OPENAI_ENV_ARGS=()
+    if [[ "${LLM_ADAPTER}" != "fake" && "${LLM_ADAPTER}" != "openai" ]]; then
+        printf 'HEARTHGHOST_LLM_ADAPTER must be fake or openai\n' >&2
+        exit 2
+    fi
+    if [[ "${LLM_ADAPTER}" == "fake" ]]; then
+        if [[ -n "${OPENAI_SECRET_NAME}" ]]; then
+            printf 'OpenAI secret must not be selected while using the fake adapter\n' >&2
+            exit 2
+        fi
+        return
+    fi
+    if [[ -z "${OPENAI_SECRET_NAME}" || ! "${OPENAI_SECRET_NAME}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+        printf 'openai requires a valid HEARTHGHOST_OPENAI_SECRET_NAME\n' >&2
+        exit 2
+    fi
+    if ! podman secret exists "${OPENAI_SECRET_NAME}"; then
+        printf 'required Podman secret does not exist: %s\n' "${OPENAI_SECRET_NAME}" >&2
+        exit 2
+    fi
+    if [[ ! "${OPENAI_MODEL}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+        printf 'invalid HEARTHGHOST_OPENAI_MODEL\n' >&2
+        exit 2
+    fi
+    if [[ ! "${OPENAI_MAX_OUTPUT_TOKENS}" =~ ^[0-9]+$ ]] ||
+        (( OPENAI_MAX_OUTPUT_TOKENS < 1 || OPENAI_MAX_OUTPUT_TOKENS > 1024 )); then
+        printf 'HEARTHGHOST_OPENAI_MAX_OUTPUT_TOKENS must be between 1 and 1024\n' >&2
+        exit 2
+    fi
+    OPENAI_SECRET_ARGS=(
+        --secret "source=${OPENAI_SECRET_NAME},type=mount,target=${OPENAI_SECRET_TARGET},uid=10001,gid=10001,mode=0400"
+    )
+    OPENAI_ENV_ARGS=(
+        --env "OPENAI_API_KEY_FILE=/run/secrets/${OPENAI_SECRET_TARGET}"
+        --env "OPENAI_MODEL=${OPENAI_MODEL}"
+        --env "OPENAI_MAX_OUTPUT_TOKENS=${OPENAI_MAX_OUTPUT_TOKENS}"
+    )
+}
+
 deploy() {
     require_repository_root
     ip -brief address show | grep -Fq "${HOST_IP}/"
     configure_postgres_secret
     configure_memory_principal
+    configure_llm
     build_image
     initialize
     create_network
@@ -129,6 +176,8 @@ deploy() {
         --mount "type=bind,src=${STATE_DIR},dst=/var/lib/hearthghost,rw,relabel=shared" \
         --mount "type=bind,src=${TLS_DIR},dst=/run/hearthghost-tls,ro,relabel=shared" \
         "${POSTGRES_SECRET_ARGS[@]}" \
+        "${OPENAI_SECRET_ARGS[@]}" \
+        "${OPENAI_ENV_ARGS[@]}" \
         --health-cmd 'python -m apps.assistant.src.runtime.healthcheck' \
         --health-interval=10s \
         --health-timeout=3s \
@@ -139,8 +188,16 @@ deploy() {
         --certificate /run/hearthghost-tls/server.crt \
         --private-key /run/hearthghost-tls/server.key \
         --client-ca /run/hearthghost-tls/client-ca.crt \
+        --llm-adapter "${LLM_ADAPTER}" \
         "${POSTGRES_RUNTIME_ARGS[@]}" \
         "${MEMORY_PRINCIPAL_ARGS[@]}"
+    if [[ "${LLM_ADAPTER}" == "openai" ]]; then
+        if ! podman network connect podman "${CONTAINER}"; then
+            podman rm --force "${CONTAINER}" >/dev/null
+            printf 'failed to attach the OpenAI-selected Core to its outbound network\n' >&2
+            exit 1
+        fi
+    fi
 }
 
 admin() {
