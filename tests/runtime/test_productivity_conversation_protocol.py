@@ -86,7 +86,7 @@ class ProductivityConversationProtocolTests(unittest.TestCase):
         result = self.command("메모해: 다음 점검 때 UPS 배터리 확인", 2)
         self.assertTrue(result.accepted)
         self.assertEqual(result.reason_code, "note_stored")
-        self.assertEqual(result.response_text, "메모했어요.")
+        self.assertTrue(result.response_text.startswith("메모했어요. ["))
         self.assertEqual(len(self.memory.list_scope(MemoryScope.USER, "owner")), 1)
 
     def test_todo_create_and_complete_are_local(self):
@@ -94,8 +94,9 @@ class ProductivityConversationProtocolTests(unittest.TestCase):
         self.assertTrue(created.accepted)
         self.assertEqual(created.reason_code, "todo_created")
         todo = self.todos.list_scope(MemoryScope.USER, "owner")[0]
+        self.assertIn(todo.todo_id[:8], created.response_text)
 
-        completed = self.command(f"할 일 완료: {todo.todo_id}", 3)
+        completed = self.command(f"할 일 완료: {todo.todo_id[:8]}", 3)
         self.assertTrue(completed.accepted)
         self.assertEqual(completed.reason_code, "todo_completed")
 
