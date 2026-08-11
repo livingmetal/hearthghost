@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import "./styles.css";
 import { AttentionController } from "./attention/controller.js";
 import { CharacterExperienceController } from "./character/experience.js";
+import type { CharacterDisplayProfile } from "./character/profile.js";
 import { loadCharacterRenderer } from "./character/renderer-loader.js";
 import { CharacterViewport } from "./character/viewport.js";
 import { TextConversationController } from "./conversation/controller.js";
@@ -68,7 +69,11 @@ root.innerHTML = `
     </header>
 
     <section class="character-stage" aria-label="HearthGhost character and response">
-      <section class="character-viewport" aria-label="Character viewport"></section>
+      <div class="character-identity" aria-live="polite">
+        <span class="character-identity-label">Character</span>
+        <strong data-character-name>HearthGhost</strong>
+      </div>
+      <section class="character-viewport" aria-label="HearthGhost character viewport"></section>
       <div class="response-layer">
         <output class="response" data-response aria-live="polite"></output>
       </div>
@@ -111,6 +116,7 @@ const nodeStatus = root.querySelector<HTMLElement>("[data-node-status]");
 const attentionStatus = root.querySelector<HTMLElement>("[data-attention-status]");
 const microphoneStatus = root.querySelector<HTMLElement>("[data-microphone-status]");
 const speechStatus = root.querySelector<HTMLElement>("[data-speech-status]");
+const characterName = root.querySelector<HTMLElement>("[data-character-name]");
 const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
@@ -139,6 +145,20 @@ const conversation = androidPlatform === null
 const voiceConversation = conversation === null
   ? null
   : new VoiceConversationController(attention, conversation);
+
+function applyCharacterProfile(profile: CharacterDisplayProfile | null): void {
+  if (profile === null) {
+    return;
+  }
+  if (characterName !== null) {
+    characterName.textContent = profile.name;
+  }
+  viewportElement.setAttribute("aria-label", `${profile.name} character viewport`);
+}
+
+function currentCharacterName(): string {
+  return characterName?.textContent?.trim() || "Ghost";
+}
 
 function showSnapshot(): void {
   const snapshot = node.snapshot();
@@ -285,7 +305,7 @@ wakeButton?.addEventListener("click", () => {
   }, NOTICE_TO_LISTEN_MILLIS);
   showSnapshot();
   if (notice !== null) {
-    notice.textContent = "Ghost noticed you. Address text or start local speech.";
+    notice.textContent = `${currentCharacterName()} noticed you. Address text or start local speech.`;
   }
   messageInput?.focus();
 });
@@ -309,7 +329,7 @@ speakButton?.addEventListener("click", () => {
     ) {
       character.showConcern();
       if (notice !== null) {
-        notice.textContent = "Wake Ghost before starting on-device speech recognition.";
+        notice.textContent = `Wake ${currentCharacterName()} before starting on-device speech recognition.`;
       }
       showSnapshot();
       return;
@@ -359,16 +379,18 @@ form?.addEventListener("submit", (event) => {
       character.sleep();
       showSnapshot();
       if (notice !== null) {
-        notice.textContent = "Ghost is sleeping. Use Wake before sending text.";
+        notice.textContent = `${currentCharacterName()} is sleeping. Use Wake before sending text.`;
       }
       return;
     }
     try {
       if (conversation.snapshot().conversationSessionId === null) {
-        await conversation.open();
+        const opened = await conversation.open();
+        applyCharacterProfile(opened.characterProfile);
       }
       character.beginThinking();
       const snapshot = await conversation.submit(messageInput.value);
+      applyCharacterProfile(snapshot.characterProfile);
       attention.recordAddressedActivity();
       showSnapshot();
       if (response !== null) {
@@ -397,6 +419,7 @@ if (voiceInput !== null && voiceConversation !== null) {
       character.beginThinking();
       try {
         const snapshot = await voiceConversation.acceptTranscript(event);
+        applyCharacterProfile(snapshot.characterProfile);
         const reply = snapshot.responseText ?? "";
         if (response !== null) {
           response.textContent = reply;
@@ -506,7 +529,7 @@ const attentionTimer = window.setInterval(() => {
   void voiceOutput?.stop();
   void conversation?.end();
   if (notice !== null) {
-    notice.textContent = "Attention timed out. Ghost returned to sleep.";
+    notice.textContent = `Attention timed out. ${currentCharacterName()} returned to sleep.`;
   }
 }, 1_000);
 
