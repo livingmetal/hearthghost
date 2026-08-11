@@ -1,14 +1,17 @@
+import type { CharacterDisplayProfile } from "../character/profile.js";
 import type { ClientNode } from "../node/client-node.js";
 
 export interface OpenConversationResult {
   readonly conversationSessionId: string;
   readonly nodeSessionId: string;
+  readonly characterProfile: CharacterDisplayProfile;
   readonly events: readonly unknown[];
 }
 
 export interface TextConversationResult {
   readonly conversationSessionId: string;
   readonly responseText: string;
+  readonly characterProfile: CharacterDisplayProfile;
   readonly events: readonly unknown[];
 }
 
@@ -22,12 +25,14 @@ export interface ConversationSnapshot {
   readonly conversationSessionId: string | null;
   readonly nodeSessionId: string | null;
   readonly responseText: string | null;
+  readonly characterProfile: CharacterDisplayProfile | null;
 }
 
 export class TextConversationController {
   private conversationSessionId: string | null = null;
   private nodeSessionId: string | null = null;
   private responseText: string | null = null;
+  private characterProfile: CharacterDisplayProfile | null = null;
 
   constructor(
     private readonly node: ClientNode,
@@ -40,6 +45,7 @@ export class TextConversationController {
       conversationSessionId: this.conversationSessionId,
       nodeSessionId: this.nodeSessionId,
       responseText: this.responseText,
+      characterProfile: this.characterProfile,
     });
   }
 
@@ -59,6 +65,7 @@ export class TextConversationController {
     this.nodeSessionId = node.technicalSessionId;
     this.conversationSessionId = opened.conversationSessionId;
     this.responseText = null;
+    this.characterProfile = opened.characterProfile;
     this.publish(opened.events);
     return this.snapshot();
   }
@@ -85,6 +92,7 @@ export class TextConversationController {
       throw new Error("Conversation transport returned a malformed response");
     }
     this.responseText = result.responseText;
+    this.characterProfile = result.characterProfile;
     this.publish(result.events);
     return this.snapshot();
   }
