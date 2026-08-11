@@ -30,8 +30,10 @@ from apps.assistant.src.adapters.node_tls_transport import (
     MutualTlsServerAdapter,
     create_node_server_context,
 )
+from apps.assistant.src.adapters.sqlite_memory import SqliteMemoryRepository
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
+from apps.assistant.src.runtime.memory_configuration import parse_memory_principal_bindings
 
 
 DEFAULT_GATEWAY_BIND = "10.89.0.10"
@@ -163,6 +165,20 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_GATEWAY_PORT)
     parser.add_argument("--status-bind", default=DEFAULT_STATUS_BIND)
     parser.add_argument("--status-port", type=int, default=DEFAULT_STATUS_PORT)
+    parser.add_argument(
+        "--memory-db",
+        help="optional SQLite path for persistent explicit text memory",
+    )
+    parser.add_argument(
+        "--memory-principal",
+        action="append",
+        default=[],
+        metavar="NODE_ID=SCOPE:SCOPE_ID",
+        help=(
+            "explicit memory binding, for example "
+            "android-personal-01=user:owner or kitchen=household:home"
+        ),
+    )
     options = parser.parse_args(arguments)
 
     state = DevelopmentStateFile(Path(options.state))
@@ -177,6 +193,16 @@ def main(arguments: list[str] | None = None) -> int:
         server_context=server_context,
         identities=PersistentCertificateIdentityResolver(state),
     )
+    memory_repository = (
+        SqliteMemoryRepository(Path(options.memory_db))
+        if options.memory_db
+        else None
+    )
+    memory_principals = (
+        parse_memory_principal_bindings(options.memory_principal)
+        if options.memory_principal
+        else None
+    )
     unreachable_admin_context = object()
     components = build_core(
         authenticator=authenticator,
@@ -187,14 +213,21 @@ def main(arguments: list[str] | None = None) -> int:
         policy=UnconfiguredPolicyBoundary(),
         node_registry=registry,
         credential_repository=credentials,
+        memory_repository=memory_repository,
+        conversation_principal_resolver=memory_principals,
         llm=FakeLLMAdapter(),
-        storage_kind="persistent_development_file",
+        storage_kind=(
+            "persistent_development_file_and_memory"
+            if memory_repository is not None
+            else "persistent_development_file"
+        ),
     )
     node_protocol = NodeGatewayProtocol(components.node_gateway)
     conversation_protocol = ConversationProtocol(
         gateway=components.node_gateway,
         conversation=components.conversation,
         orchestrator=components.orchestrator,
+        memory_commands=components.memory_commands,
     )
     gateway_server = DevelopmentGatewayServer(
         bind_address=options.bind,
