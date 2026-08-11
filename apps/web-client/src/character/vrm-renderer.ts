@@ -31,10 +31,10 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   async mount(viewport: HTMLElement): Promise<void> {
     this.renderer = new WebGLRenderer({ alpha: true, antialias: true });
     this.renderer.outputColorSpace = "srgb";
-    viewport.replaceChildren(this.renderer.domElement);
     if (this.assetUrl !== null) {
       await this.loadVrm(this.assetUrl);
     }
+    viewport.replaceChildren(this.renderer.domElement);
     this.resume();
   }
 
