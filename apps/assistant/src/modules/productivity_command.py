@@ -269,13 +269,14 @@ def _resolve_todo_ref(todos: TodoManager, reference: str, *, scope, scope_id):
 
 
 def _resolve_note_ref(memory: MemoryManager, reference: str, *, scope, scope_id):
-    if len(reference) == 36:
-        return reference
-    matches = [
-        record.memory_id
+    notes = [
+        record
         for record in memory.list_scope(scope, scope_id, limit=50)
-        if record.kind is MemoryKind.NOTE and record.memory_id.startswith(reference)
+        if record.kind is MemoryKind.NOTE
     ]
+    if len(reference) == 36:
+        return reference if any(record.memory_id == reference for record in notes) else None
+    matches = [record.memory_id for record in notes if record.memory_id.startswith(reference)]
     if len(matches) == 1:
         return matches[0]
     if len(matches) > 1:
