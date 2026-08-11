@@ -27,6 +27,7 @@ from apps.assistant.src.modules.node_security import (
 )
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
 from apps.assistant.src.modules.productivity_command import ProductivityCommandService
+from apps.assistant.src.modules.reminder_command import ReminderCommandService
 from apps.assistant.src.ports.llm import ProposedAction
 from apps.assistant.src.ports.node_gateway import NodeGatewaySecurityBoundary
 
@@ -90,12 +91,14 @@ class ConversationProtocol:
         conversation: ConversationManager,
         orchestrator: ConversationOrchestrator,
         memory_commands: MemoryCommandService | None = None,
+        reminder_commands: ReminderCommandService | None = None,
         productivity_commands: ProductivityCommandService | None = None,
     ) -> None:
         self._gateway = gateway
         self._conversation = conversation
         self._orchestrator = orchestrator
         self._memory_commands = memory_commands
+        self._reminder_commands = reminder_commands
         self._productivity_commands = productivity_commands
 
     def handle_next(self, channel: ssl.SSLSocket) -> ConversationWireResult:
@@ -148,6 +151,20 @@ class ConversationProtocol:
                     accepted=accepted,
                     reason_code=memory_result.reason,
                     response_text=text,
+                )
+
+        if self._reminder_commands is not None:
+            reminder_result = self._reminder_commands.handle(
+                node_id=node.node_id,
+                text=accepted.turn.text,
+            )
+            if reminder_result.recognized:
+                return self._complete_local(
+                    node=node,
+                    command=command,
+                    accepted=accepted,
+                    reason_code=reminder_result.reason,
+                    response_text=reminder_result.response_text or "알림 요청을 처리하지 않았어요.",
                 )
 
         if self._productivity_commands is not None:
