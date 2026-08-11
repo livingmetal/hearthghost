@@ -26,6 +26,7 @@ from apps.assistant.src.adapters.postgres_memory import PostgresMemoryRepository
 from apps.assistant.src.adapters.postgres_reminder import PostgresReminderRepository
 from apps.assistant.src.adapters.postgres_todo import PostgresTodoRepository
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
+from apps.assistant.src.runtime.admin_dashboard import AdminDashboardServer
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
 from apps.assistant.src.runtime.memory_configuration import parse_memory_principal_bindings
 from apps.assistant.src.runtime.notification_configuration import parse_notification_target_bindings
@@ -35,6 +36,7 @@ DEFAULT_GATEWAY_BIND = "10.89.0.10"
 DEFAULT_GATEWAY_PORT = 8443
 DEFAULT_STATUS_BIND = "127.0.0.1"
 DEFAULT_STATUS_PORT = 8080
+DEFAULT_ADMIN_DASHBOARD_BIND = "127.0.0.1"
 DEFAULT_SOCKET_TIMEOUT_SECONDS = 60.0
 DEFAULT_HANDSHAKE_TIMEOUT_SECONDS = 5.0
 MAX_CONNECTIONS = 8
@@ -135,6 +137,13 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=DEFAULT_GATEWAY_PORT)
     parser.add_argument("--status-bind", default=DEFAULT_STATUS_BIND)
     parser.add_argument("--status-port", type=int, default=DEFAULT_STATUS_PORT)
+    parser.add_argument(
+        "--admin-dashboard-port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="enable the read-only operator dashboard on 127.0.0.1 only; disabled by default",
+    )
     parser.add_argument("--postgres-dsn-secret", default=None, metavar="PATH", help=f"PostgreSQL DSN secret file; production default is {DEFAULT_POSTGRES_DSN_FILE}")
     parser.add_argument("--memory-principal", action="append", default=[], metavar="NODE_ID=SCOPE:SCOPE_ID")
     parser.add_argument(
@@ -145,6 +154,14 @@ def main(arguments: list[str] | None = None) -> int:
         help="explicit principal-to-notification-Node route; no creator-origin inference",
     )
     options = parser.parse_args(arguments)
+    if options.admin_dashboard_port is not None and not 1 <= options.admin_dashboard_port <= 65535:
+        parser.error("--admin-dashboard-port must be between 1 and 65535")
+    if (
+        options.admin_dashboard_port is not None
+        and options.status_bind == DEFAULT_ADMIN_DASHBOARD_BIND
+        and options.admin_dashboard_port == options.status_port
+    ):
+        parser.error("--admin-dashboard-port must differ from --status-port on 127.0.0.1")
 
     state = DevelopmentStateFile(Path(options.state))
     registry = PersistentNodeRegistry(state)
@@ -195,8 +212,28 @@ def main(arguments: list[str] | None = None) -> int:
     )
     gateway_server = DevelopmentGatewayServer(bind_address=options.bind, port=options.port, tls=MutualTlsServerAdapter(server_context), node_protocol=node_protocol, conversation_protocol=conversation_protocol)
     status_server = CoreStatusServer((options.status_bind, options.status_port), components)
+    dashboard_server: AdminDashboardServer | None = None
+    try:
+        if options.admin_dashboard_port is not None:
+            dashboard_server = AdminDashboardServer(
+                (DEFAULT_ADMIN_DASHBOARD_BIND, options.admin_dashboard_port),
+                components,
+            )
+    except Exception:
+        status_server.server_close()
+        raise
+
     status_thread = threading.Thread(target=status_server.serve_forever, kwargs={"poll_interval": 0.25}, name="loopback-status", daemon=True)
     status_thread.start()
+    dashboard_thread: threading.Thread | None = None
+    if dashboard_server is not None:
+        dashboard_thread = threading.Thread(
+            target=dashboard_server.serve_forever,
+            kwargs={"poll_interval": 0.5},
+            name="loopback-admin-dashboard",
+            daemon=True,
+        )
+        dashboard_thread.start()
 
     prior_handlers: dict[int, object] = {}
 
@@ -211,6 +248,11 @@ def main(arguments: list[str] | None = None) -> int:
         status_server.shutdown()
         status_server.server_close()
         status_thread.join(timeout=2)
+        if dashboard_server is not None:
+            dashboard_server.shutdown()
+            dashboard_server.server_close()
+        if dashboard_thread is not None:
+            dashboard_thread.join(timeout=2)
         for signum, handler in prior_handlers.items():
             signal.signal(signum, handler)
     return 0
