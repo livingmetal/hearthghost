@@ -58,6 +58,7 @@ class ConversationSession:
     state: ConversationState
     opened_at: datetime
     last_activity_at: datetime
+    follow_up_timeout_sec: int
     ended_at: datetime | None = None
 
 
@@ -88,7 +89,12 @@ class ConversationResult:
 
 
 class ConversationManager:
-    """Owns dialogue lifecycle but never calls providers, Policy, or devices."""
+    """Owns dialogue lifecycle but never calls providers, Policy, or devices.
+
+    The manager keeps one bounded default timeout for new sessions, while every
+    opened session captures its own timeout. This prevents one principal's
+    behavior preference from changing another principal's active conversation.
+    """
 
     def __init__(
         self,
@@ -103,15 +109,25 @@ class ConversationManager:
 
     @property
     def follow_up_timeout(self) -> timedelta:
+        """Default timeout used only for newly opened sessions."""
         return self._follow_up_timeout
 
     def set_follow_up_timeout(self, value: timedelta) -> None:
+        """Change the default for future sessions; existing sessions are isolated."""
         self._follow_up_timeout = _validate_follow_up_timeout(value)
 
-    def open(self, node: AdmittedConversationNode) -> ConversationResult:
+    def open(
+        self,
+        node: AdmittedConversationNode,
+        *,
+        follow_up_timeout: timedelta | None = None,
+    ) -> ConversationResult:
         denied = self._validate_node(node)
         if denied is not None:
             return denied
+        timeout = _validate_follow_up_timeout(
+            self._follow_up_timeout if follow_up_timeout is None else follow_up_timeout
+        )
         now = self._now()
         if now is None:
             return ConversationResult(False, ConversationReason.STATE_UNAVAILABLE)
@@ -122,6 +138,7 @@ class ConversationManager:
             state=ConversationState.LISTENING,
             opened_at=now,
             last_activity_at=now,
+            follow_up_timeout_sec=int(timeout.total_seconds()),
         )
         if not self._put(session):
             return ConversationResult(False, ConversationReason.STATE_UNAVAILABLE)
@@ -131,6 +148,25 @@ class ConversationManager:
             session,
             events=(self._event(session, now, "conversation_opened"),),
         )
+
+    def set_session_follow_up_timeout(
+        self,
+        node: AdmittedConversationNode,
+        session_id: str,
+        value: timedelta,
+    ) -> ConversationResult:
+        timeout = _validate_follow_up_timeout(value)
+        resolved = self._active_session(node, session_id, allow_expired=True)
+        if isinstance(resolved, ConversationResult):
+            return resolved
+        session, now = resolved
+        updated = replace(
+            session,
+            follow_up_timeout_sec=int(timeout.total_seconds()),
+        )
+        if not self._put(updated):
+            return ConversationResult(False, ConversationReason.STATE_UNAVAILABLE)
+        return ConversationResult(True, ConversationReason.INPUT_ACCEPTED, updated)
 
     def accept_text(
         self,
@@ -230,7 +266,7 @@ class ConversationManager:
             return ConversationResult(False, ConversationReason.SESSION_UNKNOWN)
         if session.ended_at is not None:
             return ConversationResult(False, ConversationReason.SESSION_INACTIVE)
-        if now < session.last_activity_at + self._follow_up_timeout:
+        if now < session.last_activity_at + _session_timeout(session):
             return ConversationResult(False, ConversationReason.SESSION_INACTIVE, session)
         return self._end(session, now, ConversationReason.TIMED_OUT)
 
@@ -260,7 +296,7 @@ class ConversationManager:
             return ConversationResult(False, ConversationReason.NODE_SESSION_MISMATCH)
         if session.ended_at is not None:
             return ConversationResult(False, ConversationReason.SESSION_INACTIVE)
-        if not allow_expired and now >= session.last_activity_at + self._follow_up_timeout:
+        if not allow_expired and now >= session.last_activity_at + _session_timeout(session):
             self._end(session, now, ConversationReason.TIMED_OUT)
             return ConversationResult(False, ConversationReason.SESSION_INACTIVE)
         return session, now
@@ -321,9 +357,20 @@ class ConversationManager:
         return ConversationStateEvent(session.session_id, session.state, now, reason)
 
 
+def _session_timeout(session: ConversationSession) -> timedelta:
+    try:
+        return _validate_follow_up_timeout(timedelta(seconds=session.follow_up_timeout_sec))
+    except (AttributeError, TypeError, ValueError, OverflowError) as error:
+        raise RuntimeError("conversation session has invalid follow-up timeout") from error
+
+
 def _validate_follow_up_timeout(value: timedelta) -> timedelta:
+    if not isinstance(value, timedelta):
+        raise ValueError("follow_up_timeout must be a timedelta")
     if value < MIN_FOLLOW_UP_TIMEOUT or value > MAX_FOLLOW_UP_TIMEOUT:
         raise ValueError("follow_up_timeout must be between 5 and 120 seconds")
+    if value.total_seconds() != int(value.total_seconds()):
+        raise ValueError("follow_up_timeout must use whole seconds")
     return value
 
 
