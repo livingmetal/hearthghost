@@ -9,6 +9,7 @@ from apps.assistant.src.adapters.conversation_protocol import (
     read_conversation_result,
 )
 from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
+from apps.assistant.src.modules.behavior_preferences import BehaviorPreferenceChange
 from apps.assistant.src.modules.conversation import AdmittedConversationNode
 from apps.assistant.src.modules.conversation_principal import (
     ConversationPrincipal,
@@ -109,11 +110,27 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
 
     def test_ordinary_text_uses_scoped_persona_in_normal_llm_prompt(self):
         self.core.behavior_preferences.apply(
-            (),
+            (BehaviorPreferenceChange("character.name", "Luna"),),
             scope="user",
             scope_id="owner",
             updated_by_node_id="android-personal-01",
         )
+        result = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                2,
+                self.conversation_id,
+                "오늘은 평범한 대화를 하자",
+            ),
+        )
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.character_profile, {"name": "Luna"})
+        self.assertEqual(len(self.llm.requests), 1)
+        self.assertIn("persistent character name is Luna", self.llm.requests[0].instructions)
+        self.assertNotIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", self.llm.requests[0].instructions)
 
     def test_ordinary_text_skips_preference_interpreter_and_uses_normal_llm_once(self):
         result = self.protocol._dispatch(
