@@ -15,6 +15,7 @@ from apps.assistant.src.modules.conversation_principal import (
     StaticConversationPrincipalResolver,
 )
 from apps.assistant.src.modules.memory import MemoryScope
+from apps.assistant.src.modules.persona import PersonaProfile
 from apps.assistant.src.modules.reminder import ReminderManager
 from apps.assistant.src.modules.reminder_command import ReminderCommandService
 from apps.assistant.src.modules.todo import TodoManager
@@ -29,6 +30,8 @@ class Clock:
 
 
 class ExplodingOrchestrator:
+    persona = PersonaProfile()
+
     def respond(self, node, turn):
         raise AssertionError("local reminder command reached the LLM")
 
