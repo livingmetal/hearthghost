@@ -19,6 +19,7 @@ from apps.assistant.src.modules.conversation import (
     ConversationStateEvent,
     TEXT_CAPABILITY,
 )
+from apps.assistant.src.modules.memory_command import MemoryCommandService
 from apps.assistant.src.modules.node_security import (
     CAPABILITY_PATTERN,
     IDENTIFIER_PATTERN,
@@ -79,7 +80,7 @@ class ConversationWireResult:
 
 
 class ConversationProtocol:
-    """Admits every command through Node Gateway before conversation dispatch."""
+    """Admit every command through Node Gateway before conversation dispatch."""
 
     def __init__(
         self,
@@ -87,10 +88,12 @@ class ConversationProtocol:
         gateway: NodeGatewaySecurityBoundary,
         conversation: ConversationManager,
         orchestrator: ConversationOrchestrator,
+        memory_commands: MemoryCommandService | None = None,
     ) -> None:
         self._gateway = gateway
         self._conversation = conversation
         self._orchestrator = orchestrator
+        self._memory_commands = memory_commands
 
     def handle_next(self, channel: ssl.SSLSocket) -> ConversationWireResult:
         if not isinstance(channel, ssl.SSLSocket):
@@ -153,6 +156,41 @@ class ConversationProtocol:
         )
         if not accepted.accepted or accepted.turn is None:
             return _conversation_result(command, accepted)
+
+        if self._memory_commands is not None:
+            memory_result = self._memory_commands.handle(
+                node_id=node.node_id,
+                text=accepted.turn.text,
+                conversation_session_id=accepted.turn.session_id,
+            )
+            if memory_result.recognized:
+                response_text = (
+                    "기억했어요."
+                    if memory_result.stored
+                    else "기억 범위를 안전하게 확인할 수 없어 저장하지 않았어요."
+                )
+                completed = self._conversation.complete_response(
+                    node,
+                    accepted.turn.session_id,
+                    response_text,
+                )
+                if not completed.accepted:
+                    return ConversationWireResult(
+                        request_id=command.request_id,
+                        accepted=False,
+                        reason_code=completed.reason.value,
+                    )
+                events = accepted.events + completed.events
+                return ConversationWireResult(
+                    request_id=command.request_id,
+                    accepted=True,
+                    reason_code=memory_result.reason,
+                    node_session_id=command.node_session_id,
+                    conversation_session_id=command.conversation_session_id,
+                    response_text=response_text,
+                    events=tuple(_state_event(event) for event in events),
+                )
+
         response = self._orchestrator.respond(node, accepted.turn)
         if not response.conversation_completed:
             return ConversationWireResult(
