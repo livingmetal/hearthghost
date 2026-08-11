@@ -20,7 +20,7 @@ class PersonaTests(unittest.TestCase):
         persona = PersonaProfile(
             name="Luna",
             humor="high",
-            verbosity="short",
+            verbosity="concise",
             formality="casual",
             initiative="moderate",
         )
@@ -30,14 +30,21 @@ class PersonaTests(unittest.TestCase):
         self.assertTrue(instructions.startswith(SECURITY_INSTRUCTIONS))
         self.assertIn("persistent character name is Luna", instructions)
         self.assertIn("Humor level: high", instructions)
+        self.assertIn("Response verbosity: concise", instructions)
         self.assertIn("Never claim to execute devices", instructions)
         self.assertIn("every proposal remains pending Policy", instructions)
+
+    def test_schema_allowed_high_initiative_is_accepted(self):
+        persona = PersonaProfile(initiative="high")
+        self.assertEqual(persona.initiative, "high")
 
     def test_invalid_persona_preference_is_rejected(self):
         with self.assertRaises(ValueError):
             PersonaProfile(initiative="autonomous")
         with self.assertRaises(ValueError):
             PersonaProfile(humor="unbounded")
+        with self.assertRaises(ValueError):
+            PersonaProfile(verbosity="short")
         with self.assertRaises(ValueError):
             PersonaProfile(name="")
 
