@@ -5,6 +5,7 @@ import type {
   TextConversationResult,
   TextConversationTransportPort,
 } from "../conversation/controller.js";
+import { parseCharacterDisplayProfile } from "../character/profile.js";
 import { parseCharacterSemanticEvent } from "../character/semantic.js";
 import type {
   CredentialReference,
@@ -29,6 +30,7 @@ interface NativeConversationResult {
   readonly nodeSessionId?: string;
   readonly responseText?: string;
   readonly events: readonly unknown[];
+  readonly characterProfile: unknown;
 }
 
 interface NativeIdentityStatus {
@@ -90,6 +92,7 @@ export class AndroidNodePlatform
     return {
       nodeSessionId: result.nodeSessionId,
       conversationSessionId: result.conversationSessionId,
+      characterProfile: parseCharacterDisplayProfile(result.characterProfile),
       events: result.events.map(parseCharacterSemanticEvent),
     };
   }
@@ -108,6 +111,7 @@ export class AndroidNodePlatform
     return {
       conversationSessionId: result.conversationSessionId,
       responseText: result.responseText,
+      characterProfile: parseCharacterDisplayProfile(result.characterProfile),
       events: result.events.map(parseCharacterSemanticEvent),
     };
   }
@@ -116,6 +120,7 @@ export class AndroidNodePlatform
     const result = await NativeNodeTransport.closeConversation({
       conversationSessionId,
     });
+    parseCharacterDisplayProfile(result.characterProfile);
     return result.events.map(parseCharacterSemanticEvent);
   }
 
