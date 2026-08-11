@@ -15,6 +15,8 @@ from typing import Callable
 
 from apps.assistant.src.adapters.contract_catalog import ContractCatalog
 from apps.assistant.src.adapters.denying_reminder_delivery import DenyingReminderDeliveryAdapter
+from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
+from apps.assistant.src.adapters.in_memory_behavior_preferences import InMemoryBehaviorPreferenceRepository
 from apps.assistant.src.adapters.in_memory_core import (
     DenyingAdministratorAuthorizer,
     InMemoryCredentialRepository,
@@ -27,7 +29,6 @@ from apps.assistant.src.adapters.in_memory_conversation import InMemoryConversat
 from apps.assistant.src.adapters.in_memory_memory import InMemoryMemoryRepository
 from apps.assistant.src.adapters.in_memory_reminder import InMemoryReminderRepository
 from apps.assistant.src.adapters.in_memory_todo import InMemoryTodoRepository
-from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
 from apps.assistant.src.modules.behavior_preference_command import BehaviorPreferenceCommandService
 from apps.assistant.src.modules.behavior_preference_interpreter import (
     BehaviorPreferenceInterpreter,
@@ -46,20 +47,21 @@ from apps.assistant.src.modules.node_administration import NodeAdministration
 from apps.assistant.src.modules.node_security import NodeGatewaySecurity, SystemClock
 from apps.assistant.src.modules.notification_delivery import NotificationDeliveryService
 from apps.assistant.src.modules.notification_target import DenyingNotificationTargetResolver
-from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
+from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.modules.privacy_gateway import DEFAULT_CLOUD_PRIVACY_POLICY, PrivacyGateway
 from apps.assistant.src.modules.productivity_command import ProductivityCommandService
 from apps.assistant.src.modules.reminder import ReminderManager
 from apps.assistant.src.modules.reminder_command import ReminderCommandService
 from apps.assistant.src.modules.todo import TodoManager
-from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
+from apps.assistant.src.ports.behavior_preferences import BehaviorPreferenceRepository
 from apps.assistant.src.ports.conversation import ConversationRepository
+from apps.assistant.src.ports.llm import LLMPort
 from apps.assistant.src.ports.memory import MemoryRepository
+from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
 from apps.assistant.src.ports.notification_target import NotificationTargetResolver
 from apps.assistant.src.ports.policy import PolicyBoundary
-from apps.assistant.src.ports.llm import LLMPort
 from apps.assistant.src.ports.reminder import ReminderDeliveryPort, ReminderRepository
 from apps.assistant.src.ports.todo import TodoRepository
 
@@ -104,6 +106,7 @@ class CoreComponents:
     memory_principals_configured: bool
     notification_routing_configured: bool
     notification_delivery_configured: bool
+    behavior_preferences_persistent: bool
     storage_kind: str = "ephemeral"
 
     def liveness(self) -> dict[str, object]:
@@ -143,8 +146,12 @@ class CoreComponents:
                     "configured" if self.administrator_authority_configured else "deny_only"
                 ),
                 "policy": "configured" if self.policy_rules_configured else "deny_only",
-                "conversation": "text_only",
-                "behavior_preferences": "scoped_natural_language_and_typed_boundary",
+                "conversation": "text_only_principal_session_timeout",
+                "behavior_preferences": (
+                    "principal_scoped_persistent"
+                    if self.behavior_preferences_persistent
+                    else "principal_scoped_ephemeral"
+                ),
                 "memory": "explicit_addressed_text_only",
                 "productivity": "explicit_note_todo_only",
                 "reminders": "explicit_schedule_only",
@@ -177,6 +184,7 @@ def build_core(
     node_registry: object | None = None,
     credential_repository: object | None = None,
     conversation_repository: ConversationRepository | None = None,
+    behavior_preference_repository: BehaviorPreferenceRepository | None = None,
     memory_repository: MemoryRepository | None = None,
     todo_repository: TodoRepository | None = None,
     reminder_repository: ReminderRepository | None = None,
@@ -210,6 +218,11 @@ def build_core(
         conversation_repository
         if conversation_repository is not None
         else InMemoryConversationRepository()
+    )
+    selected_behavior_preferences = (
+        behavior_preference_repository
+        if behavior_preference_repository is not None
+        else InMemoryBehaviorPreferenceRepository()
     )
     selected_memory_repository = (
         memory_repository if memory_repository is not None else InMemoryMemoryRepository()
@@ -263,8 +276,10 @@ def build_core(
         llm_timeout_seconds=llm_timeout_seconds,
     )
     behavior_preferences = BehaviorPreferenceManager(
-        conversation=conversation,
-        orchestrator=orchestrator,
+        repository=selected_behavior_preferences,
+        clock=clock,
+        default_persona=orchestrator.persona,
+        default_followup_timeout_sec=int(follow_up_timeout.total_seconds()),
     )
     preference_interpreter = BehaviorPreferenceInterpreter(
         privacy_gateway=privacy_gateway,
@@ -341,6 +356,7 @@ def build_core(
         memory_principals_configured=conversation_principal_resolver is not None,
         notification_routing_configured=notification_target_resolver is not None,
         notification_delivery_configured=reminder_delivery is not None,
+        behavior_preferences_persistent=behavior_preference_repository is not None,
         storage_kind=storage_kind,
     )
 
