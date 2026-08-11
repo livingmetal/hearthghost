@@ -5,10 +5,11 @@ export type CharacterRendererKind = "dom" | "vrm";
 
 export async function loadCharacterRenderer(
   kind: CharacterRendererKind,
+  assetUrl: string | null = null,
 ): Promise<CharacterRenderer> {
   if (kind === "vrm") {
     const { createVrmCharacterRenderer } = await import("./vrm-renderer.js");
-    return createVrmCharacterRenderer();
+    return createVrmCharacterRenderer(assetUrl);
   }
   return new DomCharacterRenderer();
 }

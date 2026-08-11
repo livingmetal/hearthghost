@@ -12,7 +12,7 @@ export class CharacterViewport {
 
   constructor(
     private readonly element: HTMLElement,
-    private readonly renderer: CharacterRenderer,
+    private renderer: CharacterRenderer,
   ) {}
 
   async mount(): Promise<void> {
@@ -22,6 +22,22 @@ export class CharacterViewport {
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(this.element);
+    }
+  }
+
+  async replaceRenderer(renderer: CharacterRenderer): Promise<void> {
+    const prior = this.renderer;
+    prior.suspend();
+    try {
+      await renderer.mount(this.element);
+      renderer.present(this.presentation);
+      this.renderer = renderer;
+      this.resize();
+      prior.dispose();
+    } catch (error) {
+      renderer.dispose();
+      prior.resume();
+      throw error;
     }
   }
 

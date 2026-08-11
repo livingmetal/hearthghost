@@ -8,6 +8,7 @@ from apps.assistant.src.modules.behavior_preferences import (
     BehaviorPreferenceChange,
     BehaviorPreferenceManager,
 )
+from apps.assistant.src.modules.persona import PersonaProfile
 
 
 class Clock:
@@ -47,6 +48,18 @@ class BehaviorPreferenceTests(unittest.TestCase):
         self.assertEqual(self.snapshot().followup_timeout_sec, 30)
         self.assertEqual(self.snapshot("spouse").followup_timeout_sec, 45)
         self.assertEqual(self.snapshot("spouse").persona.humor, "moderate")
+
+    def test_named_profiles_have_distinct_strong_style_anchors(self):
+        younghee = PersonaProfile(name="영희").conversation_instructions()
+        cheolsu = PersonaProfile(name="철수").conversation_instructions()
+
+        self.assertIn("AvatarSample_A", younghee)
+        self.assertIn("bright, quick, personable Korean cadence", younghee)
+        self.assertIn("AvatarSample_C", cheolsu)
+        self.assertIn("calm, grounded, economical Korean cadence", cheolsu)
+        self.assertIn("strong non-security behavior anchor", younghee)
+        self.assertIn("strong non-security behavior anchor", cheolsu)
+        self.assertNotEqual(younghee, cheolsu)
 
     def test_invalid_change_rejects_entire_update_without_partial_mutation(self):
         before = self.snapshot()
