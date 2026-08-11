@@ -59,27 +59,15 @@ class ReminderManager:
     ) -> ReminderRecord:
         if not explicit_user_request:
             raise ValueError("reminders require an explicit user request")
-        if not isinstance(todo, TodoRecord) or todo.state is not TodoState.OPEN or todo.due_at is None:
-            raise ValueError("reminder requires an open todo with due_at")
+        _validate_schedulable_todo(todo, now=self._now())
         if not isinstance(created_by_node_id, str) or not created_by_node_id or len(created_by_node_id) > 128:
             raise ValueError("reminder origin node is invalid")
-        now = self._now()
-        if todo.due_at <= now:
-            raise ValueError("reminder fire_at must be in the future")
-        if todo.due_at - now > MAX_REMINDER_HORIZON:
-            raise ValueError("reminder fire_at exceeds the scheduling horizon")
 
-        try:
-            existing = self._repository.find_active_for_todo(
-                todo.scope.value,
-                todo.scope_id,
-                todo.todo_id,
-            )
-        except Exception as error:
-            raise RuntimeError("reminder repository unavailable") from error
+        existing = self._find_active(todo)
         if existing is not None:
-            if not _valid_scoped_record(existing, todo.scope, todo.scope_id):
-                raise RuntimeError("reminder repository returned invalid scope data")
+            if existing.fire_at != todo.due_at:
+                existing = replace(existing, fire_at=todo.due_at)
+                self._replace(existing)
             return existing
 
         record = ReminderRecord(
@@ -90,13 +78,46 @@ class ReminderManager:
             fire_at=todo.due_at,
             source=ReminderSource.TODO_DUE,
             created_by_node_id=created_by_node_id,
-            created_at=now,
+            created_at=self._now(),
         )
         try:
             self._repository.put(record)
         except Exception as error:
             raise RuntimeError("reminder repository unavailable") from error
         return record
+
+    def synchronize_for_todo(self, todo: TodoRecord) -> ReminderRecord | None:
+        """Keep an existing TODO-due reminder aligned with the TODO lifecycle.
+
+        No new reminder is created here. If the TODO becomes unschedulable, the
+        existing reminder is cancelled rather than left at a stale timestamp.
+        """
+        if not isinstance(todo, TodoRecord):
+            raise TypeError("todo is invalid")
+        existing = self._find_active(todo)
+        if existing is None:
+            return None
+        now = self._now()
+        if (
+            todo.state is not TodoState.OPEN
+            or todo.due_at is None
+            or todo.due_at <= now
+            or todo.due_at - now > MAX_REMINDER_HORIZON
+        ):
+            return self.cancel(existing.reminder_id, scope=todo.scope, scope_id=todo.scope_id)
+        if existing.fire_at == todo.due_at:
+            return existing
+        updated = replace(existing, fire_at=todo.due_at)
+        self._replace(updated)
+        return updated
+
+    def cancel_for_todo(self, todo: TodoRecord) -> ReminderRecord | None:
+        if not isinstance(todo, TodoRecord):
+            raise TypeError("todo is invalid")
+        existing = self._find_active(todo)
+        if existing is None:
+            return None
+        return self.cancel(existing.reminder_id, scope=todo.scope, scope_id=todo.scope_id)
 
     def get(self, reminder_id: str, *, scope: MemoryScope, scope_id: str) -> ReminderRecord | None:
         _validate_scope(scope, scope_id)
@@ -128,11 +149,23 @@ class ReminderManager:
         if current.state is ReminderState.CANCELLED:
             return current
         cancelled = replace(current, state=ReminderState.CANCELLED, cancelled_at=self._now())
+        self._replace(cancelled)
+        return cancelled
+
+    def _find_active(self, todo: TodoRecord) -> ReminderRecord | None:
         try:
-            self._repository.replace(cancelled)
+            record = self._repository.find_active_for_todo(todo.scope.value, todo.scope_id, todo.todo_id)
         except Exception as error:
             raise RuntimeError("reminder repository unavailable") from error
-        return cancelled
+        if record is not None and not _valid_scoped_record(record, todo.scope, todo.scope_id):
+            raise RuntimeError("reminder repository returned invalid scope data")
+        return record
+
+    def _replace(self, record: ReminderRecord) -> None:
+        try:
+            self._repository.replace(record)
+        except Exception as error:
+            raise RuntimeError("reminder repository unavailable") from error
 
     def _now(self) -> datetime:
         try:
@@ -142,6 +175,15 @@ class ReminderManager:
         if not _aware(now):
             raise RuntimeError("reminder clock returned naive time")
         return now
+
+
+def _validate_schedulable_todo(todo: object, *, now: datetime) -> None:
+    if not isinstance(todo, TodoRecord) or todo.state is not TodoState.OPEN or todo.due_at is None:
+        raise ValueError("reminder requires an open todo with due_at")
+    if todo.due_at <= now:
+        raise ValueError("reminder fire_at must be in the future")
+    if todo.due_at - now > MAX_REMINDER_HORIZON:
+        raise ValueError("reminder fire_at exceeds the scheduling horizon")
 
 
 def _valid_scoped_record(record: object, scope: MemoryScope, scope_id: str) -> bool:
