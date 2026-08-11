@@ -70,17 +70,11 @@ class MemoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "explicit user request"):
             self.memory.remember(self.candidate(explicit_user_request=False))
 
-    def test_only_addressed_text_source_is_representable(self):
-        with self.assertRaises(TypeError):
-            MemoryCandidate(
-                scope=MemoryScope.USER,
-                scope_id="owner",
-                kind=MemoryKind.NOTE,
-                text="camera frame",
-                source="camera_snapshot",
-                source_conversation_session_id="conversation-1",
-                explicit_user_request=True,
-            )
+    def test_only_addressed_text_source_is_accepted(self):
+        candidate = self.candidate(source="camera_snapshot", text="camera frame")
+
+        with self.assertRaisesRegex(ValueError, "addressed text"):
+            self.memory.remember(candidate)
 
     def test_scope_isolation_blocks_cross_scope_read_and_delete(self):
         record = self.memory.remember(self.candidate())
