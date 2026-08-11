@@ -18,7 +18,7 @@ class AndroidTtsFoundationTests(unittest.TestCase):
         self.assertIn("voice.isNetworkConnectionRequired()", source)
         self.assertIn("TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED", source)
         self.assertIn("textToSpeech.setVoice(voice)", source)
-        self.assertIn('mode\", \"embedded_only\"', source)
+        self.assertIn('mode", "embedded_only"', source)
         self.assertNotIn("synthesizeToFile", source)
         self.assertNotIn("KEY_FEATURE_NETWORK_SYNTHESIS", source)
 
