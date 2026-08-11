@@ -12,6 +12,7 @@ from apps.assistant.src.adapters.behavior_preference_protocol import (
     parse_behavior_preference_update,
 )
 from apps.assistant.src.modules.behavior_preferences import (
+    BehaviorPreferenceChange,
     BehaviorPreferenceManager,
     BehaviorPreferenceSnapshot,
 )
@@ -108,7 +109,7 @@ class BehaviorPreferenceInterpreter:
 
 
 class BehaviorPreferenceService:
-    """Interpret then atomically persist only validated scoped behavior preferences."""
+    """Interpret or explicitly apply validated scoped behavior preferences."""
 
     def __init__(self, *, interpreter: BehaviorPreferenceInterpreter, manager: BehaviorPreferenceManager) -> None:
         self._interpreter = interpreter
@@ -125,9 +126,30 @@ class BehaviorPreferenceService:
         interpreted = self._interpreter.interpret(text, scope=scope, scope_id=scope_id)
         if not interpreted.recognized or interpreted.proposal is None:
             return PreferenceApplication(False, False, interpreted.reason)
+        return self.apply_explicit(
+            interpreted.proposal.changes,
+            scope=scope,
+            scope_id=scope_id,
+            updated_by_node_id=updated_by_node_id,
+        )
+
+    def apply_explicit(
+        self,
+        changes: tuple[BehaviorPreferenceChange, ...] | list[BehaviorPreferenceChange],
+        *,
+        scope: str,
+        scope_id: str,
+        updated_by_node_id: str,
+    ) -> PreferenceApplication:
+        """Apply already-typed local UI changes without an LLM classification call.
+
+        This is intentionally not a generic key/value escape hatch. The same
+        BehaviorPreferenceManager allowlist, validation, principal scope, and
+        optimistic persistence boundary still applies.
+        """
         try:
             snapshot = self._manager.apply(
-                interpreted.proposal.changes,
+                tuple(changes),
                 scope=scope,
                 scope_id=scope_id,
                 updated_by_node_id=updated_by_node_id,
