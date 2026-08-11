@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 
 import "./styles.css";
+import { AttentionController } from "./attention/controller.js";
 import { BrowserDevelopmentNodePlatform } from "./node/browser-platform.js";
 import {
   ANDROID_CREDENTIAL_REFERENCE,
@@ -11,6 +12,8 @@ import type { NodePlatformPort } from "./node/platform.js";
 import { loadCharacterRenderer } from "./character/renderer-loader.js";
 import { CharacterViewport } from "./character/viewport.js";
 import { TextConversationController } from "./conversation/controller.js";
+
+const ATTENTION_TIMEOUT_MILLIS = 20_000;
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (root === null) {
@@ -23,11 +26,13 @@ const androidPlatform = Capacitor.getPlatform() === "android"
 const platform: NodePlatformPort = androidPlatform
   ?? new BrowserDevelopmentNodePlatform();
 const node = new ClientNode(platform);
+const attention = new AttentionController(ATTENTION_TIMEOUT_MILLIS);
 
 root.innerHTML = `
   <main class="app-shell">
     <header class="status-bar" aria-label="Privacy and security status">
       <span data-node-status>Node: disconnected</span>
+      <span data-attention-status>Attention: sleeping</span>
       <span>Camera: denied</span>
       <span>Microphone: inactive</span>
       <span>Cloud media: denied</span>
@@ -37,8 +42,9 @@ root.innerHTML = `
     <section class="interaction-panel">
       <label for="message">Text conversation</label>
       <form class="text-row" data-conversation>
-        <input id="message" autocomplete="off" placeholder="Type to talk" />
+        <input id="message" autocomplete="off" placeholder="Touch wake, then type" />
         <button type="button" data-connect>Connect securely</button>
+        <button type="button" data-wake>Wake Ghost</button>
         <button type="submit" data-send disabled>Send</button>
       </form>
       <p class="notice" data-notice>Secure text transport is disconnected.</p>
@@ -60,7 +66,9 @@ root.innerHTML = `
 `;
 
 const connectButton = root.querySelector<HTMLButtonElement>("[data-connect]");
+const wakeButton = root.querySelector<HTMLButtonElement>("[data-wake]");
 const nodeStatus = root.querySelector<HTMLElement>("[data-node-status]");
+const attentionStatus = root.querySelector<HTMLElement>("[data-attention-status]");
 const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
@@ -87,11 +95,19 @@ const conversation = androidPlatform === null
 
 function showSnapshot(): void {
   const snapshot = node.snapshot();
+  const attentionSnapshot = attention.snapshot();
   if (nodeStatus !== null) {
     nodeStatus.textContent = `Node: ${snapshot.connection} / ${snapshot.trust}`;
   }
+  if (attentionStatus !== null) {
+    const remainingSeconds = Math.ceil(attentionSnapshot.remainingMillis / 1_000);
+    attentionStatus.textContent = attentionSnapshot.state === "engaged"
+      ? `Attention: engaged (${remainingSeconds}s)`
+      : "Attention: sleeping";
+  }
   if (sendButton !== null) {
-    sendButton.disabled = !node.canUseCapability("conversation.text");
+    sendButton.disabled = !node.canUseCapability("conversation.text")
+      || attentionSnapshot.state !== "engaged";
   }
 }
 
@@ -108,9 +124,24 @@ connectButton?.addEventListener("click", async () => {
     notice.textContent = snapshot.error;
   } else if (notice !== null) {
     notice.textContent = node.canUseCapability("conversation.text")
-      ? "Authenticated, trusted, and granted for text conversation."
+      ? "Authenticated and granted. Touch Wake Ghost before conversation."
       : "Authenticated, but explicit trust and conversation grant are required.";
   }
+});
+
+wakeButton?.addEventListener("click", () => {
+  if (!node.canUseCapability("conversation.text")) {
+    if (notice !== null) {
+      notice.textContent = "Connect a trusted Node with conversation.text grant first.";
+    }
+    return;
+  }
+  attention.wakeByTouch();
+  showSnapshot();
+  if (notice !== null) {
+    notice.textContent = "Ghost is listening for addressed text.";
+  }
+  root.querySelector<HTMLInputElement>("#message")?.focus();
 });
 
 form?.addEventListener("submit", (event) => {
@@ -123,13 +154,25 @@ form?.addEventListener("submit", (event) => {
       }
       return;
     }
+    if (!attention.canAcceptConversationInput()) {
+      showSnapshot();
+      if (notice !== null) {
+        notice.textContent = "Ghost is sleeping. Use Wake Ghost before sending text.";
+      }
+      return;
+    }
     try {
       if (conversation.snapshot().conversationSessionId === null) {
         await conversation.open();
       }
       const snapshot = await conversation.submit(input.value);
+      attention.recordAddressedActivity();
+      showSnapshot();
       if (response !== null) {
         response.textContent = snapshot.responseText ?? "";
+      }
+      if (notice !== null) {
+        notice.textContent = "Conversation active. Attention timeout extended.";
       }
       input.value = "";
     } catch (error) {
@@ -206,8 +249,25 @@ if (androidPlatform !== null) {
     });
 }
 
+const attentionTimer = window.setInterval(() => {
+  if (!attention.expireIfIdle()) {
+    showSnapshot();
+    return;
+  }
+  showSnapshot();
+  void conversation?.end();
+  if (notice !== null) {
+    notice.textContent = "Attention timed out. Ghost returned to sleep.";
+  }
+}, 1_000);
+
+window.addEventListener("pagehide", () => window.clearInterval(attentionTimer), {
+  once: true,
+});
+
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
+    attention.sleep();
     void (async () => {
       await conversation?.end();
       await node.suspend();
