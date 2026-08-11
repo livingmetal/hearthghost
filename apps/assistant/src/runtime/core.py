@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from apps.assistant.src.adapters.contract_catalog import ContractCatalog
+from apps.assistant.src.adapters.denying_reminder_delivery import DenyingReminderDeliveryAdapter
 from apps.assistant.src.adapters.in_memory_core import (
     DenyingAdministratorAuthorizer,
     InMemoryCredentialRepository,
@@ -42,6 +43,7 @@ from apps.assistant.src.modules.memory import MemoryManager
 from apps.assistant.src.modules.memory_command import MemoryCommandService
 from apps.assistant.src.modules.node_administration import NodeAdministration
 from apps.assistant.src.modules.node_security import NodeGatewaySecurity, SystemClock
+from apps.assistant.src.modules.notification_delivery import NotificationDeliveryService
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
 from apps.assistant.src.modules.privacy_gateway import DEFAULT_CLOUD_PRIVACY_POLICY, PrivacyGateway
@@ -55,7 +57,7 @@ from apps.assistant.src.ports.memory import MemoryRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
 from apps.assistant.src.ports.policy import PolicyBoundary
 from apps.assistant.src.ports.llm import LLMPort
-from apps.assistant.src.ports.reminder import ReminderRepository
+from apps.assistant.src.ports.reminder import ReminderDeliveryPort, ReminderRepository
 from apps.assistant.src.ports.todo import TodoRepository
 
 
@@ -85,6 +87,7 @@ class CoreComponents:
     todos: TodoManager
     reminders: ReminderManager
     reminder_commands: ReminderCommandService
+    notification_delivery: NotificationDeliveryService
     productivity_commands: ProductivityCommandService
     registry: object
     credentials: object
@@ -94,6 +97,7 @@ class CoreComponents:
     policy_rules_configured: bool
     llm_configured: bool
     memory_principals_configured: bool
+    notification_delivery_configured: bool
     storage_kind: str = "ephemeral"
 
     def liveness(self) -> dict[str, object]:
@@ -137,7 +141,12 @@ class CoreComponents:
                 "behavior_preferences": "internal_typed_boundary",
                 "memory": "explicit_addressed_text_only",
                 "productivity": "explicit_note_todo_only",
-                "reminders": "explicit_schedule_only_delivery_disabled",
+                "reminders": "explicit_schedule_only",
+                "notification_delivery": (
+                    "policy_node_local_gate_adapter_configured"
+                    if self.notification_delivery_configured
+                    else "policy_node_local_gate_deny_adapter"
+                ),
                 "memory_principal": (
                     "configured" if self.memory_principals_configured else "deny_only"
                 ),
@@ -160,6 +169,7 @@ def build_core(
     memory_repository: MemoryRepository | None = None,
     todo_repository: TodoRepository | None = None,
     reminder_repository: ReminderRepository | None = None,
+    reminder_delivery: ReminderDeliveryPort | None = None,
     conversation_principal_resolver: ConversationPrincipalResolver | None = None,
     follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
     llm: LLMPort | None = None,
@@ -197,6 +207,9 @@ def build_core(
     )
     selected_reminder_repository = (
         reminder_repository if reminder_repository is not None else InMemoryReminderRepository()
+    )
+    selected_reminder_delivery = (
+        reminder_delivery if reminder_delivery is not None else DenyingReminderDeliveryAdapter()
     )
     selected_memory_principals = (
         conversation_principal_resolver
@@ -266,6 +279,11 @@ def build_core(
         todos=todos,
         principals=selected_memory_principals,
     )
+    notification_delivery = NotificationDeliveryService(
+        policy=selected_policy,
+        nodes=registry,
+        delivery=selected_reminder_delivery,
+    )
     productivity_commands = ProductivityCommandService(
         memory=memory,
         todos=todos,
@@ -288,6 +306,7 @@ def build_core(
         todos=todos,
         reminders=reminders,
         reminder_commands=reminder_commands,
+        notification_delivery=notification_delivery,
         productivity_commands=productivity_commands,
         registry=registry,
         credentials=credentials,
@@ -297,6 +316,7 @@ def build_core(
         policy_rules_configured=policy is not None,
         llm_configured=llm is not None,
         memory_principals_configured=conversation_principal_resolver is not None,
+        notification_delivery_configured=reminder_delivery is not None,
         storage_kind=storage_kind,
     )
 
