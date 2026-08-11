@@ -87,12 +87,24 @@ class AdminDashboardTests(unittest.TestCase):
         self.assertNotIn("localStorage", script)
         self.assertNotIn("sessionStorage", script)
 
-    def test_html_has_no_inline_script_or_secret_fields(self):
+    def test_html_has_no_inline_script_or_secret_values(self):
         html = DASHBOARD_HTML.decode("utf-8")
+        lowered = html.lower()
         self.assertIn('<script src="/dashboard.js" defer></script>', html)
         self.assertNotIn("<script>", html)
-        for sensitive in ("private key", "postgresql://", "api key", "bearer token"):
-            self.assertNotIn(sensitive, html.lower())
+        for secret_pattern in (
+            "postgresql://",
+            "-----begin private key-----",
+            "-----begin rsa private key-----",
+            "authorization: bearer",
+            "api_key=",
+            "apikey=",
+            "password=",
+        ):
+            self.assertNotIn(secret_pattern, lowered)
+        self.assertNotIn('type="password"', lowered)
+        self.assertNotIn('name="secret"', lowered)
+        self.assertNotIn('name="token"', lowered)
 
 
 if __name__ == "__main__":
