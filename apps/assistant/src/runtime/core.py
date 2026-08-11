@@ -24,6 +24,7 @@ from apps.assistant.src.adapters.in_memory_core import (
 )
 from apps.assistant.src.adapters.in_memory_conversation import InMemoryConversationRepository
 from apps.assistant.src.adapters.in_memory_memory import InMemoryMemoryRepository
+from apps.assistant.src.adapters.in_memory_todo import InMemoryTodoRepository
 from apps.assistant.src.adapters.fake_llm import UnavailableLLMAdapter
 from apps.assistant.src.modules.behavior_preference_interpreter import (
     BehaviorPreferenceInterpreter,
@@ -43,12 +44,15 @@ from apps.assistant.src.modules.node_security import NodeGatewaySecurity, System
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
 from apps.assistant.src.modules.privacy_gateway import DEFAULT_CLOUD_PRIVACY_POLICY, PrivacyGateway
+from apps.assistant.src.modules.productivity_command import ProductivityCommandService
+from apps.assistant.src.modules.todo import TodoManager
 from apps.assistant.src.ports.node_administration import AdministratorAuthorizer
 from apps.assistant.src.ports.conversation import ConversationRepository
 from apps.assistant.src.ports.memory import MemoryRepository
 from apps.assistant.src.ports.node_gateway import CredentialAuthenticator
 from apps.assistant.src.ports.policy import PolicyBoundary
 from apps.assistant.src.ports.llm import LLMPort
+from apps.assistant.src.ports.todo import TodoRepository
 
 
 DEFAULT_BIND_ADDRESS = "127.0.0.1"
@@ -74,6 +78,8 @@ class CoreComponents:
     memory: MemoryManager
     memory_commands: MemoryCommandService
     memory_principals: ConversationPrincipalResolver
+    todos: TodoManager
+    productivity_commands: ProductivityCommandService
     registry: object
     credentials: object
     contracts: ContractCatalog
@@ -124,6 +130,7 @@ class CoreComponents:
                 "conversation": "text_only",
                 "behavior_preferences": "internal_typed_boundary",
                 "memory": "explicit_addressed_text_only",
+                "productivity": "explicit_note_todo_only",
                 "memory_principal": (
                     "configured" if self.memory_principals_configured else "deny_only"
                 ),
@@ -144,6 +151,7 @@ def build_core(
     credential_repository: object | None = None,
     conversation_repository: ConversationRepository | None = None,
     memory_repository: MemoryRepository | None = None,
+    todo_repository: TodoRepository | None = None,
     conversation_principal_resolver: ConversationPrincipalResolver | None = None,
     follow_up_timeout: timedelta = DEFAULT_FOLLOW_UP_TIMEOUT,
     llm: LLMPort | None = None,
@@ -175,6 +183,9 @@ def build_core(
     )
     selected_memory_repository = (
         memory_repository if memory_repository is not None else InMemoryMemoryRepository()
+    )
+    selected_todo_repository = (
+        todo_repository if todo_repository is not None else InMemoryTodoRepository()
     )
     selected_memory_principals = (
         conversation_principal_resolver
@@ -231,6 +242,15 @@ def build_core(
         memory=memory,
         principals=selected_memory_principals,
     )
+    todos = TodoManager(
+        repository=selected_todo_repository,
+        clock=clock,
+    )
+    productivity_commands = ProductivityCommandService(
+        memory=memory,
+        todos=todos,
+        principals=selected_memory_principals,
+    )
     return CoreComponents(
         node_gateway=gateway,
         node_administration=administration,
@@ -244,6 +264,8 @@ def build_core(
         memory=memory,
         memory_commands=memory_commands,
         memory_principals=selected_memory_principals,
+        todos=todos,
+        productivity_commands=productivity_commands,
         registry=registry,
         credentials=credentials,
         contracts=ContractCatalog(contracts_root or REPOSITORY_ROOT / "contracts"),
