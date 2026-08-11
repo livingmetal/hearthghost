@@ -20,6 +20,7 @@ from apps.assistant.src.modules.node_security import (
     SecurityReason,
 )
 from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
+from apps.assistant.src.modules.notification_delivery import NotificationAdapterResult
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core, main
 
 
@@ -45,6 +46,7 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertIsNotNone(core.preference_service)
         self.assertIsNotNone(core.reminders)
         self.assertIsNotNone(core.reminder_commands)
+        self.assertIsNotNone(core.notification_delivery)
         self.assertIsNotNone(core.registry)
 
     def test_unconfigured_security_boundaries_all_fail_closed(self):
@@ -153,9 +155,24 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertEqual(status["boundaries"]["policy"], "deny_only")
         self.assertEqual(status["boundaries"]["llm"], "unavailable")
         self.assertEqual(status["boundaries"]["behavior_preferences"], "internal_typed_boundary")
-        self.assertEqual(status["boundaries"]["reminders"], "explicit_schedule_only_delivery_disabled")
+        self.assertEqual(status["boundaries"]["reminders"], "explicit_schedule_only")
+        self.assertEqual(
+            status["boundaries"]["notification_delivery"],
+            "policy_node_local_gate_deny_adapter",
+        )
         self.assertNotIn("contract_ids", status)
         self.assertNotIn("credentials", status)
+
+    def test_notification_delivery_adapter_must_be_explicitly_injected(self):
+        class ConfiguredAdapter:
+            def deliver(self, request):
+                return NotificationAdapterResult(False, "test_adapter_not_connected")
+
+        core = build_core(reminder_delivery=ConfiguredAdapter())
+        self.assertEqual(
+            core.status()["boundaries"]["notification_delivery"],
+            "policy_node_local_gate_adapter_configured",
+        )
 
     def test_fake_llm_must_be_explicitly_injected(self):
         core = build_core(llm=FakeLLMAdapter())
