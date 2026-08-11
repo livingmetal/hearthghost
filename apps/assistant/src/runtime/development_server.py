@@ -28,6 +28,7 @@ from apps.assistant.src.adapters.postgres_todo import PostgresTodoRepository
 from apps.assistant.src.modules.policy import UnconfiguredPolicyBoundary
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core
 from apps.assistant.src.runtime.memory_configuration import parse_memory_principal_bindings
+from apps.assistant.src.runtime.notification_configuration import parse_notification_target_bindings
 from apps.assistant.src.runtime.postgres_configuration import DEFAULT_POSTGRES_DSN_FILE, read_postgres_dsn
 
 DEFAULT_GATEWAY_BIND = "10.89.0.10"
@@ -136,6 +137,13 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--status-port", type=int, default=DEFAULT_STATUS_PORT)
     parser.add_argument("--postgres-dsn-secret", default=None, metavar="PATH", help=f"PostgreSQL DSN secret file; production default is {DEFAULT_POSTGRES_DSN_FILE}")
     parser.add_argument("--memory-principal", action="append", default=[], metavar="NODE_ID=SCOPE:SCOPE_ID")
+    parser.add_argument(
+        "--notification-target",
+        action="append",
+        default=[],
+        metavar="SCOPE:SCOPE_ID=NODE_ID",
+        help="explicit principal-to-notification-Node route; no creator-origin inference",
+    )
     options = parser.parse_args(arguments)
 
     state = DevelopmentStateFile(Path(options.state))
@@ -155,6 +163,11 @@ def main(arguments: list[str] | None = None) -> int:
         reminder_repository = PostgresReminderRepository(dsn)
         storage_kind = "persistent_postgresql"
     memory_principals = parse_memory_principal_bindings(options.memory_principal) if options.memory_principal else None
+    notification_targets = (
+        parse_notification_target_bindings(options.notification_target)
+        if options.notification_target
+        else None
+    )
 
     unreachable_admin_context = object()
     components = build_core(
@@ -166,6 +179,7 @@ def main(arguments: list[str] | None = None) -> int:
         memory_repository=memory_repository,
         todo_repository=todo_repository,
         reminder_repository=reminder_repository,
+        notification_target_resolver=notification_targets,
         conversation_principal_resolver=memory_principals,
         llm=FakeLLMAdapter(),
         storage_kind=storage_kind,
