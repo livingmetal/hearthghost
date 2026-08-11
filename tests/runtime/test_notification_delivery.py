@@ -43,7 +43,11 @@ class AllowPolicy:
 class SpyDelivery:
     def __init__(self, result=None):
         self.requests = []
-        self.result = result or NotificationAdapterResult(True, "delivered")
+        self.result = result or NotificationAdapterResult(
+            True,
+            "delivered",
+            local_authorization_confirmed=True,
+        )
 
     def deliver(self, request):
         self.requests.append(request)
@@ -114,10 +118,33 @@ class NotificationDeliveryTests(unittest.TestCase):
         self.assertEqual(request.title, "HearthGhost")
         self.assertEqual(request.body, "Reminder")
         self.assertEqual(request.content_mode, "redacted")
+        self.assertTrue(request.local_authorization_required)
+        self.assertEqual(request.fire_at, NOW)
         self.assertFalse(hasattr(request, "todo_text"))
         proposal = policy.proposals[0]
         self.assertEqual(proposal.name, NOTIFICATION_CAPABILITY)
         self.assertEqual(proposal.arguments["content_mode"], "redacted")
+        self.assertEqual(proposal.arguments["fire_at"], NOW.isoformat())
+
+    def test_delivered_adapter_result_cannot_omit_local_authorization_confirmation(self):
+        with self.assertRaisesRegex(ValueError, "confirmed local authorization"):
+            NotificationAdapterResult(True, "delivered")
+
+    def test_adapter_request_cannot_weaken_redaction_or_local_gate(self):
+        with self.assertRaises(ValueError):
+            NotificationAdapterRequest(
+                REMINDER_ID,
+                NODE_ID,
+                NOW,
+                title="Private todo text",
+            )
+        with self.assertRaises(ValueError):
+            NotificationAdapterRequest(
+                REMINDER_ID,
+                NODE_ID,
+                NOW,
+                local_authorization_required=False,
+            )
 
     def test_invalid_adapter_result_fails_closed(self):
         class InvalidDelivery:
