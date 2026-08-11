@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { CharacterExperienceController } from "../.test-dist/character/experience.js";
 import {
   INITIAL_PRESENTATION,
   parseCharacterSemanticEvent,
@@ -29,6 +30,17 @@ function fakeElement() {
   };
 }
 
+async function experienceFixture() {
+  const renderer = new RecordingRenderer();
+  const viewport = new CharacterViewport(fakeElement(), renderer);
+  await viewport.mount();
+  return {
+    renderer,
+    viewport,
+    experience: new CharacterExperienceController(viewport),
+  };
+}
+
 test("state and emotion remain separate semantic dimensions", () => {
   const speaking = reduceCharacterPresentation(
     INITIAL_PRESENTATION,
@@ -48,6 +60,17 @@ test("state and emotion remain separate semantic dimensions", () => {
   assert.deepEqual(amused, { state: "speaking", emotion: "amused" });
 });
 
+test("noticing is a first-class semantic state", () => {
+  const noticing = reduceCharacterPresentation(
+    INITIAL_PRESENTATION,
+    parseCharacterSemanticEvent({
+      type: "character.state",
+      payload: { state: "noticing" },
+    }),
+  );
+  assert.deepEqual(noticing, { state: "noticing", emotion: "neutral" });
+});
+
 test("renderer receives semantic presentation only", async () => {
   const renderer = new RecordingRenderer();
   const viewport = new CharacterViewport(fakeElement(), renderer);
@@ -63,6 +86,52 @@ test("renderer receives semantic presentation only", async () => {
     "emotion",
     "state",
   ]);
+});
+
+test("touch wake and local voice phases produce visible character states", async () => {
+  const { viewport, experience } = await experienceFixture();
+
+  experience.wakeByTouch();
+  assert.deepEqual(viewport.snapshot(), { state: "noticing", emotion: "curious" });
+
+  experience.beginListening();
+  assert.deepEqual(viewport.snapshot(), { state: "listening", emotion: "curious" });
+
+  experience.beginThinking();
+  assert.deepEqual(viewport.snapshot(), { state: "thinking", emotion: "neutral" });
+
+  experience.beginSpeaking();
+  assert.deepEqual(viewport.snapshot(), { state: "speaking", emotion: "neutral" });
+
+  experience.engage();
+  assert.deepEqual(viewport.snapshot(), { state: "engaged", emotion: "neutral" });
+
+  experience.sleep();
+  assert.deepEqual(viewport.snapshot(), { state: "sleeping", emotion: "neutral" });
+});
+
+test("success and error cues change emotion without inventing device authority", async () => {
+  const { viewport, experience } = await experienceFixture();
+  experience.wakeByTouch();
+  experience.acknowledgeSuccess();
+  assert.deepEqual(viewport.snapshot(), { state: "engaged", emotion: "happy" });
+
+  experience.showConcern();
+  assert.deepEqual(viewport.snapshot(), { state: "engaged", emotion: "concerned" });
+});
+
+test("server semantic events still pass through the same strict viewport boundary", async () => {
+  const { viewport, experience } = await experienceFixture();
+  experience.presentServerEvent({
+    type: "character.state",
+    payload: { state: "thinking" },
+  });
+  assert.equal(viewport.snapshot().state, "thinking");
+
+  assert.throws(() => experience.presentServerEvent({
+    type: "character.animation",
+    payload: { clip: "run-shell-command" },
+  }));
 });
 
 test("renderer-specific commands are rejected at the viewport boundary", async () => {

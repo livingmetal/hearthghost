@@ -2,6 +2,10 @@ import { Capacitor } from "@capacitor/core";
 
 import "./styles.css";
 import { AttentionController } from "./attention/controller.js";
+import { CharacterExperienceController } from "./character/experience.js";
+import { loadCharacterRenderer } from "./character/renderer-loader.js";
+import { CharacterViewport } from "./character/viewport.js";
+import { TextConversationController } from "./conversation/controller.js";
 import { BrowserDevelopmentNodePlatform } from "./node/browser-platform.js";
 import {
   ANDROID_CREDENTIAL_REFERENCE,
@@ -9,9 +13,6 @@ import {
 } from "./node/android-platform.js";
 import { ClientNode } from "./node/client-node.js";
 import type { NodePlatformPort } from "./node/platform.js";
-import { loadCharacterRenderer } from "./character/renderer-loader.js";
-import { CharacterViewport } from "./character/viewport.js";
-import { TextConversationController } from "./conversation/controller.js";
 import {
   AndroidVoiceInput,
   type VoiceInputStatus,
@@ -24,6 +25,7 @@ import { VoiceConversationController } from "./voice/controller.js";
 
 const ATTENTION_TIMEOUT_MILLIS = 20_000;
 const VOICE_LOCALE = "ko-KR";
+const NOTICE_TO_LISTEN_MILLIS = 220;
 
 const root = document.querySelector<HTMLDivElement>("#app");
 if (root === null) {
@@ -44,27 +46,48 @@ let ttsStatus: VoiceOutputStatus | null = null;
 
 root.innerHTML = `
   <main class="app-shell">
-    <header class="status-bar" aria-label="Privacy and security status">
-      <span data-node-status>Node: disconnected</span>
-      <span data-attention-status>Attention: sleeping</span>
-      <span>Camera: denied</span>
-      <span data-microphone-status>Microphone: inactive</span>
-      <span data-speech-status>Speech: text only</span>
-      <span>Cloud media: denied</span>
+    <header class="top-bar">
+      <div class="brand-lockup" aria-label="HearthGhost">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">HearthGhost</span>
+      </div>
+      <div class="top-actions">
+        <button class="quiet-button" type="button" data-connect>Connect</button>
+        <details class="system-status">
+          <summary>System</summary>
+          <div class="status-bar" aria-label="Privacy and security status">
+            <span data-node-status>Node: disconnected</span>
+            <span data-attention-status>Attention: sleeping</span>
+            <span>Camera: denied</span>
+            <span data-microphone-status>Microphone: inactive</span>
+            <span data-speech-status>Speech: text only</span>
+            <span>Cloud media: denied</span>
+          </div>
+        </details>
+      </div>
     </header>
-    <section class="character-viewport" aria-label="Character viewport">
+
+    <section class="character-stage" aria-label="HearthGhost character and response">
+      <section class="character-viewport" aria-label="Character viewport"></section>
+      <div class="response-layer">
+        <output class="response" data-response aria-live="polite"></output>
+      </div>
     </section>
+
     <section class="interaction-panel">
-      <label for="message">Conversation</label>
-      <form class="text-row" data-conversation>
-        <input id="message" autocomplete="off" placeholder="Touch wake, then type or speak" />
-        <button type="button" data-connect>Connect securely</button>
-        <button type="button" data-wake>Wake Ghost</button>
-        <button type="button" data-speak disabled>Speak</button>
-        <button type="submit" data-send disabled>Send</button>
-      </form>
       <p class="notice" data-notice>Secure text transport is disconnected.</p>
-      <output class="response" data-response aria-live="polite"></output>
+      <div class="quick-actions" aria-label="Quick message templates">
+        <button type="button" class="chip" data-template="메모해: ">Memo</button>
+        <button type="button" class="chip" data-template="할 일: ">Todo</button>
+        <button type="button" class="chip" data-template="알림 목록">Reminders</button>
+      </div>
+      <form class="text-row" data-conversation>
+        <label class="sr-only" for="message">Conversation</label>
+        <button class="wake-button" type="button" data-wake>Wake</button>
+        <input id="message" autocomplete="off" enterkeyhint="send" placeholder="Type to Ghost" />
+        <button class="speak-button" type="button" data-speak disabled>Speak</button>
+        <button class="send-button" type="submit" data-send disabled>Send</button>
+      </form>
       <details class="provisioning" data-provision hidden>
         <summary>Development Node enrollment</summary>
         <p data-identity-status>Android Keystore identity not checked.</p>
@@ -92,6 +115,7 @@ const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
 const sendButton = root.querySelector<HTMLButtonElement>("[data-send]");
+const messageInput = root.querySelector<HTMLInputElement>("#message");
 const viewportElement = root.querySelector<HTMLElement>(".character-viewport");
 if (viewportElement === null) {
   throw new Error("CharacterViewport element is missing");
@@ -104,12 +128,13 @@ const viewport = new CharacterViewport(
   await loadCharacterRenderer(rendererKind),
 );
 await viewport.mount();
+const character = new CharacterExperienceController(viewport);
 const conversation = androidPlatform === null
   ? null
   : new TextConversationController(
       node,
       androidPlatform,
-      (event) => viewport.present(event),
+      (event) => character.presentServerEvent(event),
     );
 const voiceConversation = conversation === null
   ? null
@@ -158,6 +183,7 @@ function showSnapshot(): void {
       || voiceStatus?.onDeviceAvailable === false
       || voiceStatus?.listening === true;
   }
+  wakeButton?.classList.toggle("is-awake", attentionSnapshot.state === "engaged");
 }
 
 async function refreshVoiceStatus(): Promise<void> {
@@ -192,47 +218,87 @@ async function speakReplyLocally(text: string): Promise<boolean> {
       showSnapshot();
       return false;
     }
+    character.beginSpeaking();
     await voiceOutput.speak(text, VOICE_LOCALE);
+    character.engage();
     showSnapshot();
     return true;
   } catch {
+    character.showConcern();
     await refreshVoiceStatus();
     return false;
   }
 }
 
-connectButton?.addEventListener("click", async () => {
-  await node.connect({
-    kind: "platform-managed",
-    reference: androidPlatform === null
-      ? "not-provisioned"
-      : ANDROID_CREDENTIAL_REFERENCE,
-  });
-  const snapshot = node.snapshot();
-  showSnapshot();
-  if (notice !== null && snapshot.error !== null) {
-    notice.textContent = snapshot.error;
-  } else if (notice !== null) {
-    notice.textContent = node.canUseCapability("conversation.text")
-      ? "Authenticated and granted. Touch Wake Ghost before conversation."
-      : "Authenticated, but explicit trust and conversation grant are required.";
-  }
+connectButton?.addEventListener("click", () => {
+  void (async () => {
+    try {
+      await node.connect({
+        kind: "platform-managed",
+        reference: androidPlatform === null
+          ? "not-provisioned"
+          : ANDROID_CREDENTIAL_REFERENCE,
+      });
+      const snapshot = node.snapshot();
+      showSnapshot();
+      if (snapshot.error !== null) {
+        character.showConcern();
+        if (notice !== null) {
+          notice.textContent = snapshot.error;
+        }
+      } else if (notice !== null) {
+        if (node.canUseCapability("conversation.text")) {
+          character.acknowledgeSuccess();
+          notice.textContent = "Secure Node ready. Touch Wake before conversation.";
+        } else {
+          character.showConcern();
+          notice.textContent = "Authenticated, but explicit trust and conversation grant are required.";
+        }
+      }
+    } catch (error) {
+      character.showConcern();
+      showSnapshot();
+      if (notice !== null) {
+        notice.textContent = error instanceof Error ? error.message : "Secure connection failed";
+      }
+    }
+  })();
 });
 
 wakeButton?.addEventListener("click", () => {
   if (!node.canUseCapability("conversation.text")) {
+    character.showConcern();
     if (notice !== null) {
       notice.textContent = "Connect a trusted Node with conversation.text grant first.";
     }
     return;
   }
   attention.wakeByTouch();
+  character.wakeByTouch();
+  window.setTimeout(() => {
+    if (
+      attention.canAcceptConversationInput()
+      && viewport.snapshot().state === "noticing"
+    ) {
+      character.beginListening();
+    }
+  }, NOTICE_TO_LISTEN_MILLIS);
   showSnapshot();
   if (notice !== null) {
-    notice.textContent = "Ghost is listening for addressed text or speech.";
+    notice.textContent = "Ghost noticed you. Address text or start local speech.";
   }
-  root.querySelector<HTMLInputElement>("#message")?.focus();
+  messageInput?.focus();
 });
+
+for (const templateButton of root.querySelectorAll<HTMLButtonElement>("[data-template]")) {
+  templateButton.addEventListener("click", () => {
+    if (messageInput === null) {
+      return;
+    }
+    messageInput.value = templateButton.dataset.template ?? "";
+    messageInput.focus();
+  });
+}
 
 speakButton?.addEventListener("click", () => {
   void (async () => {
@@ -241,6 +307,7 @@ speakButton?.addEventListener("click", () => {
       || voiceConversation === null
       || !attention.canAcceptConversationInput()
     ) {
+      character.showConcern();
       if (notice !== null) {
         notice.textContent = "Wake Ghost before starting on-device speech recognition.";
       }
@@ -261,6 +328,7 @@ speakButton?.addEventListener("click", () => {
         return;
       }
       await voiceOutput?.stop();
+      character.beginListening();
       await voiceInput.start(VOICE_LOCALE);
       voiceStatus = { ...voiceStatus, listening: true };
       showSnapshot();
@@ -268,6 +336,7 @@ speakButton?.addEventListener("click", () => {
         notice.textContent = "Listening locally. Raw microphone audio is not sent to Core or cloud.";
       }
     } catch (error) {
+      character.showConcern();
       await refreshVoiceStatus();
       if (notice !== null) {
         notice.textContent = error instanceof Error ? error.message : "Voice input failed";
@@ -279,17 +348,18 @@ speakButton?.addEventListener("click", () => {
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
   void (async () => {
-    const input = root.querySelector<HTMLInputElement>("#message");
-    if (conversation === null || input === null) {
+    if (conversation === null || messageInput === null) {
+      character.showConcern();
       if (notice !== null) {
         notice.textContent = "Native text transport is unavailable.";
       }
       return;
     }
     if (!attention.canAcceptConversationInput()) {
+      character.sleep();
       showSnapshot();
       if (notice !== null) {
-        notice.textContent = "Ghost is sleeping. Use Wake Ghost before sending text.";
+        notice.textContent = "Ghost is sleeping. Use Wake before sending text.";
       }
       return;
     }
@@ -297,17 +367,20 @@ form?.addEventListener("submit", (event) => {
       if (conversation.snapshot().conversationSessionId === null) {
         await conversation.open();
       }
-      const snapshot = await conversation.submit(input.value);
+      character.beginThinking();
+      const snapshot = await conversation.submit(messageInput.value);
       attention.recordAddressedActivity();
       showSnapshot();
       if (response !== null) {
         response.textContent = snapshot.responseText ?? "";
       }
+      character.engage();
       if (notice !== null) {
         notice.textContent = "Conversation active. Attention timeout extended.";
       }
-      input.value = "";
+      messageInput.value = "";
     } catch (error) {
+      character.showConcern();
       if (notice !== null) {
         notice.textContent = error instanceof Error
           ? error.message
@@ -321,6 +394,7 @@ if (voiceInput !== null && voiceConversation !== null) {
   void voiceInput.onTranscript((event) => {
     void (async () => {
       voiceStatus = voiceStatus === null ? null : { ...voiceStatus, listening: false };
+      character.beginThinking();
       try {
         const snapshot = await voiceConversation.acceptTranscript(event);
         const reply = snapshot.responseText ?? "";
@@ -328,12 +402,16 @@ if (voiceInput !== null && voiceConversation !== null) {
           response.textContent = reply;
         }
         const spoken = reply !== "" && await speakReplyLocally(reply);
+        if (!spoken) {
+          character.engage();
+        }
         if (notice !== null) {
           notice.textContent = spoken
-            ? `On-device transcript accepted and reply spoken locally: ${event.text}`
-            : `On-device transcript accepted; local TTS unavailable, showing text: ${event.text}`;
+            ? "Reply spoken using an embedded Android voice."
+            : "Local TTS unavailable. Reply remains text only.";
         }
       } catch (error) {
+        character.showConcern();
         if (notice !== null) {
           notice.textContent = error instanceof Error ? error.message : "Voice transcript rejected";
         }
@@ -344,6 +422,7 @@ if (voiceInput !== null && voiceConversation !== null) {
   });
   void voiceInput.onError((event) => {
     void (async () => {
+      character.showConcern();
       await refreshVoiceStatus();
       if (notice !== null) {
         notice.textContent = `Voice input stopped: ${event.reason}`;
@@ -385,6 +464,7 @@ if (androidPlatform !== null) {
             identityStatus.textContent = `CSR SHA-256: ${request.csrSha256}`;
           }
         } catch (error) {
+          character.showConcern();
           if (identityStatus !== null) {
             identityStatus.textContent = error instanceof Error
               ? error.message
@@ -401,8 +481,10 @@ if (androidPlatform !== null) {
             nodeCertificate?.value ?? "",
             authorityCertificate?.value ?? "",
           );
+          character.acknowledgeSuccess();
           await refreshIdentityStatus();
         } catch (error) {
+          character.showConcern();
           if (identityStatus !== null) {
             identityStatus.textContent = error instanceof Error
               ? error.message
@@ -418,6 +500,7 @@ const attentionTimer = window.setInterval(() => {
     showSnapshot();
     return;
   }
+  character.sleep();
   showSnapshot();
   void voiceInput?.cancel();
   void voiceOutput?.stop();
@@ -434,6 +517,7 @@ window.addEventListener("pagehide", () => window.clearInterval(attentionTimer), 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     attention.sleep();
+    character.sleep();
     void (async () => {
       await voiceInput?.cancel();
       await voiceOutput?.stop();
