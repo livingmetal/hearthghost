@@ -61,6 +61,17 @@ MIGRATIONS = (
         ON todo_records(scope, scope_id, state, created_at DESC, todo_id DESC);
         """,
     ),
+    Migration(
+        3,
+        "todo_due_at_v1",
+        """
+        ALTER TABLE todo_records
+        ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ NULL;
+        CREATE INDEX IF NOT EXISTS todo_scope_due_idx
+        ON todo_records(scope, scope_id, due_at, todo_id)
+        WHERE state = 'open' AND due_at IS NOT NULL;
+        """,
+    ),
 )
 
 
@@ -120,7 +131,7 @@ def _validate_applied_migrations(rows: object) -> dict[int, str]:
     if not isinstance(rows, (list, tuple)):
         raise PostgresSchemaError("database migration metadata is invalid")
     applied: dict[int, str] = {}
-    expected_versions = {migration.version for migration in MIGRATIONS}
+    expected_names = {migration.version: migration.name for migration in MIGRATIONS}
     for row in rows:
         try:
             version, name = tuple(row)
@@ -135,10 +146,8 @@ def _validate_applied_migrations(rows: object) -> dict[int, str]:
             or version in applied
         ):
             raise PostgresSchemaError("database migration metadata is invalid")
-        if version in expected_versions:
-            expected_name = next(item.name for item in MIGRATIONS if item.version == version)
-            if name != expected_name:
-                raise PostgresSchemaError("database migration name does not match this build")
+        if version in expected_names and name != expected_names[version]:
+            raise PostgresSchemaError("database migration name does not match this build")
         applied[version] = name
     if applied:
         versions = sorted(applied)

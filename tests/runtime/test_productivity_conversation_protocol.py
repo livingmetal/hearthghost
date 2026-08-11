@@ -100,6 +100,18 @@ class ProductivityConversationProtocolTests(unittest.TestCase):
         self.assertTrue(completed.accepted)
         self.assertEqual(completed.reason_code, "todo_completed")
 
+    def test_due_todo_and_invalid_due_are_both_local(self):
+        created = self.command("할 일 [2026-08-12T09:00+09:00]: DB 백업 확인", 2)
+        self.assertTrue(created.accepted)
+        self.assertEqual(created.reason_code, "todo_created")
+        self.assertIn("2026-08-12T09:00:00+09:00", created.response_text)
+
+        invalid = self.command("할 일 [2026-08-13T09:00]: DB 백업 재확인", 3)
+        self.assertTrue(invalid.accepted)
+        self.assertEqual(invalid.reason_code, "todo_due_invalid")
+        self.assertIn("+09:00", invalid.response_text)
+        self.assertEqual(len(self.todos.list_scope(MemoryScope.USER, "owner")), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

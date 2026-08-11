@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from apps.assistant.src.adapters.in_memory_memory import InMemoryMemoryRepository
 from apps.assistant.src.adapters.in_memory_todo import InMemoryTodoRepository
@@ -129,6 +129,57 @@ class ProductivityCommandTests(unittest.TestCase):
         self.assertTrue(completed.succeeded)
         self.assertEqual(completed.todo.state, TodoState.COMPLETED)
         self.assertEqual(todos.list_scope(MemoryScope.USER, "owner")[0].state, TodoState.COMPLETED)
+
+    def test_due_todo_requires_explicit_timezone_and_round_trips(self):
+        service, _, todos = self.build(self.personal_principals())
+        created = service.handle(
+            node_id="android-personal-01",
+            text="할 일 [2026-08-12T09:00+09:00]: DB 백업 확인",
+            conversation_session_id="conversation-due",
+        )
+        self.assertTrue(created.succeeded)
+        self.assertEqual(created.reason, "todo_created")
+        expected = datetime(2026, 8, 12, 9, tzinfo=timezone(timedelta(hours=9)))
+        self.assertEqual(created.todo.due_at, expected)
+        self.assertIn("2026-08-12T09:00:00+09:00", created.response_text)
+        listed = service.handle(
+            node_id="android-personal-01",
+            text="할 일 목록",
+            conversation_session_id="conversation-due",
+        )
+        self.assertIn("2026-08-12T09:00:00+09:00", listed.response_text)
+        self.assertEqual(todos.list_scope(MemoryScope.USER, "owner")[0].due_at, expected)
+
+    def test_due_todo_without_timezone_is_recognized_and_rejected_locally(self):
+        service, _, todos = self.build(self.personal_principals())
+        result = service.handle(
+            node_id="android-personal-01",
+            text="할 일 [2026-08-12T09:00]: DB 백업 확인",
+            conversation_session_id="conversation-invalid-due",
+        )
+        self.assertTrue(result.recognized)
+        self.assertFalse(result.succeeded)
+        self.assertEqual(result.reason, "todo_due_invalid")
+        self.assertIn("+09:00", result.response_text)
+        self.assertEqual(todos.list_scope(MemoryScope.USER, "owner"), ())
+
+    def test_due_todo_with_malformed_timestamp_is_not_downgraded_to_plain_todo(self):
+        service, _, todos = self.build(self.personal_principals())
+        for text in (
+            "할 일 [tomorrow]: DB 백업 확인",
+            "todo [not-a-date]: rotate certificate",
+            "할 일 [2026-99-99T09:00+09:00]: DB 백업 확인",
+        ):
+            with self.subTest(text=text):
+                result = service.handle(
+                    node_id="android-personal-01",
+                    text=text,
+                    conversation_session_id="conversation-invalid-due",
+                )
+                self.assertTrue(result.recognized)
+                self.assertFalse(result.succeeded)
+                self.assertEqual(result.reason, "todo_due_invalid")
+        self.assertEqual(todos.list_scope(MemoryScope.USER, "owner"), ())
 
     def test_todo_delete_with_short_ref(self):
         service, _, todos = self.build(self.personal_principals())
