@@ -18,6 +18,72 @@ runtime exposes only `192.168.55.100:38443`; its status endpoint remains inside
 the container on loopback. The internal network has no Internet route. No
 OpenAI secret is mounted into this milestone.
 
+## Remote Android development access
+
+Do not expose TCP/38443 through a home-router port forward. ADR-0007 keeps the
+HearthGhost Gateway private and places remote connectivity in a separate private
+routing layer.
+
+The preferred development layout is:
+
+```text
+HearthGhost Android client on mobile Internet
+        |
+        | Tailscale subnet route
+        v
+WTR PRO subnet router
+        |
+        | routed development subnet
+        v
+192.168.55.100:38443
+        |
+        | HearthGhost TLS 1.3 + per-node mTLS
+        v
+Node Gateway
+```
+
+This deliberately preserves the Android transport's fixed
+`192.168.55.100:38443` endpoint and the server certificate bound to that IP.
+Tailscale grants reachability only; it does not grant HearthGhost Node trust or
+capabilities.
+
+HearthGhost does not require a full-tunnel exit node. Keep ordinary phone
+Internet traffic on its normal path. If a payment, banking, vehicle, projection,
+or other application behaves incorrectly while Tailscale is connected, use the
+Android Tailscale client's app-based split-tunneling setting to exclude that
+application. Excluded application traffic and DNS bypass Tailscale; applications
+not excluded can continue to reach the tailnet.
+
+For a Tailscale-based development setup, configure the WTR PRO Linux host as a
+subnet router for the smallest CIDR that contains the Gateway. Linux subnet
+routing requires IP forwarding and uses:
+
+```text
+sudo tailscale set --advertise-routes=<development-subnet-cidr>
+```
+
+Approve the route in the tailnet control plane and restrict tailnet access so
+only the designated Android test device or user can reach the development
+route. Do not commit Tailscale auth keys or account-specific policy material to
+this repository.
+
+Before HG-014 enrollment:
+
+1. connect Tailscale on the Android phone without selecting a home exit node;
+2. add split-tunnel exclusions only for applications that demonstrate VPN
+   compatibility problems;
+3. verify excluded applications still work through ordinary mobile/Wi-Fi
+   connectivity;
+4. switch to mobile data and verify HearthGhost has route reachability to
+   `192.168.55.100`;
+5. do not weaken TLS, certificate validation, Node enrollment, trust, capability
+   grants, or replay protection to compensate for a routing problem.
+
+Android's user-facing Tailscale split-tunnel mode is exclusion-oriented. A
+strict mode where only HearthGhost uses Tailscale is possible through Android
+system policy/MDM, but is not required for the current personally managed test
+phone.
+
 ## One Android Node credential
 
 The Android app must generate its key in Android Keystore and export only a
