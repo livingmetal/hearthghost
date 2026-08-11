@@ -5,28 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Callable
 
+from apps.assistant.src.adapters.postgres_schema import ensure_postgres_schema
 from apps.assistant.src.modules.memory import (
     MemoryKind,
     MemoryRecord,
     MemoryScope,
     MemorySource,
 )
-
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS memory_records (
-    memory_id UUID PRIMARY KEY,
-    scope TEXT NOT NULL CHECK (scope IN ('user', 'household')),
-    scope_id TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('semantic', 'user_preference', 'note')),
-    text TEXT NOT NULL,
-    source TEXT NOT NULL CHECK (source = 'addressed_text'),
-    source_conversation_session_id TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL
-);
-CREATE INDEX IF NOT EXISTS memory_scope_created_idx
-ON memory_records(scope, scope_id, created_at DESC, memory_id DESC);
-"""
 
 
 class PostgresMemoryRepository:
@@ -41,7 +26,7 @@ class PostgresMemoryRepository:
             connect = psycopg.connect
         self._dsn = dsn
         self._connect_factory = connect
-        self._initialize()
+        ensure_postgres_schema(dsn, connect=connect)
 
     def __repr__(self) -> str:
         return "PostgresMemoryRepository(dsn=<redacted>)"
@@ -106,11 +91,6 @@ class PostgresMemoryRepository:
             with connection.cursor() as cursor:
                 cursor.execute("DELETE FROM memory_records WHERE memory_id = %s", (memory_id,))
                 return cursor.rowcount == 1
-
-    def _initialize(self) -> None:
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(_SCHEMA)
 
     def _connect(self):
         return self._connect_factory(self._dsn, connect_timeout=5)
