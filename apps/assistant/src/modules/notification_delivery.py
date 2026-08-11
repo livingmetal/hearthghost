@@ -2,8 +2,8 @@
 
 This module does not choose a target Node, poll the database, open a network
 connection, or display an Android notification. It only proves that a future
-delivery attempt must pass Policy plus authoritative Node capability state
-before a delivery adapter is invoked.
+delivery attempt must pass Policy plus authoritative Node capability state and
+confirmed Node-local authorization before delivery may be reported successful.
 """
 
 from __future__ import annotations
@@ -42,21 +42,37 @@ class NotificationDeliveryIntent:
 class NotificationAdapterRequest:
     reminder_id: str
     target_node_id: str
+    fire_at: datetime
     title: str = REDACTED_TITLE
     body: str = REDACTED_BODY
     content_mode: str = "redacted"
+    local_authorization_required: bool = True
+
+    def __post_init__(self) -> None:
+        _validate_uuid(self.reminder_id)
+        if not isinstance(self.target_node_id, str) or not self.target_node_id or len(self.target_node_id) > 128:
+            raise ValueError("notification target_node_id is invalid")
+        if not _aware(self.fire_at):
+            raise ValueError("notification fire_at must be timezone-aware")
+        if self.content_mode != "redacted" or self.local_authorization_required is not True:
+            raise ValueError("notification adapter request weakens privacy or local authorization")
+        if self.title != REDACTED_TITLE or self.body != REDACTED_BODY:
+            raise ValueError("notification adapter request must remain redacted")
 
 
 @dataclass(frozen=True)
 class NotificationAdapterResult:
     delivered: bool
     reason: str
+    local_authorization_confirmed: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.delivered, bool):
+        if not isinstance(self.delivered, bool) or not isinstance(self.local_authorization_confirmed, bool):
             raise ValueError("notification adapter result is invalid")
         if not isinstance(self.reason, str) or not self.reason or len(self.reason) > 128:
             raise ValueError("notification adapter reason is invalid")
+        if self.delivered and not self.local_authorization_confirmed:
+            raise ValueError("delivered notification requires confirmed local authorization")
 
 
 @dataclass(frozen=True)
@@ -87,6 +103,7 @@ class NotificationDeliveryService:
             {
                 "target_node_id": intent.target_node_id,
                 "reminder_id": intent.reminder_id,
+                "fire_at": intent.fire_at.isoformat(),
                 "content_mode": "redacted",
             },
         )
@@ -108,6 +125,7 @@ class NotificationDeliveryService:
         request = NotificationAdapterRequest(
             reminder_id=intent.reminder_id,
             target_node_id=intent.target_node_id,
+            fire_at=intent.fire_at,
         )
         try:
             result = self._delivery.deliver(request)
@@ -115,6 +133,8 @@ class NotificationDeliveryService:
             return NotificationDeliveryResult(False, "delivery_adapter_unavailable")
         if not isinstance(result, NotificationAdapterResult):
             return NotificationDeliveryResult(False, "delivery_adapter_invalid_result")
+        if result.delivered and not result.local_authorization_confirmed:
+            return NotificationDeliveryResult(False, "local_authorization_not_confirmed")
         return NotificationDeliveryResult(result.delivered, result.reason)
 
 
