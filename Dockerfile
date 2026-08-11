@@ -6,6 +6,15 @@ ARG HEARTHGHOST_GID=10001
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+USER root
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-runtime.txt /tmp/requirements-runtime.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-runtime.txt \
+    && rm /tmp/requirements-runtime.txt
+
 RUN groupadd --gid "${HEARTHGHOST_GID}" hearthghost \
     && useradd --uid "${HEARTHGHOST_UID}" \
         --gid "${HEARTHGHOST_GID}" \
