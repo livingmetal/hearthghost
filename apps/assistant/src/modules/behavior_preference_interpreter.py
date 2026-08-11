@@ -15,7 +15,7 @@ from apps.assistant.src.modules.behavior_preferences import (
     BehaviorPreferenceManager,
     BehaviorPreferenceSnapshot,
 )
-from apps.assistant.src.modules.privacy_gateway import DataModality, PrivacyGateway, PrivacyReason
+from apps.assistant.src.modules.privacy_gateway import DataModality, PrivacyGateway
 from apps.assistant.src.ports.llm import LLMRequest
 
 
@@ -108,19 +108,31 @@ class BehaviorPreferenceInterpreter:
 
 
 class BehaviorPreferenceService:
-    """Interpret then atomically apply only validated behavior preferences."""
+    """Interpret then atomically persist only validated scoped behavior preferences."""
 
     def __init__(self, *, interpreter: BehaviorPreferenceInterpreter, manager: BehaviorPreferenceManager) -> None:
         self._interpreter = interpreter
         self._manager = manager
 
-    def interpret_and_apply(self, text: str, *, scope: str, scope_id: str) -> PreferenceApplication:
+    def interpret_and_apply(
+        self,
+        text: str,
+        *,
+        scope: str,
+        scope_id: str,
+        updated_by_node_id: str,
+    ) -> PreferenceApplication:
         interpreted = self._interpreter.interpret(text, scope=scope, scope_id=scope_id)
         if not interpreted.recognized or interpreted.proposal is None:
             return PreferenceApplication(False, False, interpreted.reason)
         try:
-            snapshot = self._manager.apply(interpreted.proposal.changes)
-        except (TypeError, ValueError):
+            snapshot = self._manager.apply(
+                interpreted.proposal.changes,
+                scope=scope,
+                scope_id=scope_id,
+                updated_by_node_id=updated_by_node_id,
+            )
+        except (TypeError, ValueError, RuntimeError):
             return PreferenceApplication(True, False, "preference_rejected")
         return PreferenceApplication(True, True, "preference_applied", snapshot)
 

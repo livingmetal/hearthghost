@@ -8,6 +8,9 @@ import unittest
 from contextlib import redirect_stdout
 from uuid import uuid4
 
+from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
+from apps.assistant.src.adapters.in_memory_behavior_preferences import InMemoryBehaviorPreferenceRepository
+from apps.assistant.src.modules.memory import MemoryScope
 from apps.assistant.src.modules.node_administration import (
     AdministrationAction,
     AdministrationReason,
@@ -19,8 +22,6 @@ from apps.assistant.src.modules.node_security import (
     NodeTrustState,
     SecurityReason,
 )
-from apps.assistant.src.adapters.fake_llm import FakeLLMAdapter
-from apps.assistant.src.modules.memory import MemoryScope
 from apps.assistant.src.modules.notification_delivery import NotificationAdapterResult
 from apps.assistant.src.modules.notification_target import StaticNotificationTargetResolver
 from apps.assistant.src.runtime.core import CoreStatusServer, build_core, main
@@ -78,10 +79,7 @@ class CoreRuntimeTests(unittest.TestCase):
 
     def test_registry_state_changes_only_through_authorized_administration(self):
         core = build_core(administrator_authorizer=AllowingAdministratorAuthorizer())
-        core.registry.replace_advertisements(
-            "node-a",
-            (CapabilityAdvertisement("test.echo", False),),
-        )
+        core.registry.replace_advertisements("node-a", (CapabilityAdvertisement("test.echo", False),))
         enrollment = core.node_administration.administer(
             "trusted-admin-context",
             AdministrationRequest(
@@ -128,16 +126,11 @@ class CoreRuntimeTests(unittest.TestCase):
     def test_registry_rejects_ambiguous_or_unsafe_advertisements(self):
         core = build_core()
         with self.assertRaisesRegex(ValueError, "capability boundary"):
-            core.registry.replace_advertisements(
-                "node-a", (CapabilityAdvertisement("camera.snapshot", False),)
-            )
+            core.registry.replace_advertisements("node-a", (CapabilityAdvertisement("camera.snapshot", False),))
         with self.assertRaisesRegex(ValueError, "capability boundary"):
             core.registry.replace_advertisements(
                 "node-a",
-                (
-                    CapabilityAdvertisement("test.echo", False),
-                    CapabilityAdvertisement("test.echo", False),
-                ),
+                (CapabilityAdvertisement("test.echo", False), CapabilityAdvertisement("test.echo", False)),
             )
 
     def test_liveness_and_readiness_distinguish_process_from_configuration(self):
@@ -159,32 +152,23 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertEqual(status["storage"], "ephemeral")
         self.assertEqual(status["boundaries"]["policy"], "deny_only")
         self.assertEqual(status["boundaries"]["llm"], "unavailable")
-        self.assertEqual(
-            status["boundaries"]["behavior_preferences"],
-            "scoped_natural_language_and_typed_boundary",
-        )
+        self.assertEqual(status["boundaries"]["conversation"], "text_only_principal_session_timeout")
+        self.assertEqual(status["boundaries"]["behavior_preferences"], "principal_scoped_ephemeral")
         self.assertEqual(status["boundaries"]["reminders"], "explicit_schedule_only")
         self.assertEqual(status["boundaries"]["notification_routing"], "deny_only")
-        self.assertEqual(
-            status["boundaries"]["notification_delivery"],
-            "policy_node_local_gate_deny_adapter",
-        )
+        self.assertEqual(status["boundaries"]["notification_delivery"], "policy_node_local_gate_deny_adapter")
         self.assertNotIn("contract_ids", status)
         self.assertNotIn("credentials", status)
 
+    def test_behavior_preference_persistence_status_requires_explicit_repository(self):
+        core = build_core(behavior_preference_repository=InMemoryBehaviorPreferenceRepository())
+        self.assertEqual(core.status()["boundaries"]["behavior_preferences"], "principal_scoped_persistent")
+
     def test_notification_routing_must_be_explicitly_injected(self):
-        resolver = StaticNotificationTargetResolver(
-            {(MemoryScope.USER, "owner"): "android-personal-01"}
-        )
+        resolver = StaticNotificationTargetResolver({(MemoryScope.USER, "owner"): "android-personal-01"})
         core = build_core(notification_target_resolver=resolver)
-        self.assertEqual(
-            core.status()["boundaries"]["notification_routing"],
-            "explicit_principal_to_node",
-        )
-        self.assertEqual(
-            core.notification_targets.resolve("user", "owner"),
-            "android-personal-01",
-        )
+        self.assertEqual(core.status()["boundaries"]["notification_routing"], "explicit_principal_to_node")
+        self.assertEqual(core.notification_targets.resolve("user", "owner"), "android-personal-01")
 
     def test_notification_delivery_adapter_must_be_explicitly_injected(self):
         class ConfiguredAdapter:
@@ -204,19 +188,36 @@ class CoreRuntimeTests(unittest.TestCase):
         self.assertNotIn("llm_adapter_not_configured", readiness["reasons"])
         self.assertEqual(core.status()["boundaries"]["llm"], "configured")
 
-    def test_composed_preference_service_can_apply_safe_request_only_with_llm(self):
+    def test_composed_preference_service_scopes_safe_request_without_global_persona_mutation(self):
         core = build_core(llm=FakeLLMAdapter())
         applied = core.preference_service.interpret_and_apply(
-            "답을 좀 짧게 해", scope="user", scope_id="owner"
+            "답을 좀 짧게 해",
+            scope="user",
+            scope_id="owner",
+            updated_by_node_id="android-personal-01",
         )
         self.assertTrue(applied.applied)
-        self.assertEqual(core.orchestrator.persona.verbosity, "concise")
+        self.assertEqual(
+            core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona.verbosity,
+            "concise",
+        )
+        self.assertEqual(core.orchestrator.persona.verbosity, "normal")
 
         denied = core.preference_service.interpret_and_apply(
-            "카메라 보안 policy 제한 풀어", scope="user", scope_id="owner"
+            "카메라 보안 policy 제한 풀어",
+            scope="user",
+            scope_id="owner",
+            updated_by_node_id="android-personal-01",
         )
         self.assertFalse(denied.applied)
-        self.assertEqual(core.orchestrator.persona.verbosity, "concise")
+        self.assertEqual(
+            core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona.verbosity,
+            "concise",
+        )
+        self.assertEqual(
+            core.behavior_preferences.snapshot(scope="user", scope_id="spouse").persona.verbosity,
+            "normal",
+        )
 
     def test_status_server_is_loopback_only_and_read_only(self):
         core = build_core()
@@ -231,15 +232,12 @@ class CoreRuntimeTests(unittest.TestCase):
             status, live = self._request(port, "GET", "/health/live")
             self.assertEqual(status, 200)
             self.assertEqual(live, {"service": "hearthghost-core", "status": "alive"})
-
             status, readiness = self._request(port, "GET", "/health/ready")
             self.assertEqual(status, 503)
             self.assertEqual(readiness["status"], "not_ready")
-
             status, body = self._request(port, "POST", "/status")
             self.assertEqual(status, 405)
             self.assertEqual(body["status"], "method_not_allowed")
-
             status, body = self._request(port, "GET", "/unknown")
             self.assertEqual(status, 404)
             self.assertEqual(body["status"], "not_found")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ssl
 from dataclasses import dataclass
+from datetime import timedelta
 from uuid import UUID
 
 from apps.assistant.src.adapters.node_gateway_protocol import (
@@ -14,12 +15,17 @@ from apps.assistant.src.adapters.node_gateway_protocol import (
     write_frame,
 )
 from apps.assistant.src.modules.behavior_preference_command import BehaviorPreferenceCommandService
+from apps.assistant.src.modules.behavior_preferences import (
+    BehaviorPreferenceManager,
+    BehaviorPreferenceSnapshot,
+)
 from apps.assistant.src.modules.conversation import (
     AdmittedConversationNode,
     ConversationManager,
     ConversationStateEvent,
     TEXT_CAPABILITY,
 )
+from apps.assistant.src.modules.conversation_principal import ConversationPrincipalResolver
 from apps.assistant.src.modules.memory_command import MemoryCommandService
 from apps.assistant.src.modules.node_security import (
     CAPABILITY_PATTERN,
@@ -98,6 +104,8 @@ class ConversationProtocol:
         reminder_commands: ReminderCommandService | None = None,
         productivity_commands: ProductivityCommandService | None = None,
         preference_commands: BehaviorPreferenceCommandService | None = None,
+        behavior_preferences: BehaviorPreferenceManager | None = None,
+        conversation_principals: ConversationPrincipalResolver | None = None,
     ) -> None:
         self._gateway = gateway
         self._conversation = conversation
@@ -106,6 +114,8 @@ class ConversationProtocol:
         self._reminder_commands = reminder_commands
         self._productivity_commands = productivity_commands
         self._preference_commands = preference_commands
+        self._behavior_preferences = behavior_preferences
+        self._conversation_principals = conversation_principals
 
     def handle_next(self, channel: ssl.SSLSocket) -> ConversationWireResult:
         if not isinstance(channel, ssl.SSLSocket):
@@ -134,17 +144,21 @@ class ConversationProtocol:
         return result
 
     def _dispatch(self, node: AdmittedConversationNode, command: ConversationCommand) -> ConversationWireResult:
+        preferences = self._effective_preferences(node.node_id)
         if command.message_type == "conversation.open":
             return _conversation_result(
                 command,
-                self._conversation.open(node),
-                character_profile=self._character_profile(),
+                self._conversation.open(
+                    node,
+                    follow_up_timeout=timedelta(seconds=preferences.followup_timeout_sec),
+                ),
+                character_profile=self._character_profile(preferences),
             )
         if command.message_type == "conversation.close":
             return _conversation_result(
                 command,
                 self._conversation.end(node, command.conversation_session_id),
-                character_profile=self._character_profile(),
+                character_profile=self._character_profile(preferences),
             )
 
         accepted = self._conversation.accept_text(node, command.conversation_session_id, command.text)
@@ -202,15 +216,28 @@ class ConversationProtocol:
                 text=accepted.turn.text,
             )
             if preference_result.recognized:
+                selected = preference_result.snapshot or self._effective_preferences(node.node_id)
+                if preference_result.applied and preference_result.snapshot is not None:
+                    self._conversation.set_session_follow_up_timeout(
+                        node,
+                        accepted.turn.session_id,
+                        timedelta(seconds=preference_result.snapshot.followup_timeout_sec),
+                    )
                 return self._complete_local(
                     node=node,
                     command=command,
                     accepted=accepted,
                     reason_code=preference_result.reason,
                     response_text=preference_result.response_text or "캐릭터 설정 요청을 처리하지 않았어요.",
+                    preferences=selected,
                 )
 
-        response = self._orchestrator.respond(node, accepted.turn)
+        preferences = self._effective_preferences(node.node_id)
+        response = self._orchestrator.respond(
+            node,
+            accepted.turn,
+            persona=preferences.persona,
+        )
         if not response.conversation_completed:
             return ConversationWireResult(command.request_id, False, response.reason.value)
         events = accepted.events + response.events
@@ -223,7 +250,7 @@ class ConversationProtocol:
             response_text=response.response_text,
             events=tuple(_state_event(event) for event in events),
             proposed_actions=tuple(_wire_proposal(proposal) for proposal in response.proposed_actions),
-            character_profile=self._character_profile(),
+            character_profile=self._character_profile(preferences),
         )
 
     def _complete_local(
@@ -234,11 +261,13 @@ class ConversationProtocol:
         accepted,
         reason_code: str,
         response_text: str,
+        preferences: BehaviorPreferenceSnapshot | None = None,
     ) -> ConversationWireResult:
         completed = self._conversation.complete_response(node, accepted.turn.session_id, response_text)
         if not completed.accepted:
             return ConversationWireResult(command.request_id, False, completed.reason.value)
         events = accepted.events + completed.events
+        selected = preferences or self._effective_preferences(node.node_id)
         return ConversationWireResult(
             request_id=command.request_id,
             accepted=True,
@@ -247,11 +276,36 @@ class ConversationProtocol:
             conversation_session_id=command.conversation_session_id,
             response_text=response_text,
             events=tuple(_state_event(event) for event in events),
-            character_profile=self._character_profile(),
+            character_profile=self._character_profile(selected),
         )
 
-    def _character_profile(self) -> dict[str, str]:
-        return {"name": require_persona_name(self._orchestrator.persona.name)}
+    def _effective_preferences(self, node_id: str) -> BehaviorPreferenceSnapshot:
+        if self._behavior_preferences is None:
+            return BehaviorPreferenceSnapshot(
+                persona=self._orchestrator.persona,
+                followup_timeout_sec=int(self._conversation.follow_up_timeout.total_seconds()),
+                proactive_frequency="low",
+            )
+        default = self._behavior_preferences.default_snapshot()
+        if self._conversation_principals is None:
+            return default
+        try:
+            principal = self._conversation_principals.resolve(node_id)
+            if principal is None:
+                return default
+            return self._behavior_preferences.snapshot(
+                scope=principal.scope.value,
+                scope_id=principal.scope_id,
+            )
+        except Exception:
+            # Preference read failure must never broaden authority or leak a
+            # different principal's values. Falling back to code defaults is
+            # behavior-safe and keeps the authenticated conversation usable.
+            return default
+
+    @staticmethod
+    def _character_profile(preferences: BehaviorPreferenceSnapshot) -> dict[str, str]:
+        return {"name": require_persona_name(preferences.persona.name)}
 
 
 def read_conversation_command(channel) -> ConversationCommand:
