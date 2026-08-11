@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NodeTransportPlugin.class);
         registerPlugin(VoiceInputPlugin.class);
         registerPlugin(VoiceOutputPlugin.class);
+        registerPlugin(LocalReminderPlugin.class);
         super.onCreate(savedInstanceState);
     }
 

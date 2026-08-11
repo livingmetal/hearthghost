@@ -17,11 +17,13 @@ public final class NodeTransportPlugin extends Plugin {
     private final AtomicBoolean operationInFlight = new AtomicBoolean(false);
     private NodeIdentityStore identity;
     private NodeConnection connection;
+    private ReminderSyncConnection reminderSync;
 
     @Override
     public void load() {
         identity = new NodeIdentityStore(getContext());
         connection = new NodeConnection(identity);
+        reminderSync = new ReminderSyncConnection(identity);
     }
 
     @PluginMethod
@@ -32,14 +34,10 @@ public final class NodeTransportPlugin extends Plugin {
     @PluginMethod
     public void createEnrollmentRequest(PluginCall call) {
         execute(call, () -> {
-            NodeIdentityStore.EnrollmentRequest request =
-                identity.createEnrollmentRequest();
+            NodeIdentityStore.EnrollmentRequest request = identity.createEnrollmentRequest();
             return new JSObject()
                 .put("nodeId", NodeIdentityStore.NODE_ID)
-                .put(
-                    "credentialReference",
-                    NodeIdentityStore.CREDENTIAL_REFERENCE
-                )
+                .put("credentialReference", NodeIdentityStore.CREDENTIAL_REFERENCE)
                 .put("csrPem", request.pem)
                 .put("csrSha256", request.sha256);
         });
@@ -52,10 +50,7 @@ public final class NodeTransportPlugin extends Plugin {
         execute(
             call,
             () -> statusOutput(
-                identity.installCertificateChain(
-                    nodeCertificate,
-                    authorityCertificate
-                )
+                identity.installCertificateChain(nodeCertificate, authorityCertificate)
             )
         );
     }
@@ -83,19 +78,18 @@ public final class NodeTransportPlugin extends Plugin {
     public void sendText(PluginCall call) {
         String conversationSessionId = call.getString("conversationSessionId");
         String text = call.getString("text");
-        execute(
-            call,
-            () -> connection.sendText(conversationSessionId, text)
-        );
+        execute(call, () -> connection.sendText(conversationSessionId, text));
     }
 
     @PluginMethod
     public void closeConversation(PluginCall call) {
         String conversationSessionId = call.getString("conversationSessionId");
-        execute(
-            call,
-            () -> connection.closeConversation(conversationSessionId)
-        );
+        execute(call, () -> connection.closeConversation(conversationSessionId));
+    }
+
+    @PluginMethod
+    public void syncReminders(PluginCall call) {
+        execute(call, reminderSync::sync);
     }
 
     @Override
@@ -112,10 +106,7 @@ public final class NodeTransportPlugin extends Plugin {
             .put("keyPresent", status.keyPresent)
             .put("certificateInstalled", status.certificateInstalled)
             .put("nonExportable", status.nonExportable)
-            .put(
-                "credentialReference",
-                NodeIdentityStore.CREDENTIAL_REFERENCE
-            );
+            .put("credentialReference", NodeIdentityStore.CREDENTIAL_REFERENCE);
     }
 
     private void execute(PluginCall call, Operation operation) {

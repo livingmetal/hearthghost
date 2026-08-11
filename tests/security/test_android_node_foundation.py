@@ -13,7 +13,7 @@ ANDROID_NAMESPACE = "{http://schemas.android.com/apk/res/android}"
 
 
 class AndroidNodeFoundationTests(unittest.TestCase):
-    def test_only_reviewed_network_and_microphone_permissions_are_requested(self):
+    def test_only_reviewed_runtime_permissions_are_requested(self):
         root = ET.parse(
             ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
         ).getroot()
@@ -26,8 +26,12 @@ class AndroidNodeFoundationTests(unittest.TestCase):
             {
                 "android.permission.INTERNET",
                 "android.permission.RECORD_AUDIO",
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
             },
         )
+        self.assertNotIn("android.permission.SCHEDULE_EXACT_ALARM", permissions)
+        self.assertNotIn("android.permission.USE_EXACT_ALARM", permissions)
         application = root.find("application")
         self.assertIsNotNone(application)
         self.assertEqual(application.attrib[f"{ANDROID_NAMESPACE}allowBackup"], "false")

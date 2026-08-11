@@ -120,6 +120,7 @@ class NodeGatewayProtocol:
                 request_id=message.request_id,
                 accepted=result.admitted,
                 reason_code=result.reason.value,
+                session_id=message.session_id,
                 node_id=result.node_id,
             )
         closed = self._gateway.close_session(channel, message.session_id)
@@ -250,9 +251,9 @@ def read_gateway_result(channel: socket.socket) -> GatewayResult:
 def write_frame(channel: socket.socket, document: dict[str, object]) -> None:
     try:
         payload = json.dumps(
-        document,
-        ensure_ascii=False,
-        separators=(",", ":"),
+            document,
+            ensure_ascii=False,
+            separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
     except (TypeError, ValueError) as error:
