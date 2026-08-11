@@ -60,15 +60,9 @@ class FakeLLMAdapter:
     @staticmethod
     def _preference_completion(original: str, lowered: str) -> LLMCompletion:
         changes: list[dict[str, object]] = []
-        name_match = re.fullmatch(
-            r"\s*(?:이름(?:을|은)?|name)\s*(?:[:：]|을|은|로|is|to)?\s*([\w가-힣 .'-]{1,80})\s*(?:로\s*)?(?:해|해줘|바꿔|바꿔줘|please)?\s*[.!]?\s*",
-            original,
-            flags=re.IGNORECASE,
-        )
-        if name_match is not None:
-            candidate = name_match.group(1).strip()
-            if candidate:
-                changes.append({"path": "character.name", "value": candidate})
+        candidate = _fake_name_candidate(original)
+        if candidate is not None:
+            changes.append({"path": "character.name", "value": candidate})
         if "짧게" in lowered or "concise" in lowered:
             changes.append({"path": "character.verbosity", "value": "concise"})
         if "농담" in lowered and ("많" in lowered or "more" in lowered):
@@ -82,6 +76,28 @@ class FakeLLMAdapter:
             "changes": changes,
         }
         return LLMCompletion(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+_KOREAN_NAME_PATTERN = re.compile(
+    r"^\s*이름(?:을|은)?\s*(?:[:：]\s*)?(?P<name>[\w가-힣 .'-]{1,80}?)\s*"
+    r"(?:으?로\s*)?(?:바꿔줘|바꿔|해줘|해)\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+_ENGLISH_NAME_PATTERN = re.compile(
+    r"^\s*(?:name|call\s+yourself)\s*(?:[:：]|is|to)?\s*"
+    r"(?P<name>[\w .'-]{1,80}?)\s*(?:please\s*)?$",
+    re.IGNORECASE,
+)
+
+
+def _fake_name_candidate(value: str) -> str | None:
+    for pattern in (_KOREAN_NAME_PATTERN, _ENGLISH_NAME_PATTERN):
+        match = pattern.fullmatch(value)
+        if match is None:
+            continue
+        candidate = match.group("name").strip()
+        return candidate or None
+    return None
 
 
 class UnavailableLLMAdapter:
