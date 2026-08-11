@@ -54,9 +54,11 @@ class ConversationOrchestrator:
 
     @property
     def persona(self) -> PersonaProfile:
+        """Default Persona used only when no principal-scoped Persona is supplied."""
         return self._persona
 
     def set_persona(self, persona: PersonaProfile) -> None:
+        """Set the process default only; scoped preferences must not call this."""
         if not isinstance(persona, PersonaProfile):
             raise TypeError("persona must be a PersonaProfile")
         self._persona = persona
@@ -65,11 +67,16 @@ class ConversationOrchestrator:
         self,
         node: AdmittedConversationNode,
         turn: ConversationTurn,
+        *,
+        persona: PersonaProfile | None = None,
     ) -> OrchestrationResult:
+        selected_persona = self._persona if persona is None else persona
+        if not isinstance(selected_persona, PersonaProfile):
+            raise TypeError("persona must be a PersonaProfile")
         request = LLMRequest(
             request_id=str(uuid4()),
             conversation_session_id=turn.session_id,
-            instructions=_compose_instructions(self._persona),
+            instructions=_compose_instructions(selected_persona),
             input_text=turn.text,
         )
         generated = self._privacy_gateway.generate(
