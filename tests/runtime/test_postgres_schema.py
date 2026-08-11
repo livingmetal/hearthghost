@@ -56,54 +56,48 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
     def test_empty_database_applies_all_migrations_under_advisory_lock(self):
         cursor = FakeCursor()
         connector = Connector(cursor)
-
         version = ensure_postgres_schema("postgresql://db/hearthghost", connect=connector)
-
         self.assertEqual(version, MIGRATIONS[-1].version)
         self.assertEqual(connector.calls[0][1]["connect_timeout"], 5)
         first_sql, first_params = cursor.executed[0]
         self.assertIn("pg_advisory_xact_lock", first_sql)
         self.assertEqual(first_params, (MIGRATION_LOCK_KEY,))
-        inserted = [
-            params
-            for sql, params in cursor.executed
-            if "INSERT INTO hearthghost_schema_migrations" in sql
-        ]
-        self.assertEqual(
-            inserted,
-            [(migration.version, migration.name) for migration in MIGRATIONS],
-        )
+        inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
+        self.assertEqual(inserted, [(migration.version, migration.name) for migration in MIGRATIONS])
 
-    def test_existing_v1_applies_only_v2(self):
+    def test_existing_v1_applies_v2_and_v3(self):
         cursor = FakeCursor([(1, "memory_records_v1")])
-        connector = Connector(cursor)
+        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
+        self.assertEqual(version, 3)
+        inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
+        self.assertEqual(inserted, [(2, "todo_records_v1"), (3, "todo_due_at_v1")])
 
-        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=connector)
-
-        self.assertEqual(version, 2)
-        inserted = [
-            params
-            for sql, params in cursor.executed
-            if "INSERT INTO hearthghost_schema_migrations" in sql
-        ]
-        self.assertEqual(inserted, [(2, "todo_records_v1")])
+    def test_existing_v2_applies_only_v3(self):
+        cursor = FakeCursor([(1, "memory_records_v1"), (2, "todo_records_v1")])
+        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
+        self.assertEqual(version, 3)
+        inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
+        self.assertEqual(inserted, [(3, "todo_due_at_v1")])
+        migration_sql = next(sql for sql, _ in cursor.executed if "ADD COLUMN IF NOT EXISTS due_at" in sql)
+        self.assertIn("TIMESTAMPTZ", migration_sql)
+        self.assertIn("WHERE state = 'open' AND due_at IS NOT NULL", migration_sql)
 
     def test_current_database_is_idempotent(self):
-        cursor = FakeCursor([(1, "memory_records_v1"), (2, "todo_records_v1")])
-        connector = Connector(cursor)
-
-        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=connector)
-
-        self.assertEqual(version, 2)
-        self.assertFalse(
-            any("INSERT INTO hearthghost_schema_migrations" in sql for sql, _ in cursor.executed)
-        )
+        cursor = FakeCursor([
+            (1, "memory_records_v1"),
+            (2, "todo_records_v1"),
+            (3, "todo_due_at_v1"),
+        ])
+        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
+        self.assertEqual(version, 3)
+        self.assertFalse(any("INSERT INTO hearthghost_schema_migrations" in sql for sql, _ in cursor.executed))
 
     def test_future_database_version_fails_closed(self):
         cursor = FakeCursor([
             (1, "memory_records_v1"),
             (2, "todo_records_v1"),
-            (3, "future_build"),
+            (3, "todo_due_at_v1"),
+            (4, "future_build"),
         ])
         with self.assertRaisesRegex(PostgresSchemaError, "newer"):
             ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
@@ -114,7 +108,7 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
             ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
 
     def test_migration_history_gap_fails_closed(self):
-        cursor = FakeCursor([(2, "todo_records_v1")])
+        cursor = FakeCursor([(1, "memory_records_v1"), (3, "todo_due_at_v1")])
         with self.assertRaisesRegex(PostgresSchemaError, "gaps"):
             ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
 
