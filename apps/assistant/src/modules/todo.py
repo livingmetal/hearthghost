@@ -1,7 +1,7 @@
 """Explicit, scoped todo domain boundary.
 
-Todos are deliberate user/household records. This module has no parser, LLM,
-calendar, notification, or ambient-observation dependency.
+Todos are deliberate user/household records. A due time is metadata only: it
+never grants reminder, notification, calendar, or automation authority.
 """
 
 from __future__ import annotations
@@ -33,6 +33,7 @@ class TodoRecord:
     text: str
     state: TodoState
     created_at: datetime
+    due_at: datetime | None = None
     completed_at: datetime | None = None
 
 
@@ -41,9 +42,17 @@ class TodoManager:
         self._repository = repository
         self._clock = clock
 
-    def create(self, *, scope: MemoryScope, scope_id: str, text: str) -> TodoRecord:
+    def create(
+        self,
+        *,
+        scope: MemoryScope,
+        scope_id: str,
+        text: str,
+        due_at: datetime | None = None,
+    ) -> TodoRecord:
         _validate_scope(scope, scope_id)
         normalized = _validate_text(text)
+        _validate_optional_due_at(due_at)
         record = TodoRecord(
             todo_id=str(uuid4()),
             scope=scope,
@@ -51,6 +60,7 @@ class TodoManager:
             text=normalized,
             state=TodoState.OPEN,
             created_at=self._now(),
+            due_at=due_at,
         )
         try:
             self._repository.put(record)
@@ -66,12 +76,7 @@ class TodoManager:
             records = self._repository.list_scope(scope.value, scope_id, limit=limit)
         except Exception as error:
             raise RuntimeError("todo repository unavailable") from error
-        if any(
-            not isinstance(record, TodoRecord)
-            or record.scope is not scope
-            or record.scope_id != scope_id
-            for record in records
-        ):
+        if any(not _valid_scoped_record(record, scope, scope_id) for record in records):
             raise RuntimeError("todo repository returned invalid scope data")
         return records
 
@@ -84,11 +89,7 @@ class TodoManager:
             raise RuntimeError("todo repository unavailable") from error
         if current is None:
             return None
-        if (
-            not isinstance(current, TodoRecord)
-            or current.scope is not scope
-            or current.scope_id != scope_id
-        ):
+        if not _valid_scoped_record(current, scope, scope_id):
             return None
         if current.state is TodoState.COMPLETED:
             return current
@@ -106,13 +107,7 @@ class TodoManager:
             current = self._repository.get(todo_id)
         except Exception as error:
             raise RuntimeError("todo repository unavailable") from error
-        if current is None:
-            return False
-        if (
-            not isinstance(current, TodoRecord)
-            or current.scope is not scope
-            or current.scope_id != scope_id
-        ):
+        if current is None or not _valid_scoped_record(current, scope, scope_id):
             return False
         try:
             return self._repository.delete(todo_id)
@@ -124,9 +119,21 @@ class TodoManager:
             now = self._clock.now()
         except Exception as error:
             raise RuntimeError("todo clock unavailable") from error
-        if now.tzinfo is None or now.utcoffset() is None:
+        if not _is_aware_datetime(now):
             raise RuntimeError("todo clock returned naive time")
         return now
+
+
+def _valid_scoped_record(record: object, scope: MemoryScope, scope_id: str) -> bool:
+    if not isinstance(record, TodoRecord) or record.scope is not scope or record.scope_id != scope_id:
+        return False
+    if not _is_aware_datetime(record.created_at):
+        return False
+    if record.due_at is not None and not _is_aware_datetime(record.due_at):
+        return False
+    if record.completed_at is not None and not _is_aware_datetime(record.completed_at):
+        return False
+    return (record.state is TodoState.OPEN) == (record.completed_at is None)
 
 
 def _validate_scope(scope: object, scope_id: object) -> None:
@@ -146,6 +153,15 @@ def _validate_text(text: object) -> str:
     ):
         raise ValueError("todo text is invalid")
     return text.strip()
+
+
+def _validate_optional_due_at(due_at: object) -> None:
+    if due_at is not None and not _is_aware_datetime(due_at):
+        raise ValueError("todo due_at must include a timezone")
+
+
+def _is_aware_datetime(value: object) -> bool:
+    return isinstance(value, datetime) and value.tzinfo is not None and value.utcoffset() is not None
 
 
 def _validate_todo_id(todo_id: object) -> None:
