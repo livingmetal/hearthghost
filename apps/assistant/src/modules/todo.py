@@ -83,34 +83,57 @@ class TodoManager:
     def complete(self, todo_id: str, *, scope: MemoryScope, scope_id: str) -> TodoRecord | None:
         _validate_scope(scope, scope_id)
         _validate_todo_id(todo_id)
-        try:
-            current = self._repository.get(todo_id)
-        except Exception as error:
-            raise RuntimeError("todo repository unavailable") from error
+        current = self._get_scoped(todo_id, scope=scope, scope_id=scope_id)
         if current is None:
-            return None
-        if not _valid_scoped_record(current, scope, scope_id):
             return None
         if current.state is TodoState.COMPLETED:
             return current
         completed = replace(current, state=TodoState.COMPLETED, completed_at=self._now())
-        try:
-            self._repository.replace(completed)
-        except Exception as error:
-            raise RuntimeError("todo repository unavailable") from error
+        self._replace(completed)
         return completed
+
+    def set_due(
+        self,
+        todo_id: str,
+        *,
+        scope: MemoryScope,
+        scope_id: str,
+        due_at: datetime | None,
+    ) -> TodoRecord | None:
+        """Set or clear due metadata without granting scheduling authority."""
+        _validate_scope(scope, scope_id)
+        _validate_todo_id(todo_id)
+        _validate_optional_due_at(due_at)
+        current = self._get_scoped(todo_id, scope=scope, scope_id=scope_id)
+        if current is None:
+            return None
+        updated = replace(current, due_at=due_at)
+        self._replace(updated)
+        return updated
 
     def delete(self, todo_id: str, *, scope: MemoryScope, scope_id: str) -> bool:
         _validate_scope(scope, scope_id)
         _validate_todo_id(todo_id)
+        current = self._get_scoped(todo_id, scope=scope, scope_id=scope_id)
+        if current is None:
+            return False
+        try:
+            return self._repository.delete(todo_id)
+        except Exception as error:
+            raise RuntimeError("todo repository unavailable") from error
+
+    def _get_scoped(self, todo_id: str, *, scope: MemoryScope, scope_id: str) -> TodoRecord | None:
         try:
             current = self._repository.get(todo_id)
         except Exception as error:
             raise RuntimeError("todo repository unavailable") from error
         if current is None or not _valid_scoped_record(current, scope, scope_id):
-            return False
+            return None
+        return current
+
+    def _replace(self, record: TodoRecord) -> None:
         try:
-            return self._repository.delete(todo_id)
+            self._repository.replace(record)
         except Exception as error:
             raise RuntimeError("todo repository unavailable") from error
 
