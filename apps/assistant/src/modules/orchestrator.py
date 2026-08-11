@@ -52,6 +52,15 @@ class ConversationOrchestrator:
         self._llm_timeout_seconds = llm_timeout_seconds
         self._persona = persona or PersonaProfile()
 
+    @property
+    def persona(self) -> PersonaProfile:
+        return self._persona
+
+    def set_persona(self, persona: PersonaProfile) -> None:
+        if not isinstance(persona, PersonaProfile):
+            raise TypeError("persona must be a PersonaProfile")
+        self._persona = persona
+
     def respond(
         self,
         node: AdmittedConversationNode,
