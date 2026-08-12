@@ -11,6 +11,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
 import type { CharacterRenderer } from "./renderer.js";
+import { VrmBaseAnimationLayer } from "./vrm-base-animation.js";
 import { ProceduralIdleBaseMotion, type VrmBaseMotionFrame } from "./vrm-base-motion.js";
 import { VRM_CAMERA_FRAMING } from "./vrm-framing.js";
 import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";
@@ -27,6 +28,9 @@ interface BoneRestPose {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+  readonly px: number;
+  readonly py: number;
+  readonly pz: number;
 }
 
 const DRIVEN_BONE_NAMES = [
@@ -86,6 +90,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly drivenBones = new Map<DrivenBoneName, BoneRestPose>();
   private readonly gestureQueue: CharacterGesture[] = [];
   private readonly viewManipulation = new VrmViewManipulation();
+  private readonly baseAnimation = new VrmBaseAnimationLayer();
   private readonly baseMotion = new ProceduralIdleBaseMotion();
   private renderer: WebGLRenderer | null = null;
   private vrm: VRM | null = null;
@@ -177,6 +182,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.suspend();
     this.gestureQueue.length = 0;
     this.activeGesture = null;
+    this.baseAnimation.dispose();
     if (this.vrm !== null) {
       this.vrm.scene.removeFromParent();
       VRMUtils.deepDispose(this.vrm.scene);
@@ -204,6 +210,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     VRMUtils.combineMorphs(vrm);
     VRMUtils.rotateVRM0(vrm);
 
+    this.baseAnimation.dispose();
     if (this.vrm !== null) {
       this.vrm.scene.removeFromParent();
       VRMUtils.deepDispose(this.vrm.scene);
@@ -223,6 +230,15 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     const lookAt = vrm.lookAt;
     if (lookAt !== null && lookAt !== undefined) {
       lookAt.target = this.lookAtTarget;
+    }
+
+    try {
+      await this.baseAnimation.load(vrm);
+    } catch {
+      // A missing or malformed optional VRMA never prevents the approved VRM
+      // from loading. The foot-planted procedural base motion remains available.
+      this.baseAnimation.dispose();
+      this.baseMotion.reset(this.elapsed);
     }
   }
 
@@ -275,6 +291,9 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         x: node.rotation.x,
         y: node.rotation.y,
         z: node.rotation.z,
+        px: node.position.x,
+        py: node.position.y,
+        pz: node.position.z,
       });
     }
   }
@@ -299,8 +318,11 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.elapsed += delta;
     if (this.vrm !== null) {
       this.resetFramePose();
+      const hasAuthoredBase = this.baseAnimation.update(delta, this.presentation.state);
+      if (!hasAuthoredBase) {
+        this.applyBaseMotion(this.baseMotion.update(delta, this.presentation.state));
+      }
       this.updateBodyMotion(this.presentation.state);
-      this.applyBaseMotion(this.baseMotion.update(delta, this.presentation.state));
       this.updateGesture();
       this.updateLookAt(this.presentation.state, delta);
       this.updateExpressions(delta);
@@ -327,11 +349,11 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     const sleepingDrop = state === "sleeping" ? 0.065 : 0;
     const armDrift = Math.sin(this.elapsed * 0.46 + 0.8) * activity;
 
-    this.setBoneRotation("hips", 0, upperBodySway * 0.20, 0);
-    this.setBoneRotation("spine", breath * 0.50, upperBodySway * 0.28, -upperBodySway * 0.20);
-    this.setBoneRotation("chest", breath, upperBodySway * 0.42, upperBodySway * 0.30);
-    this.setBoneRotation("neck", sleepingDrop * 0.35, -upperBodySway * 0.26, thinkingTilt * 0.35);
-    this.setBoneRotation("head", sleepingDrop + speakingNod, -upperBodySway * 0.46, thinkingTilt);
+    this.offsetBoneRotation("hips", 0, upperBodySway * 0.20, 0);
+    this.offsetBoneRotation("spine", breath * 0.50, upperBodySway * 0.28, -upperBodySway * 0.20);
+    this.offsetBoneRotation("chest", breath, upperBodySway * 0.42, upperBodySway * 0.30);
+    this.offsetBoneRotation("neck", sleepingDrop * 0.35, -upperBodySway * 0.26, thinkingTilt * 0.35);
+    this.offsetBoneRotation("head", sleepingDrop + speakingNod, -upperBodySway * 0.46, thinkingTilt);
 
     if (state === "thinking") {
       this.applyThinkingPose();
@@ -369,14 +391,6 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.offsetBoneRotation("chest", 0, -0.035, 0.02);
   }
 
-  private setBoneRotation(name: DrivenBoneName, x: number, y: number, z: number): void {
-    const rest = this.drivenBones.get(name);
-    if (rest === undefined) {
-      return;
-    }
-    rest.node.rotation.set(rest.x + x, rest.y + y, rest.z + z);
-  }
-
   private offsetBoneTuple(name: DrivenBoneName, rotation: RotationTuple): void {
     this.offsetBoneRotation(name, rotation[0], rotation[1], rotation[2]);
   }
@@ -394,6 +408,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private resetFramePose(): void {
     for (const rest of this.drivenBones.values()) {
       rest.node.rotation.set(rest.x, rest.y, rest.z);
+      rest.node.position.set(rest.px, rest.py, rest.pz);
     }
     if (this.vrm !== null) {
       const view = this.viewManipulation.snapshot();
