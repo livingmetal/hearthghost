@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Mapping, Protocol
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class ToolAdapterResult:
     succeeded: bool
     reason_code: str
-    output: Mapping[str, object] = MappingProxyType({})
+    output: Mapping[str, object] = field(default_factory=lambda: MappingProxyType({}))
 
     def __post_init__(self) -> None:
         if not isinstance(self.succeeded, bool):
