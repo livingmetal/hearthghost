@@ -46,8 +46,26 @@ test("bounded screen-space movement is inferred without coordinates", () => {
   ]);
 });
 
+test("clap shrug and stretch are inferred as parameter-free semantic actions", () => {
+  assert.deepEqual(inferCharacterGestures("박수 쳐봐"), [
+    { gesture: "clap" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("어깨를 으쓱해봐"), [
+    { gesture: "shrug" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("기지개 한번 켜"), [
+    { gesture: "stretch" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("clap and shrug"), [
+    { gesture: "clap" },
+    { gesture: "shrug" },
+  ]);
+});
+
 test("negated motion requests do not animate", () => {
   assert.deepEqual(inferCharacterGestures("손 흔들지 마"), []);
   assert.deepEqual(inferCharacterGestures("오른쪽으로 돌지 말고 가만히 있어"), []);
   assert.deepEqual(inferCharacterGestures("앞으로 다가오지 마"), []);
+  assert.deepEqual(inferCharacterGestures("박수치지 마"), []);
+  assert.deepEqual(inferCharacterGestures("don't shrug"), []);
 });
