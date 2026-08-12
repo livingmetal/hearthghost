@@ -9,7 +9,7 @@ export interface CharacterVoiceProfile {
 export interface HearthGhostCharacterDefinition {
   readonly id: HearthGhostCharacterId;
   readonly name: "영희" | "철수";
-  readonly sample: "AvatarSample_A" | "AvatarSample_C";
+  readonly sample: "AvatarSample_Y" | "AvatarSample_C";
   readonly assetUrl: string;
   readonly voice: CharacterVoiceProfile;
 }
@@ -18,8 +18,8 @@ export const CHARACTER_CATALOG: readonly HearthGhostCharacterDefinition[] = Obje
   Object.freeze({
     id: "younghee",
     name: "영희",
-    sample: "AvatarSample_A",
-    assetUrl: "/models/AvatarSample_A.vrm",
+    sample: "AvatarSample_Y",
+    assetUrl: "/models/AvatarSample_Y.vrm",
     voice: Object.freeze({ id: "younghee", pitch: 1.10, rate: 1.04 }),
   }),
   Object.freeze({
