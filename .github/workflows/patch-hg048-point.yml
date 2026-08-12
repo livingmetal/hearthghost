@@ -1,0 +1,72 @@
+name: patch-hg048-point
+
+on:
+  push:
+    branches:
+      - codex/hg-048-pointing-gesture
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: codex/hg-048-pointing-gesture
+      - name: Patch renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/web-client/src/character/vrm-renderer.ts")
+          text = path.read_text()
+
+          changes = [
+              (
+                  '      case "stretch":\n        return 2.5;\n',
+                  '      case "stretch":\n'
+                  '        return 2.5;\n'
+                  '      case "point":\n'
+                  '        return 1.8;\n',
+              ),
+              (
+                  '      case "move":\n        this.applyMoveGesture(gesture.direction, progress);\n        return;\n',
+                  '      case "move":\n'
+                  '        this.applyMoveGesture(gesture.direction, progress);\n'
+                  '        return;\n'
+                  '      case "point":\n'
+                  '        this.applyPointGesture(gesture.direction, progress);\n'
+                  '        return;\n',
+              ),
+          ]
+
+          for old, new in changes:
+              count = text.count(old)
+              if count == 0 and new in text:
+                  continue
+              if count != 1:
+                  raise SystemExit(f"expected one renderer match, got {count}: {old[:90]!r}")
+              text = text.replace(old, new)
+
+          marker = '  private applyMoveGesture(\n'
+          if '  private applyPointGesture(direction: CharacterSide, progress: number): void {' not in text:
+              idx = text.index(marker)
+              method = '''  private applyPointGesture(direction: CharacterSide, progress: number): void {\n    const amount = this.holdEnvelope(progress, 0.24, 0.24);\n    const sign = this.sideSign(direction);\n    const upper = direction === "left" ? "leftUpperArm" : "rightUpperArm";\n    const lower = direction === "left" ? "leftLowerArm" : "rightLowerArm";\n    const hand = direction === "left" ? "leftHand" : "rightHand";\n\n    this.offsetBoneRotation(upper, -0.10 * amount, sign * 0.10 * amount, sign * 0.62 * amount);\n    this.offsetBoneRotation(lower, -0.16 * amount, sign * 0.10 * amount, -sign * 0.035 * amount);\n    this.offsetBoneRotation(hand, 0.025 * amount, -sign * 0.055 * amount, sign * 0.018 * amount);\n    this.offsetBoneRotation("chest", 0, -sign * 0.035 * amount, -sign * 0.012 * amount);\n    this.offsetBoneRotation("head", 0, -sign * 0.025 * amount, sign * 0.008 * amount);\n    this.pointHand(direction, amount);\n  }\n\n  private pointHand(side: CharacterSide, amount: number): void {\n    const blend = Math.max(0, Math.min(1, amount));\n    for (const name of fingerBonesForSide(side)) {\n      const delta = handPoseDelta(name, "relaxed", "point");\n      this.offsetBoneRotation(\n        name,\n        delta[0] * blend,\n        delta[1] * blend,\n        delta[2] * blend,\n      );\n    }\n  }\n\n'''
+              text = text[:idx] + method + text[idx:]
+
+          path.write_text(text)
+          PY
+      - name: Commit renderer wiring
+        run: |
+          if git diff --quiet -- apps/web-client/src/character/vrm-renderer.ts; then
+            echo "Renderer already patched"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web-client/src/character/vrm-renderer.ts
+          git commit -m "HG-048: wire pointing gesture into renderer"
+          git push origin HEAD:codex/hg-048-pointing-gesture
