@@ -89,6 +89,15 @@ export function inferCharacterGestures(text: string): readonly CharacterGesture[
   if (/(?:허리|고개).{0,10}숙|(?:인사|절)(?:해|한다|하)|\bbow\b/iu.test(normalized)) {
     appendUnique(gestures, { gesture: "bow" });
   }
+  if (/(?:박수|손뼉).{0,10}(?:쳐|치|친|친다|짝짝)|(?:clap|applaud)(?:s|ed|ing)?\b/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "clap" });
+  }
+  if (/(?:어깨.{0,10}(?:으쓱|들썩)|으쓱(?:해|한다|하)?|\bshrug(?:s|ged|ging)?\b)/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "shrug" });
+  }
+  if (/(?:기지개|스트레칭).{0,10}(?:켜|하|한다)?|\bstretch(?:es|ed|ing)?\b)/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "stretch" });
+  }
 
   return gestures;
 }
