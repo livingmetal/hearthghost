@@ -345,19 +345,6 @@ MIGRATIONS = (
         ON tool_policy_decision_consumptions(consumed_at);
         """,
     ),
-    Migration(
-        8,
-        "tool_policy_decision_replay_v1",
-        """
-        CREATE TABLE IF NOT EXISTS tool_policy_decision_consumptions (
-            decision_id UUID PRIMARY KEY,
-            consumed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_tool_policy_decision_consumptions_consumed_at
-        ON tool_policy_decision_consumptions(consumed_at);
-        """,
-    ),
 )
 
 
