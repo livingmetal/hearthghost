@@ -3,7 +3,6 @@ import type { CharacterGesture } from "./semantic.js";
 
 const NEGATION_PATTERN = /(?:하지\s*마|지\s*마|지\s*말(?:고|아|자)?|말고|말아|안\s*(?:해|해줘|하)|don't|do not)/iu;
 const WAVE_VERB = "(?:흔들|흔든|흔들어|흔들고|wave)";
-const RECENT_USER_GESTURE_MILLIS = 5_000;
 
 function gestureKey(gesture: CharacterGesture): string {
   if (gesture.gesture === "wave" || gesture.gesture === "raise_hand") {
@@ -81,7 +80,7 @@ export class GestureCueBridge {
   private observer: MutationObserver | null = null;
   private responseHost: HTMLElement | null = null;
   private readonly assistantSeen = new Set<string>();
-  private readonly recentUser = new Map<string, number>();
+  private readonly pendingUserGestures = new Map<string, CharacterGesture>();
 
   install(): void {
     document.addEventListener("submit", this.onSubmit, true);
@@ -103,7 +102,7 @@ export class GestureCueBridge {
     this.observer = null;
     this.responseHost = null;
     this.assistantSeen.clear();
-    this.recentUser.clear();
+    this.pendingUserGestures.clear();
   }
 
   private tryAttachResponse(): void {
@@ -124,16 +123,9 @@ export class GestureCueBridge {
     }
 
     this.assistantSeen.clear();
-    const now = Date.now();
+    this.pendingUserGestures.clear();
     for (const gesture of inferCharacterGestures(input.value)) {
-      const key = gestureKey(gesture);
-      this.recentUser.set(key, now);
-      publishCharacterGesture(gesture);
-    }
-    for (const [key, timestamp] of this.recentUser) {
-      if (now - timestamp > RECENT_USER_GESTURE_MILLIS) {
-        this.recentUser.delete(key);
-      }
+      this.pendingUserGestures.set(gestureKey(gesture), gesture);
     }
   };
 
@@ -142,17 +134,21 @@ export class GestureCueBridge {
     if (text === "") {
       return;
     }
-    const now = Date.now();
+
+    for (const [key, gesture] of this.pendingUserGestures) {
+      if (!this.assistantSeen.has(key)) {
+        this.assistantSeen.add(key);
+        publishCharacterGesture(gesture);
+      }
+    }
+    this.pendingUserGestures.clear();
+
     for (const gesture of inferCharacterGestures(text)) {
       const key = gestureKey(gesture);
       if (this.assistantSeen.has(key)) {
         continue;
       }
       this.assistantSeen.add(key);
-      const userTimestamp = this.recentUser.get(key);
-      if (userTimestamp !== undefined && now - userTimestamp <= RECENT_USER_GESTURE_MILLIS) {
-        continue;
-      }
       publishCharacterGesture(gesture);
     }
   }
