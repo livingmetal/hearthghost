@@ -17,7 +17,7 @@ test("clap prepares both open hands and returns cleanly to rest", () => {
   assert.ok(maxAbs(start) < 0.001);
   assert.ok(middle.leftHandOpen > 0.95);
   assert.ok(middle.rightHandOpen > 0.95);
-  assert.ok(Math.abs(middle.leftLowerArm[0]) > 0.5);
+  assert.ok(Math.abs(middle.rotations.leftLowerArm[0]) > 0.5);
   assert.ok(maxAbs(end) < 0.001);
 });
 
@@ -25,7 +25,7 @@ test("clap contains repeated approach and release phases", () => {
   const samples = [];
   for (let index = 15; index <= 85; index += 5) {
     const frame = actionMotionFrame({ gesture: "clap" }, index / 100, "younghee");
-    samples.push(frame.leftHand[1]);
+    samples.push(frame.rotations.leftHand[1]);
   }
 
   let directionChanges = 0;
@@ -46,10 +46,10 @@ test("clap contains repeated approach and release phases", () => {
 test("shrug lifts both shoulders and opens both palms", () => {
   const frame = actionMotionFrame({ gesture: "shrug" }, 0.5, "younghee");
 
-  assert.ok(frame.leftShoulder[0] < -0.07);
-  assert.ok(frame.rightShoulder[0] < -0.07);
-  assert.ok(frame.leftShoulder[2] < 0);
-  assert.ok(frame.rightShoulder[2] > 0);
+  assert.ok(frame.rotations.leftShoulder[0] < -0.07);
+  assert.ok(frame.rotations.rightShoulder[0] < -0.07);
+  assert.ok(frame.rotations.leftShoulder[2] < 0);
+  assert.ok(frame.rotations.rightShoulder[2] > 0);
   assert.ok(frame.leftHandOpen > 0.9);
   assert.ok(frame.rightHandOpen > 0.9);
 });
@@ -57,9 +57,9 @@ test("shrug lifts both shoulders and opens both palms", () => {
 test("stretch raises both arms symmetrically while opening the chest", () => {
   const frame = actionMotionFrame({ gesture: "stretch" }, 0.5, "younghee");
 
-  assert.ok(frame.chest[0] < -0.07);
-  assert.ok(frame.leftUpperArm[2] < -0.7);
-  assert.ok(frame.rightUpperArm[2] > 0.7);
+  assert.ok(frame.rotations.chest[0] < -0.07);
+  assert.ok(frame.rotations.leftUpperArm[2] < -0.7);
+  assert.ok(frame.rotations.rightUpperArm[2] > 0.7);
   assert.ok(frame.leftHandOpen > 0.9);
   assert.ok(frame.rightHandOpen > 0.9);
 });
@@ -68,8 +68,8 @@ test("cheolsu action performance remains more restrained than younghee", () => {
   const y = actionMotionFrame({ gesture: "stretch" }, 0.5, "younghee");
   const c = actionMotionFrame({ gesture: "stretch" }, 0.5, "cheolsu");
 
-  assert.ok(Math.abs(c.leftUpperArm[2]) < Math.abs(y.leftUpperArm[2]));
-  assert.ok(Math.abs(c.chest[0]) < Math.abs(y.chest[0]));
+  assert.ok(Math.abs(c.rotations.leftUpperArm[2]) < Math.abs(y.rotations.leftUpperArm[2]));
+  assert.ok(Math.abs(c.rotations.chest[0]) < Math.abs(y.rotations.chest[0]));
 });
 
 test("all new actions remain bounded and never expose root movement", () => {
