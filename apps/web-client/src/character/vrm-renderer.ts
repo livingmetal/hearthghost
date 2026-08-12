@@ -25,6 +25,7 @@ import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.
 import { NaturalPostureController, type VrmPostureFrame } from "./vrm-posture.js";
 import { EmotionPostureController } from "./vrm-emotion-posture.js";
 import { GazeBehaviorController } from "./vrm-gaze-behavior.js";
+import { actionMotionFrame, type VrmActionMotionFrame } from "./vrm-action-motion.js";
 import type {
   CharacterEmotion,
   CharacterGesture,
@@ -125,7 +126,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
 
   constructor(
     private readonly assetUrl: string | null = null,
-    characterId: HearthGhostCharacterId | null = null,
+    private readonly characterId: HearthGhostCharacterId | null = null,
   ) {
     this.posture = new NaturalPostureController(characterId);
     this.emotionPosture = new EmotionPostureController(characterId);
@@ -510,6 +511,12 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         return 1.2;
       case "bow":
         return 1.5;
+      case "clap":
+        return this.characterId === "younghee" ? 2.2 : this.characterId === "cheolsu" ? 2.4 : 2.3;
+      case "shrug":
+        return 1.5;
+      case "stretch":
+        return 2.5;
     }
   }
 
@@ -580,7 +587,29 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         this.offsetBoneRotation("head", 0.06 * amount, 0, 0);
         return;
       }
+      case "clap":
+      case "shrug":
+      case "stretch":
+        this.applyActionMotion(actionMotionFrame(gesture, progress, this.characterId));
+        return;
     }
+  }
+
+  private applyActionMotion(frame: VrmActionMotionFrame): void {
+    this.offsetBoneTuple("spine", frame.rotations.spine);
+    this.offsetBoneTuple("chest", frame.rotations.chest);
+    this.offsetBoneTuple("neck", frame.rotations.neck);
+    this.offsetBoneTuple("head", frame.rotations.head);
+    this.offsetBoneTuple("leftShoulder", frame.rotations.leftShoulder);
+    this.offsetBoneTuple("rightShoulder", frame.rotations.rightShoulder);
+    this.offsetBoneTuple("leftUpperArm", frame.rotations.leftUpperArm);
+    this.offsetBoneTuple("rightUpperArm", frame.rotations.rightUpperArm);
+    this.offsetBoneTuple("leftLowerArm", frame.rotations.leftLowerArm);
+    this.offsetBoneTuple("rightLowerArm", frame.rotations.rightLowerArm);
+    this.offsetBoneTuple("leftHand", frame.rotations.leftHand);
+    this.offsetBoneTuple("rightHand", frame.rotations.rightHand);
+    this.openHand("left", frame.leftHandOpen);
+    this.openHand("right", frame.rightHandOpen);
   }
 
   private applyMoveGesture(
