@@ -1,0 +1,1085 @@
+name: HG-050 one-shot persona expression-style patch
+
+on:
+  push:
+    branches:
+      - codex/hg-050-persona-expression-style
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/hg-050-persona-expression-style
+          fetch-depth: 0
+      - name: Apply HG-050 patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          def replace_once(path, old, new):
+              text = read(path)
+              if old not in text:
+                  raise RuntimeError(f'expected patch anchor missing: {path}: {old[:80]!r}')
+              write(path, text.replace(old, new, 1))
+
+          # Renderer-neutral style ID contract. Actual morph recipes remain in the VRM composer.
+          Path('apps/web-client/src/character/expression-style.ts').write_text('''export const EXPRESSION_STYLE_IDS = [
+            "balanced",
+            "playful",
+            "reserved",
+            "tsundere",
+            "mesugaki",
+            "yandere",
+          ] as const;
+
+          export type ExpressionStyleId = (typeof EXPRESSION_STYLE_IDS)[number];
+
+          export function isExpressionStyleId(value: unknown): value is ExpressionStyleId {
+            return typeof value === "string"
+              && (EXPRESSION_STYLE_IDS as readonly string[]).includes(value);
+          }
+
+          export function defaultExpressionStyleForCharacter(
+            characterId: "younghee" | "cheolsu" | null,
+          ): ExpressionStyleId {
+            if (characterId === "younghee") return "playful";
+            if (characterId === "cheolsu") return "reserved";
+            return "balanced";
+          }
+          ''', encoding='utf-8')
+
+          replace_once(
+              'apps/web-client/src/character/vrm-expression-composer.ts',
+              '''import type { HearthGhostCharacterId } from "./catalog.js";
+          import type { CharacterEmotion, CharacterState } from "./semantic.js";
+
+          export const EXPRESSION_STYLE_IDS = [
+            "balanced",
+            "playful",
+            "reserved",
+            "tsundere",
+            "mesugaki",
+            "yandere",
+          ] as const;
+
+          export type ExpressionStyleId = (typeof EXPRESSION_STYLE_IDS)[number];
+          ''',
+              '''import type { HearthGhostCharacterId } from "./catalog.js";
+          import {
+            defaultExpressionStyleForCharacter,
+            type ExpressionStyleId,
+          } from "./expression-style.js";
+          import type { CharacterEmotion, CharacterState } from "./semantic.js";
+
+          export { EXPRESSION_STYLE_IDS } from "./expression-style.js";
+          export { defaultExpressionStyleForCharacter };
+          export type { ExpressionStyleId };
+          ''',
+          )
+          replace_once(
+              'apps/web-client/src/character/vrm-expression-composer.ts',
+              '''export function defaultExpressionStyleForCharacter(
+            characterId: HearthGhostCharacterId | null,
+          ): ExpressionStyleId {
+            if (characterId === "younghee") {
+              return "playful";
+            }
+            if (characterId === "cheolsu") {
+              return "reserved";
+            }
+            return "balanced";
+          }
+
+          ''',
+              '',
+          )
+
+          replace_once(
+              'apps/web-client/src/character/renderer.ts',
+              '''import type { CharacterGesture, CharacterPresentation } from "./semantic.js";
+          ''',
+              '''import type { ExpressionStyleId } from "./expression-style.js";
+          import type { CharacterGesture, CharacterPresentation } from "./semantic.js";
+          ''',
+          )
+          replace_once(
+              'apps/web-client/src/character/renderer.ts',
+              '''  present(presentation: CharacterPresentation): void;
+            performGesture?(gesture: CharacterGesture): void;
+          ''',
+              '''  present(presentation: CharacterPresentation): void;
+            setExpressionStyle?(style: ExpressionStyleId): void;
+            performGesture?(gesture: CharacterGesture): void;
+          ''',
+          )
+
+          replace_once(
+              'apps/web-client/src/character/vrm-renderer.ts',
+              '''import type { CharacterRenderer } from "./renderer.js";
+          ''',
+              '''import type { CharacterRenderer } from "./renderer.js";
+          import type { ExpressionStyleId } from "./expression-style.js";
+          ''',
+          )
+          replace_once(
+              'apps/web-client/src/character/vrm-renderer.ts',
+              '''  present(presentation: CharacterPresentation): void {
+              this.presentation = presentation;
+            }
+
+            performGesture(gesture: CharacterGesture): void {
+          ''',
+              '''  present(presentation: CharacterPresentation): void {
+              this.presentation = presentation;
+            }
+
+            setExpressionStyle(style: ExpressionStyleId): void {
+              this.expressionComposer.setStyle(style);
+            }
+
+            performGesture(gesture: CharacterGesture): void {
+          ''',
+          )
+
+          replace_once(
+              'apps/web-client/src/character/viewport.ts',
+              '''import type { CharacterRenderer } from "./renderer.js";
+          ''',
+              '''import type { ExpressionStyleId } from "./expression-style.js";
+          import type { CharacterRenderer } from "./renderer.js";
+          ''',
+          )
+          replace_once(
+              'apps/web-client/src/character/viewport.ts',
+              '''  private exitCycle = 0;
+
+            constructor(
+          ''',
+              '''  private exitCycle = 0;
+            private expressionStyle: ExpressionStyleId | null = null;
+
+            constructor(
+          ''',
+          )
+          replace_once(
+              'apps/web-client/src/character/viewport.ts',
+              '''    await this.renderer.mount(this.element);
+              this.applyPresentation();
+          ''',
+              '''    await this.renderer.mount(this.element);
+              if (this.expressionStyle !== null) {
+                this.renderer.setExpressionStyle?.(this.expressionStyle);
+              }
+              this.applyPresentation();
+          ''',
+          )
+          replace_once(
+              'apps/web-client/src/character/viewport.ts',
+              '''      await renderer.mount(this.element);
+              renderer.present(this.presentation);
+          ''',
+              '''      await renderer.mount(this.element);
+              if (this.expressionStyle !== null) {
+                renderer.setExpressionStyle?.(this.expressionStyle);
+              }
+              renderer.present(this.presentation);
+          ''',
+          )
+          replace_once(
+              'apps/web-client/src/character/viewport.ts',
+              '''  snapshot(): CharacterPresentation {
+              return this.presentation;
+            }
+
+            characterId(): "younghee" | "cheolsu" | null {
+          ''',
+              '''  snapshot(): CharacterPresentation {
+              return this.presentation;
+            }
+
+            setExpressionStyle(style: ExpressionStyleId): void {
+              this.expressionStyle = style;
+              this.renderer.setExpressionStyle?.(style);
+            }
+
+            characterId(): "younghee" | "cheolsu" | null {
+          ''',
+          )
+
+          # Server persona owns an allow-listed presentation style ID, never morph weights.
+          replace_once(
+              'apps/assistant/src/modules/persona.py',
+              '''CHEOLSU_NAME = "철수"
+
+
+@dataclass(frozen=True)
+          ''',
+              '''CHEOLSU_NAME = "철수"
+EXPRESSION_STYLES = frozenset(
+    {"balanced", "playful", "reserved", "tsundere", "mesugaki", "yandere"}
+)
+
+
+def default_expression_style_for_name(name: str) -> str:
+    if name == YOUNGHEE_NAME:
+        return "playful"
+    if name == CHEOLSU_NAME:
+        return "reserved"
+    return "balanced"
+
+
+def require_expression_style(value: object) -> str:
+    if not isinstance(value, str) or value not in EXPRESSION_STYLES:
+        raise ValueError("expression_style is not an approved presentation style")
+    return value
+
+
+@dataclass(frozen=True)
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/persona.py',
+              '''    initiative: str = "low"
+
+              def __post_init__(self) -> None:
+          ''',
+              '''    initiative: str = "low"
+              expression_style: str = "balanced"
+
+              def __post_init__(self) -> None:
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/persona.py',
+              '''        _require_choice("initiative", self.initiative, {"low", "moderate", "high"})
+
+              def conversation_instructions(self) -> str:
+          ''',
+              '''        _require_choice("initiative", self.initiative, {"low", "moderate", "high"})
+                  require_expression_style(self.expression_style)
+
+              def conversation_instructions(self) -> str:
+          ''',
+          )
+
+          replace_once(
+              'apps/assistant/src/modules/behavior_preferences.py',
+              '''from apps.assistant.src.modules.persona import PersonaProfile, require_persona_name
+          ''',
+              '''from apps.assistant.src.modules.persona import (
+              PersonaProfile,
+              require_expression_style,
+              require_persona_name,
+          )
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preferences.py',
+              '''        "character.initiative",
+                  "conversation.followup_timeout_sec",
+          ''',
+              '''        "character.initiative",
+                  "character.expression_style",
+                  "conversation.followup_timeout_sec",
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preferences.py',
+              '''        elif change.path == "character.initiative":
+                      persona = replace(persona, initiative=_require_string(change.value))
+                  elif change.path == "conversation.followup_timeout_sec":
+          ''',
+              '''        elif change.path == "character.initiative":
+                      persona = replace(persona, initiative=_require_string(change.value))
+                  elif change.path == "character.expression_style":
+                      persona = replace(persona, expression_style=require_expression_style(change.value))
+                  elif change.path == "conversation.followup_timeout_sec":
+          ''',
+          )
+
+          # Versioned profile command: v1 remains strict/compatible; v2 adds expressionStyle.
+          replace_once(
+              'apps/assistant/src/modules/behavior_preference_command.py',
+              '''from apps.assistant.src.modules.persona import CHEOLSU_NAME, YOUNGHEE_NAME
+          ''',
+              '''from apps.assistant.src.modules.persona import (
+              CHEOLSU_NAME,
+              YOUNGHEE_NAME,
+              default_expression_style_for_name,
+          )
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preference_command.py',
+              '''_PERSONA_PROFILE_PREFIX = "페르소나:v1:"
+          _PERSONA_PROFILE_QUERY = "페르소나조회:v1"
+          _PERSONA_PROFILE_STATE_PREFIX = "페르소나상태:v1:"
+          _PERSONA_PROFILE_FIELDS = frozenset(
+              {"name", "humor", "verbosity", "formality", "initiative"}
+          )
+          ''',
+              '''_PERSONA_PROFILE_V1_PREFIX = "페르소나:v1:"
+          _PERSONA_PROFILE_V2_PREFIX = "페르소나:v2:"
+          _PERSONA_PROFILE_V1_QUERY = "페르소나조회:v1"
+          _PERSONA_PROFILE_V2_QUERY = "페르소나조회:v2"
+          _PERSONA_PROFILE_V1_STATE_PREFIX = "페르소나상태:v1:"
+          _PERSONA_PROFILE_V2_STATE_PREFIX = "페르소나상태:v2:"
+          _PERSONA_PROFILE_V1_FIELDS = frozenset(
+              {"name", "humor", "verbosity", "formality", "initiative"}
+          )
+          _PERSONA_PROFILE_V2_FIELDS = _PERSONA_PROFILE_V1_FIELDS | {"expressionStyle"}
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preference_command.py',
+              '''        persona_query = text == _PERSONA_PROFILE_QUERY
+                  persona_profile = None
+                  if isinstance(text, str) and text.startswith(_PERSONA_PROFILE_PREFIX):
+                      try:
+                          persona_profile = _parse_persona_profile(text)
+          ''',
+              '''        persona_query_version = _persona_query_version(text)
+                  persona_query = persona_query_version is not None
+                  persona_profile = None
+                  if isinstance(text, str) and text.startswith(
+                      (_PERSONA_PROFILE_V1_PREFIX, _PERSONA_PROFILE_V2_PREFIX)
+                  ):
+                      try:
+                          persona_profile = _parse_persona_profile(text)
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preference_command.py',
+              '''            payload = {
+                          "name": persona.name,
+                          "humor": persona.humor,
+                          "verbosity": persona.verbosity,
+                          "formality": persona.formality,
+                          "initiative": persona.initiative,
+                      }
+                      return BehaviorPreferenceCommandResult(
+                          True,
+                          False,
+                          "persona_profile_read",
+                          _PERSONA_PROFILE_STATE_PREFIX
+                          + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                          snapshot,
+                      )
+          ''',
+              '''            payload = {
+                          "name": persona.name,
+                          "humor": persona.humor,
+                          "verbosity": persona.verbosity,
+                          "formality": persona.formality,
+                          "initiative": persona.initiative,
+                      }
+                      state_prefix = _PERSONA_PROFILE_V1_STATE_PREFIX
+                      if persona_query_version == 2:
+                          payload["expressionStyle"] = persona.expression_style
+                          state_prefix = _PERSONA_PROFILE_V2_STATE_PREFIX
+                      return BehaviorPreferenceCommandResult(
+                          True,
+                          False,
+                          "persona_profile_read",
+                          state_prefix
+                          + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                          snapshot,
+                      )
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preference_command.py',
+              '''                    [
+                              BehaviorPreferenceChange(f"character.{field}", persona_profile[field])
+                              for field in ("name", "humor", "verbosity", "formality", "initiative")
+                          ],
+          ''',
+              '''                    [
+                              BehaviorPreferenceChange(f"character.{field}", persona_profile[field])
+                              for field in (
+                                  "name",
+                                  "humor",
+                                  "verbosity",
+                                  "formality",
+                                  "initiative",
+                                  "expression_style",
+                              )
+                              if field in persona_profile
+                          ],
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preference_command.py',
+              '''                result = self._preferences.apply_explicit(
+                          [BehaviorPreferenceChange("character.name", selection)],
+          ''',
+              '''                result = self._preferences.apply_explicit(
+                          [
+                              BehaviorPreferenceChange("character.name", selection),
+                              BehaviorPreferenceChange(
+                                  "character.expression_style",
+                                  default_expression_style_for_name(selection),
+                              ),
+                          ],
+          ''',
+          )
+          replace_once(
+              'apps/assistant/src/modules/behavior_preference_command.py',
+              '''def _parse_persona_profile(text: object) -> dict[str, str]:
+              if (
+                  not isinstance(text, str)
+                  or not text.startswith(_PERSONA_PROFILE_PREFIX)
+                  or len(text) > 1_000
+                  or "\\x00" in text
+              ):
+                  raise ValueError("persona profile command is invalid")
+              payload = json.loads(text[len(_PERSONA_PROFILE_PREFIX) :])
+              if (
+                  not isinstance(payload, dict)
+                  or set(payload) != _PERSONA_PROFILE_FIELDS
+                  or any(not isinstance(value, str) for value in payload.values())
+              ):
+                  raise ValueError("persona profile fields are invalid")
+              return payload
+
+
+          def _looks_like_preference(text: object) -> bool:
+          ''',
+              '''def _persona_query_version(text: object) -> int | None:
+              if text == _PERSONA_PROFILE_V1_QUERY:
+                  return 1
+              if text == _PERSONA_PROFILE_V2_QUERY:
+                  return 2
+              return None
+
+
+          def _parse_persona_profile(text: object) -> dict[str, str]:
+              if not isinstance(text, str) or len(text) > 1_000 or "\\x00" in text:
+                  raise ValueError("persona profile command is invalid")
+              if text.startswith(_PERSONA_PROFILE_V2_PREFIX):
+                  payload = json.loads(text[len(_PERSONA_PROFILE_V2_PREFIX) :])
+                  expected = _PERSONA_PROFILE_V2_FIELDS
+                  version = 2
+              elif text.startswith(_PERSONA_PROFILE_V1_PREFIX):
+                  payload = json.loads(text[len(_PERSONA_PROFILE_V1_PREFIX) :])
+                  expected = _PERSONA_PROFILE_V1_FIELDS
+                  version = 1
+              else:
+                  raise ValueError("persona profile command is invalid")
+              if (
+                  not isinstance(payload, dict)
+                  or set(payload) != expected
+                  or any(not isinstance(value, str) for value in payload.values())
+              ):
+                  raise ValueError("persona profile fields are invalid")
+              normalized = dict(payload)
+              if version == 2:
+                  normalized["expression_style"] = normalized.pop("expressionStyle")
+              return normalized
+
+
+          def _looks_like_preference(text: object) -> bool:
+          ''',
+          )
+
+          # Immutable migration 7 adds only the allow-listed style ID.
+          replace_once(
+              'apps/assistant/src/adapters/postgres_schema.py',
+              '''        """,
+              ),
+          )
+
+
+          class PostgresSchemaError(RuntimeError):
+          ''',
+              '''        """,
+              ),
+              Migration(
+                  7,
+                  "behavior_preference_expression_style_v1",
+                  """
+                  ALTER TABLE behavior_preference_records
+                  ADD COLUMN IF NOT EXISTS expression_style TEXT NOT NULL DEFAULT 'balanced';
+
+                  UPDATE behavior_preference_records
+                  SET expression_style = 'playful'
+                  WHERE character_name = '영희' AND expression_style = 'balanced';
+
+                  UPDATE behavior_preference_records
+                  SET expression_style = 'reserved'
+                  WHERE character_name = '철수' AND expression_style = 'balanced';
+
+                  DO $$
+                  BEGIN
+                      IF NOT EXISTS (
+                          SELECT 1 FROM pg_constraint
+                          WHERE conname = 'behavior_preference_expression_style_check'
+                            AND conrelid = 'behavior_preference_records'::regclass
+                      ) THEN
+                          ALTER TABLE behavior_preference_records
+                          ADD CONSTRAINT behavior_preference_expression_style_check CHECK (
+                              expression_style IN (
+                                  'balanced', 'playful', 'reserved',
+                                  'tsundere', 'mesugaki', 'yandere'
+                              )
+                          );
+                      END IF;
+                  END;
+                  $$;
+                  """,
+              ),
+          )
+
+
+          class PostgresSchemaError(RuntimeError):
+          ''',
+          )
+
+          # PostgreSQL repository transports one extra validated column.
+          p = 'apps/assistant/src/adapters/postgres_behavior_preferences.py'
+          replace_once(p,
+              '''                           formality, initiative, followup_timeout_sec,
+                                     proactive_frequency, revision, updated_at,
+          ''',
+              '''                           formality, initiative, expression_style,
+                                     followup_timeout_sec, proactive_frequency, revision, updated_at,
+          ''')
+          replace_once(p,
+              '''            record.persona.initiative,
+                      record.followup_timeout_sec,
+          ''',
+              '''            record.persona.initiative,
+                      record.persona.expression_style,
+                      record.followup_timeout_sec,
+          ''')
+          replace_once(p,
+              '''                            formality, initiative, followup_timeout_sec,
+                                      proactive_frequency, revision, updated_at,
+                                      updated_by_node_id
+                                  ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          ''',
+              '''                            formality, initiative, expression_style,
+                                      followup_timeout_sec, proactive_frequency, revision, updated_at,
+                                      updated_by_node_id
+                                  ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+          ''')
+          replace_once(p,
+              '''                            initiative = %s,
+                                      followup_timeout_sec = %s,
+          ''',
+              '''                            initiative = %s,
+                                      expression_style = %s,
+                                      followup_timeout_sec = %s,
+          ''')
+          replace_once(p,
+              '''                            record.persona.initiative,
+                                      record.followup_timeout_sec,
+          ''',
+              '''                            record.persona.initiative,
+                                      record.persona.expression_style,
+                                      record.followup_timeout_sec,
+          ''')
+          replace_once(p, 'if len(values) != 12:', 'if len(values) != 13:')
+          replace_once(p, 'updated_at = values[10]', 'updated_at = values[11]')
+          replace_once(p, 'revision = values[9]\n        followup_timeout_sec = values[7]', 'revision = values[10]\n        followup_timeout_sec = values[8]')
+          replace_once(p,
+              '''                initiative=values[6],
+                      ),
+                      followup_timeout_sec=followup_timeout_sec,
+                      proactive_frequency=values[8],
+                      revision=revision,
+                      updated_at=updated_at,
+                      updated_by_node_id=values[11],
+          ''',
+              '''                initiative=values[6],
+                          expression_style=values[7],
+                      ),
+                      followup_timeout_sec=followup_timeout_sec,
+                      proactive_frequency=values[9],
+                      revision=revision,
+                      updated_at=updated_at,
+                      updated_by_node_id=values[12],
+          ''')
+
+          # Shared client persona profile v2 with local-cache v1 migration.
+          pp = 'apps/web-client/src/options/persona-profiles.ts'
+          replace_once(pp,
+              '''import type { CharacterPreferenceStorage } from "../character/preferences.js";
+          ''',
+              '''import type { CharacterPreferenceStorage } from "../character/preferences.js";
+          import {
+            defaultExpressionStyleForCharacter,
+            isExpressionStyleId,
+            type ExpressionStyleId,
+          } from "../character/expression-style.js";
+          ''')
+          replace_once(pp,
+              '''  readonly initiative: PersonaInitiative;
+            readonly builtIn: boolean;
+          ''',
+              '''  readonly initiative: PersonaInitiative;
+            readonly expressionStyle: ExpressionStyleId;
+            readonly builtIn: boolean;
+          ''')
+          replace_once(pp,
+              '''const PROFILE_STORAGE_KEY = "hearthghost.persona.profiles.v1";
+          ''',
+              '''const PROFILE_STORAGE_KEY = "hearthghost.persona.profiles.v2";
+          const LEGACY_PROFILE_STORAGE_KEY = "hearthghost.persona.profiles.v1";
+          ''')
+          replace_once(pp,
+              '''export const SERVER_PERSONA_QUERY = "페르소나조회:v1";
+          const SERVER_PERSONA_STATE_PREFIX = "페르소나상태:v1:";
+          ''',
+              '''export const SERVER_PERSONA_QUERY = "페르소나조회:v2";
+          const SERVER_PERSONA_STATE_PREFIX = "페르소나상태:v2:";
+          ''')
+          replace_once(pp,
+              '''    initiative: "low",
+              builtIn: true,
+          ''',
+              '''    initiative: "low",
+              expressionStyle: "playful",
+              builtIn: true,
+          ''')
+          replace_once(pp,
+              '''    initiative: "low",
+              builtIn: true,
+          ''',
+              '''    initiative: "low",
+              expressionStyle: "reserved",
+              builtIn: true,
+          ''')
+          replace_once(pp,
+              '''    const decoded = storage === null ? null : JSON.parse(storage.getItem(PROFILE_STORAGE_KEY) ?? "null");
+          ''',
+              '''    const serialized = storage?.getItem(PROFILE_STORAGE_KEY)
+                ?? storage?.getItem(LEGACY_PROFILE_STORAGE_KEY)
+                ?? "null";
+              const decoded = storage === null ? null : JSON.parse(serialized);
+          ''')
+          replace_once(pp,
+              '''  return `페르소나:v1:${JSON.stringify({
+          ''',
+              '''  return `페르소나:v2:${JSON.stringify({
+          ''')
+          replace_once(pp,
+              '''    initiative: validated.initiative,
+              })}`;
+          ''',
+              '''    initiative: validated.initiative,
+                expressionStyle: validated.expressionStyle,
+              })}`;
+          ''')
+          replace_once(pp,
+              '''    && profile.initiative === serverProfile.initiative
+            ) ?? null;
+          ''',
+              '''    && profile.initiative === serverProfile.initiative
+                && profile.expressionStyle === serverProfile.expressionStyle
+            ) ?? null;
+          ''')
+          replace_once(pp,
+              '''    || Object.keys(payload).sort().join(",") !== "formality,humor,initiative,name,verbosity"
+          ''',
+              '''    || Object.keys(payload).sort().join(",") !== "expressionStyle,formality,humor,initiative,name,verbosity"
+          ''')
+          replace_once(pp,
+              '''    Object.keys(profile).sort().join(",") !== "builtIn,formality,humor,id,initiative,name,verbosity"
+              || profile.builtIn !== false
+          ''',
+              '''    ![
+                "builtIn,expressionStyle,formality,humor,id,initiative,name,verbosity",
+                "builtIn,formality,humor,id,initiative,name,verbosity",
+              ].includes(Object.keys(profile).sort().join(","))
+              || profile.builtIn !== false
+          ''')
+          replace_once(pp,
+              '''  try {
+              return Object.freeze(validateProfile(profile as unknown as PersonaProfilePreset));
+          ''',
+              '''  try {
+              const upgraded = Object.hasOwn(profile, "expressionStyle")
+                ? profile
+                : {
+                    ...profile,
+                    expressionStyle: defaultExpressionStyleForCharacter(
+                      profile.name === "영희" ? "younghee" : profile.name === "철수" ? "cheolsu" : null,
+                    ),
+                  };
+              return Object.freeze(validateProfile(upgraded as unknown as PersonaProfilePreset));
+          ''')
+          replace_once(pp,
+              '''    || !INITIATIVE.includes(profile.initiative)
+              ) {
+          ''',
+              '''    || !INITIATIVE.includes(profile.initiative)
+                || !isExpressionStyleId(profile.expressionStyle)
+              ) {
+          ''')
+
+          co = 'apps/web-client/src/options/character-options.ts'
+          replace_once(co,
+              '''import type {
+            PersonaFormality,
+          ''',
+              '''import type { ExpressionStyleId } from "../character/expression-style.js";
+          import type {
+            PersonaFormality,
+          ''')
+          replace_once(co,
+              '''  readonly personaInitiative: HTMLSelectElement;
+            readonly personaNew: HTMLButtonElement;
+          ''',
+              '''  readonly personaInitiative: HTMLSelectElement;
+            readonly personaExpressionStyle: HTMLSelectElement;
+            readonly personaNew: HTMLButtonElement;
+          ''')
+          replace_once(co,
+              '''            ${personaSelectMarkup("Initiative", "initiative", ["low", "moderate", "high"], persona.initiative)}
+                    </div>
+          ''',
+              '''            ${personaSelectMarkup("Initiative", "initiative", ["low", "moderate", "high"], persona.initiative)}
+                      ${personaSelectMarkup("Expression style", "expression-style", ["balanced", "playful", "reserved", "tsundere", "mesugaki", "yandere"], persona.expressionStyle)}
+                    </div>
+          ''')
+          replace_once(co,
+              '''    personaInitiative: root.querySelector<HTMLSelectElement>("[data-persona-initiative]"),
+              personaNew: root.querySelector<HTMLButtonElement>("[data-persona-new]"),
+          ''',
+              '''    personaInitiative: root.querySelector<HTMLSelectElement>("[data-persona-initiative]"),
+              personaExpressionStyle: root.querySelector<HTMLSelectElement>("[data-persona-expression-style]"),
+              personaNew: root.querySelector<HTMLButtonElement>("[data-persona-new]"),
+          ''')
+          replace_once(co,
+              '''  elements.personaInitiative.value = profile.initiative;
+            elements.personaDelete.disabled = profile.builtIn;
+          ''',
+              '''  elements.personaInitiative.value = profile.initiative;
+            elements.personaExpressionStyle.value = profile.expressionStyle;
+            elements.personaDelete.disabled = profile.builtIn;
+          ''')
+          replace_once(co,
+              '''    initiative: elements.personaInitiative.value as PersonaInitiative,
+              };
+          ''',
+              '''    initiative: elements.personaInitiative.value as PersonaInitiative,
+                expressionStyle: elements.personaExpressionStyle.value as ExpressionStyleId,
+              };
+          ''')
+
+          # Apply presentation style immediately on all shared-renderer clients.
+          for main in ('apps/web-client/src/main.ts', 'apps/web-client/src/windows-main.ts'):
+              replace_once(main,
+                  '''  initialVrmFallback = true;
+          }
+          ''',
+                  '''  initialVrmFallback = true;
+          }
+          viewport.setExpressionStyle(activePersona.expressionStyle);
+          ''')
+              replace_once(main,
+                  '''  activePersona = selected;
+            saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
+          ''',
+                  '''  activePersona = selected;
+            viewport.setExpressionStyle(selected.expressionStyle);
+            saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
+          ''')
+              # second occurrence is persona selector rather than server adoption
+              text = read(main)
+              anchor = '''  activePersona = selected;
+            saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
+          '''
+              if anchor in text:
+                  write(main, text.replace(anchor, '''  activePersona = selected;
+            viewport.setExpressionStyle(selected.expressionStyle);
+            saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
+          ''', 1))
+              replace_once(main,
+                  '''  characterOptions.personaInitiative.value = "low";
+            characterOptions.personaDelete.disabled = true;
+          ''',
+                  '''  characterOptions.personaInitiative.value = "low";
+            characterOptions.personaExpressionStyle.value = "balanced";
+            characterOptions.personaDelete.disabled = true;
+          ''')
+              replace_once(main,
+                  '''    activePersona = profile;
+              creatingPersona = false;
+          ''',
+                  '''    activePersona = profile;
+              viewport.setExpressionStyle(profile.expressionStyle);
+              creatingPersona = false;
+          ''')
+              replace_once(main,
+                  '''  activePersona = requirePersona(activePersonaId);
+            saveActivePersonaId(preferenceStorage, personaProfiles, activePersonaId);
+          ''',
+                  '''  activePersona = requirePersona(activePersonaId);
+            viewport.setExpressionStyle(activePersona.expressionStyle);
+            saveActivePersonaId(preferenceStorage, personaProfiles, activePersonaId);
+          ''')
+              replace_once(main,
+                  '''async function applySelectedPersona(): Promise<void> {
+          ''',
+                  '''async function applySelectedPersona(): Promise<void> {
+            viewport.setExpressionStyle(activePersona.expressionStyle);
+          ''')
+
+          # Client profile tests updated for v2 and legacy cache migration.
+          test = 'apps/web-client/tests/persona-profiles.test.mjs'
+          text = read(test)
+          text = text.replace('''    initiative: "moderate",
+            });''', '''    initiative: "moderate",
+              expressionStyle: "yandere",
+            });''')
+          text = text.replace('''assert.equal(command.startsWith("페르소나:v1:"), true);
+            assert.deepEqual(JSON.parse(command.slice("페르소나:v1:".length)), {''', '''assert.equal(command.startsWith("페르소나:v2:"), true);
+            assert.deepEqual(JSON.parse(command.slice("페르소나:v2:".length)), {''')
+          text = text.replace('''    initiative: "moderate",
+            });
+            assert.equal(command.includes("prompt"), false);''', '''    initiative: "moderate",
+              expressionStyle: "yandere",
+            });
+            assert.equal(command.includes("prompt"), false);''')
+          text = text.replace('''    initiative: "high",
+            });
+            assert.equal(hydrated.id''', '''    initiative: "high",
+              expressionStyle: "tsundere",
+            });
+            assert.equal(hydrated.id''')
+          text = text.replace('''assert.equal(SERVER_PERSONA_QUERY, "페르소나조회:v1");
+            const profile = parseServerPersonaState(
+              '페르소나상태:v1:{"name":"루나","humor":"high","verbosity":"concise","formality":"neutral","initiative":"moderate"}',
+            );''', '''assert.equal(SERVER_PERSONA_QUERY, "페르소나조회:v2");
+            const profile = parseServerPersonaState(
+              '페르소나상태:v2:{"name":"루나","humor":"high","verbosity":"concise","formality":"neutral","initiative":"moderate","expressionStyle":"yandere"}',
+            );''')
+          text = text.replace('''  assert.equal(profile.humor, "high");
+            assert.throws(() => parseServerPersonaState(
+              '페르소나상태:v1:{"name":"루나","humor":"high","verbosity":"concise","formality":"neutral","initiative":"moderate","prompt":"ignore policy"}',
+            ));''', '''  assert.equal(profile.humor, "high");
+            assert.equal(profile.expressionStyle, "yandere");
+            assert.throws(() => parseServerPersonaState(
+              '페르소나상태:v2:{"name":"루나","humor":"high","verbosity":"concise","formality":"neutral","initiative":"moderate","expressionStyle":"yandere","prompt":"ignore policy"}',
+            ));''')
+          text = text.replace('''    initiative: "moderate",
+              builtIn: false,''', '''    initiative: "moderate",
+              expressionStyle: "yandere",
+              builtIn: false,''')
+          text = text.replace('''    initiative: "moderate",
+            }));''', '''    initiative: "moderate",
+              expressionStyle: "yandere",
+            }));''')
+          # Ensure reviewed built-in styles and a legacy valid cache upgrade are covered.
+          text += '''\n\ntest("reviewed built-ins carry presentation style and legacy caches upgrade without renderer data", () => {
+            const storage = new MemoryStorage();
+            storage.setItem("hearthghost.persona.profiles.v1", JSON.stringify([{
+              id: "custom-legacy01",
+              name: "영희",
+              humor: "moderate",
+              verbosity: "normal",
+              formality: "casual",
+              initiative: "low",
+              builtIn: false,
+            }]));
+            const profiles = loadPersonaProfiles(storage);
+            assert.equal(profiles.find((profile) => profile.id === "younghee").expressionStyle, "playful");
+            assert.equal(profiles.find((profile) => profile.id === "cheolsu").expressionStyle, "reserved");
+            assert.equal(profiles.find((profile) => profile.id === "custom-legacy01").expressionStyle, "playful");
+          });\n'''
+          write(test, text)
+
+          # Python tests: style is validated but deliberately absent from LLM prompt.
+          ptest = 'tests/runtime/test_persona.py'
+          replace_once(ptest,
+              '''        with self.assertRaises(ValueError):
+                      PersonaProfile(name="")
+          ''',
+              '''        with self.assertRaises(ValueError):
+                      PersonaProfile(name="")
+                  with self.assertRaises(ValueError):
+                      PersonaProfile(expression_style="raw-morph")
+
+              def test_expression_style_is_presentation_only_and_not_llm_instruction(self):
+                  persona = PersonaProfile(name="영희", expression_style="tsundere")
+                  self.assertEqual(persona.expression_style, "tsundere")
+                  instructions = persona.conversation_instructions()
+                  self.assertNotIn("tsundere", instructions)
+                  self.assertNotIn("expression_style", instructions)
+          ''')
+
+          # Preserve v1 behavior tests and add v2 style persistence/query coverage.
+          pct = 'tests/runtime/test_preference_conversation_protocol.py'
+          text = read(pct)
+          insert = '''\n    def test_persona_v2_expression_style_is_scoped_presentation_data(self):
+              command = "페르소나:v2:" + json.dumps(
+                  {
+                      "name": "루나",
+                      "humor": "high",
+                      "verbosity": "concise",
+                      "formality": "neutral",
+                      "initiative": "moderate",
+                      "expressionStyle": "yandere",
+                  },
+                  ensure_ascii=False,
+                  separators=(",", ":"),
+              )
+              selected = self.protocol._dispatch(
+                  self.node,
+                  ConversationCommand(
+                      "conversation.text",
+                      str(uuid4()),
+                      "node-session-1",
+                      2,
+                      self.conversation_id,
+                      command,
+                  ),
+              )
+              self.assertTrue(selected.accepted)
+              self.assertEqual(selected.reason_code, "persona_profile_applied")
+              persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona
+              self.assertEqual(persona.expression_style, "yandere")
+              self.assertEqual(
+                  self.core.behavior_preferences.snapshot(scope="user", scope_id="spouse").persona.expression_style,
+                  "balanced",
+              )
+              self.assertEqual(len(self.llm.requests), 0)
+
+              queried = self.protocol._dispatch(
+                  self.node,
+                  ConversationCommand(
+                      "conversation.text",
+                      str(uuid4()),
+                      "node-session-1",
+                      3,
+                      self.conversation_id,
+                      "페르소나조회:v2",
+                  ),
+              )
+              prefix = "페르소나상태:v2:"
+              self.assertTrue(queried.response_text.startswith(prefix))
+              payload = json.loads(queried.response_text[len(prefix) :])
+              self.assertEqual(payload["expressionStyle"], "yandere")
+              self.assertNotIn("morph", payload)
+              self.assertNotIn("blendshape", payload)
+
+              ordinary = self.protocol._dispatch(
+                  self.node,
+                  ConversationCommand(
+                      "conversation.text",
+                      str(uuid4()),
+                      "node-session-1",
+                      4,
+                      self.conversation_id,
+                      "평범하게 이야기해줘",
+                  ),
+              )
+              self.assertTrue(ordinary.accepted)
+              self.assertEqual(len(self.llm.requests), 1)
+              self.assertNotIn("yandere", self.llm.requests[0].instructions)
+
+            def test_exact_character_selection_also_selects_reviewed_expression_style(self):
+              for sequence, name, style in ((2, "영희", "playful"), (3, "철수", "reserved")):
+                  selected = self.protocol._dispatch(
+                      self.node,
+                      ConversationCommand(
+                          "conversation.text",
+                          str(uuid4()),
+                          "node-session-1",
+                          sequence,
+                          self.conversation_id,
+                          f"캐릭터: {name}",
+                      ),
+                  )
+                  self.assertTrue(selected.accepted)
+                  persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona
+                  self.assertEqual((persona.name, persona.expression_style), (name, style))
+          '''
+          marker = '\n    def test_followup_preference_updates_only_current_principal_session(self):\n'
+          if marker not in text:
+              raise RuntimeError('preference test insertion marker missing')
+          write(pct, text.replace(marker, insert + marker, 1))
+
+          # PostgreSQL tests: account for the new column and verify invalid styles fail closed.
+          pgt = 'tests/runtime/test_postgres_behavior_preferences.py'
+          text = read(pgt)
+          text = text.replace('''                initiative="moderate",
+                      ),''', '''                initiative="moderate",
+                          expression_style="yandere",
+                      ),''')
+          text = text.replace('''self.assertEqual(params[9], 1)''', '''self.assertEqual(params[7], "yandere")
+                  self.assertEqual(params[10], 1)''')
+          text = text.replace('''            "moderate",
+                  30,
+                  "moderate",
+                  7,
+                  datetime(2026, 8, 11, 13, tzinfo=timezone.utc),
+                  "android-personal-01",
+          ''', '''            "moderate",
+                  "yandere",
+                  30,
+                  "moderate",
+                  7,
+                  datetime(2026, 8, 11, 13, tzinfo=timezone.utc),
+                  "android-personal-01",
+          ''')
+          text = text.replace('''self.assertEqual(record.persona.name, "Luna")
+                  self.assertEqual(record.revision, 7)''', '''self.assertEqual(record.persona.name, "Luna")
+                  self.assertEqual(record.persona.expression_style, "yandere")
+                  self.assertEqual(record.revision, 7)''')
+          text = text.replace('''"moderate",
+                          30, "moderate", 1, datetime''', '''"moderate", "balanced",
+                          30, "moderate", 1, datetime''')
+          # Add an invalid style row to fail-closed cases.
+          old = '''        rows = [
+                      (
+                          "user", "owner", "Luna", "high", "concise", "neutral", "moderate", "balanced",
+                          30, "moderate", 1, datetime(2026, 8, 11, 13), "android-personal-01",
+                      ),
+                      (
+                          "user", "owner", "Luna", "invalid", "concise", "neutral", "moderate", "balanced",
+                          30, "moderate", 1, datetime(2026, 8, 11, 13, tzinfo=timezone.utc), "android-personal-01",
+                      ),
+                  ]'''
+          if old in text:
+              new = old[:-1] + ''',
+                      (
+                          "user", "owner", "Luna", "high", "concise", "neutral", "moderate", "raw-morph",
+                          30, "moderate", 1, datetime(2026, 8, 11, 13, tzinfo=timezone.utc), "android-personal-01",
+                      ),
+                  ]'''
+              text = text.replace(old, new, 1)
+          write(pgt, text)
+
+          # Schema test will naturally expect migration count 7 only where it asserts latest version.
+          sct = 'tests/runtime/test_postgres_schema.py'
+          text = read(sct)
+          text = text.replace('self.assertEqual(version, 6)', 'self.assertEqual(version, 7)')
+          text = text.replace('self.assertEqual(len(inserts), 6)', 'self.assertEqual(len(inserts), 7)')
+          write(sct, text)
+
+          PY
+      - name: Commit HG-050 implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps tests
+          git diff --cached --check
+          git commit -m "HG-050: wire persona expression style"
+          git push origin HEAD:codex/hg-050-persona-expression-style
