@@ -9,6 +9,10 @@ import {
   isFingerBoneName,
 } from "../.test-dist/character/vrm-hand-pose.js";
 
+function assertClose(actual, expected, epsilon = 1e-12) {
+  assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} != ${expected}`);
+}
+
 test("hand pose covers all optional VRM finger bones exactly once", () => {
   assert.equal(FINGER_BONE_NAMES.length, 30);
   assert.equal(new Set(FINGER_BONE_NAMES).size, 30);
@@ -74,8 +78,8 @@ test("point pose remains mirrored, bounded and reversible from relaxed", () => {
     const point = handPoseRotation(bone, "point");
     const delta = handPoseDelta(bone, "relaxed", "point");
     assert.ok(Math.abs(point[2]) <= 0.55);
-    assert.equal(relaxed[0] + delta[0], point[0]);
-    assert.equal(relaxed[1] + delta[1], point[1]);
-    assert.equal(relaxed[2] + delta[2], point[2]);
+    assertClose(relaxed[0] + delta[0], point[0]);
+    assertClose(relaxed[1] + delta[1], point[1]);
+    assertClose(relaxed[2] + delta[2], point[2]);
   }
 });
