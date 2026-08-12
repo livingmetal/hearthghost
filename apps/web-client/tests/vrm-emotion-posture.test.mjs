@@ -95,3 +95,60 @@ test("emotion transitions ease instead of snapping", () => {
   assert.ok(Math.abs(next.head[0] - beforeHead) < 0.01);
   assert.ok(Math.abs(next.leftShoulder[2] - beforeShoulder) < 0.01);
 });
+
+
+test("tsundere embarrassment turns away and closes the silhouette more than balanced", () => {
+  const balanced = new EmotionPostureController("younghee", "balanced");
+  const tsundere = new EmotionPostureController("younghee", "tsundere");
+  balanced.reset();
+  tsundere.reset();
+
+  const base = settle(balanced, "engaged", "embarrassed");
+  const styled = settle(tsundere, "engaged", "embarrassed");
+
+  assert.ok(Math.abs(styled.head[1]) > Math.abs(base.head[1]) + 0.01);
+  assert.ok(styled.leftShoulder[2] > base.leftShoulder[2]);
+  assert.ok(styled.rightShoulder[2] < base.rightShoulder[2]);
+  assert.ok(maxAbs(styled) < 0.10);
+});
+
+test("mesugaki smug posture exaggerates the teasing head cant without large rotations", () => {
+  const balanced = new EmotionPostureController("younghee", "balanced");
+  const styled = new EmotionPostureController("younghee", "mesugaki");
+  balanced.reset();
+  styled.reset();
+
+  const base = settle(balanced, "engaged", "smug");
+  const frame = settle(styled, "engaged", "smug");
+
+  assert.ok(Math.abs(frame.head[2]) > Math.abs(base.head[2]));
+  assert.ok(Math.abs(frame.chest[1]) > Math.abs(base.chest[1]));
+  assert.ok(maxAbs(frame) < 0.10);
+});
+
+test("yandere affection leans in locally while remaining a rotation-only overlay", () => {
+  const balanced = new EmotionPostureController("younghee", "balanced");
+  const styled = new EmotionPostureController("younghee", "yandere");
+  balanced.reset();
+  styled.reset();
+
+  const base = settle(balanced, "engaged", "affectionate");
+  const frame = settle(styled, "engaged", "affectionate");
+
+  assert.ok(frame.chest[0] < base.chest[0]);
+  assert.ok(Math.abs(frame.head[2]) > Math.abs(base.head[2]));
+  assert.deepEqual(Object.keys(frame).sort(), Object.keys(base).sort());
+});
+
+test("changing persona style reselects body language without changing semantic emotion", () => {
+  const controller = new EmotionPostureController("younghee", "balanced");
+  controller.reset();
+  const before = settle(controller, "engaged", "embarrassed");
+  const yawBefore = before.head[1];
+
+  controller.setStyle("tsundere");
+  const first = controller.update(1 / 60, "engaged", "embarrassed");
+  assert.ok(Math.abs(first.head[1] - yawBefore) < 0.01);
+  const after = settle(controller, "engaged", "embarrassed");
+  assert.ok(Math.abs(after.head[1]) > Math.abs(yawBefore));
+});

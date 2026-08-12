@@ -167,6 +167,8 @@ export class VrmCharacterRenderer implements CharacterRenderer {
 
   setExpressionStyle(style: ExpressionStyleId): void {
     this.expressionComposer.setStyle(style);
+    this.emotionPosture.setStyle(style);
+    this.gaze.setStyle(style);
   }
 
   performGesture(gesture: CharacterGesture): void {

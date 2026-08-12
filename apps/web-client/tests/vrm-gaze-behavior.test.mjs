@@ -112,3 +112,52 @@ test("gaze transitions remain bounded under repeated long-running updates", () =
     assert.ok(frame.y >= 1.28 && frame.y <= 1.64);
   }
 });
+
+
+test("tsundere embarrassment performs a deliberate side glance", () => {
+  const gaze = new GazeBehaviorController("younghee", sequence([0.2, 0.5, 0.4]), "tsundere");
+  gaze.reset(0);
+  const frame = settle(gaze, 0, "engaged", "embarrassed", 0.8);
+
+  assert.match(frame.behavior, /^glance-(left|right)$/);
+  assert.ok(Math.abs(frame.x) > 0.10);
+});
+
+test("reserved embarrassment lowers the gaze instead of seeking a large side glance", () => {
+  const gaze = new GazeBehaviorController("cheolsu", sequence([0.4, 0.5, 0.6]), "reserved");
+  gaze.reset(0);
+  const frame = settle(gaze, 0, "engaged", "embarrassed", 0.8);
+
+  assert.equal(frame.behavior, "glance-down");
+  assert.ok(frame.y < 1.43);
+});
+
+test("mesugaki smug presentation uses a short teasing side glance", () => {
+  const gaze = new GazeBehaviorController("younghee", sequence([0.8, 0.5, 0.3]), "mesugaki");
+  gaze.reset(0);
+  const frame = settle(gaze, 0, "engaged", "smug", 0.4);
+
+  assert.match(frame.behavior, /^glance-(left|right)$/);
+  assert.ok(Math.abs(frame.x) > 0.10);
+});
+
+test("yandere affection holds user focus longer without inventing a semantic action", () => {
+  const gaze = new GazeBehaviorController("younghee", sequence([0.1, 0.9, 0.2]), "yandere");
+  gaze.reset(0);
+  let frame = settle(gaze, 0, "engaged", "affectionate", 1.0);
+  assert.equal(frame.behavior, "focus");
+  assert.ok(Math.abs(frame.x) < 0.02);
+
+  frame = gaze.update(1 / 60, 3.5, "engaged", "affectionate");
+  assert.equal(frame.behavior, "focus");
+});
+
+test("style swap immediately reselects gaze choreography for the same emotion", () => {
+  const gaze = new GazeBehaviorController("younghee", sequence([0.2, 0.4, 0.6]), "balanced");
+  gaze.reset(0);
+  settle(gaze, 0, "engaged", "embarrassed", 0.2);
+
+  gaze.setStyle("tsundere");
+  const frame = gaze.update(1 / 60, 0.25, "engaged", "embarrassed");
+  assert.match(frame.behavior, /^glance-(left|right)$/);
+});
