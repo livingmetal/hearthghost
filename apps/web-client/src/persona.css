@@ -30,19 +30,72 @@
   white-space: nowrap;
 }
 
+.app-options {
+  position: relative;
+}
+
+.app-options > summary {
+  list-style: none;
+  min-height: 2.35rem;
+  display: grid;
+  place-items: center;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid rgba(164, 196, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(17, 29, 27, 0.78);
+  color: #cfe0d9;
+  user-select: none;
+  cursor: pointer;
+}
+
+.app-options > summary::-webkit-details-marker {
+  display: none;
+}
+
+.options-panel {
+  position: absolute;
+  z-index: 8;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  width: min(19rem, calc(100vw - 1.5rem));
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(164, 196, 184, 0.2);
+  border-radius: 1rem;
+  background: rgba(11, 19, 18, 0.97);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(18px);
+}
+
+.options-panel label {
+  color: #e5efeb;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
 .character-select {
-  max-width: 12rem;
-  min-height: 1.9rem;
-  padding: 0.25rem 1.8rem 0.25rem 0.5rem;
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.4rem 1.8rem 0.4rem 0.6rem;
   border: 1px solid rgba(170, 207, 193, 0.18);
   border-radius: 0.65rem;
   background: rgba(6, 12, 11, 0.82);
   color: #cfddd7;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
 }
 
-.character-select:disabled {
-  opacity: 0.5;
+.character-setting-status {
+  margin: 0;
+  color: #8fa89e;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 480px) {
+  .brand-name {
+    display: none;
+  }
 }
 
 @media (max-width: 420px) {
@@ -50,9 +103,5 @@
     top: 0.7rem;
     left: 0.7rem;
     max-width: calc(100% - 1.4rem);
-  }
-
-  .character-select {
-    max-width: 10.5rem;
   }
 }
