@@ -19,7 +19,7 @@ export class CharacterViewport {
 
   async mount(): Promise<void> {
     await this.renderer.mount(this.element);
-    this.renderer.present(this.presentation);
+    this.applyPresentation();
     this.resize();
     if (typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -36,6 +36,7 @@ export class CharacterViewport {
     try {
       await renderer.mount(this.element);
       renderer.present(this.presentation);
+      this.applyPresenceToElement();
       this.renderer = renderer;
       this.resize();
       prior.dispose();
@@ -53,7 +54,7 @@ export class CharacterViewport {
       return this.presentation;
     }
     this.presentation = reduceCharacterPresentation(this.presentation, event);
-    this.renderer.present(this.presentation);
+    this.applyPresentation();
     return this.presentation;
   }
 
@@ -76,6 +77,21 @@ export class CharacterViewport {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.renderer.dispose();
+  }
+
+  private applyPresentation(): void {
+    this.renderer.present(this.presentation);
+    this.applyPresenceToElement();
+  }
+
+  private applyPresenceToElement(): void {
+    this.element.dataset.characterPresence = this.presentation.presence;
+    this.element.dataset.characterState = this.presentation.state;
+    if (this.presentation.presence === "offstage") {
+      this.element.setAttribute("aria-hidden", "true");
+    } else {
+      this.element.removeAttribute("aria-hidden");
+    }
   }
 
   private resize(): void {
