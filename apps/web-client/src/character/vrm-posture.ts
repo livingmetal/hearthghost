@@ -72,8 +72,29 @@ const YOUNGHEE_PROFILE: CharacterPostureProfile = Object.freeze({
   opennessBias: 0.004,
   elbowBias: 0.004,
   variants: Object.freeze({
+    noticing: Object.freeze([
+      variant("younghee.noticing.brighten", 0.42, {
+        spine: [-0.008, 0, 0],
+        chest: [-0.018, 0, 0.012],
+        head: [-0.014, 0, 0.012],
+        leftShoulder: [0, 0, -0.012],
+        rightShoulder: [0, 0, 0.010],
+      }),
+      variant("younghee.noticing.catch-side", 0.34, {
+        chest: [-0.010, 0.020, -0.008],
+        neck: [-0.004, -0.014, -0.010],
+        head: [-0.010, -0.026, -0.020],
+        rightShoulder: [0, 0, -0.010],
+      }),
+      variant("younghee.noticing.small-freeze", 0.24, {
+        chest: [-0.006, -0.006, 0.010],
+        head: [-0.016, 0.008, 0.006],
+        leftUpperArm: [0.018, -0.006, 0.010],
+        rightUpperArm: [-0.014, 0.006, -0.008],
+      }),
+    ]),
     thinking: Object.freeze([
-      variant("younghee.thinking.chin-touch", 0.42, {
+      variant("younghee.thinking.chin-touch", 0.32, {
         chest: [0, -0.020, 0.012],
         head: [0.010, 0, 0.025],
         rightShoulder: [0, 0, -0.010],
@@ -82,7 +103,7 @@ const YOUNGHEE_PROFILE: CharacterPostureProfile = Object.freeze({
         rightHand: [0.08, -0.04, -0.03],
         leftLowerArm: [-0.07, -0.02, 0.02],
       }),
-      variant("younghee.thinking.head-tilt", 0.36, {
+      variant("younghee.thinking.head-tilt", 0.28, {
         chest: [0.005, 0.014, -0.010],
         neck: [0.006, -0.010, 0.024],
         head: [0.008, -0.018, 0.052],
@@ -91,7 +112,7 @@ const YOUNGHEE_PROFILE: CharacterPostureProfile = Object.freeze({
         leftLowerArm: [-0.10, 0, 0.015],
         rightLowerArm: [-0.07, 0, -0.010],
       }),
-      variant("younghee.thinking.soft-closed", 0.22, {
+      variant("younghee.thinking.soft-closed", 0.20, {
         chest: [0.012, -0.018, 0.008],
         head: [0.018, 0.012, 0.016],
         leftUpperArm: [0.025, -0.025, 0.028],
@@ -99,46 +120,104 @@ const YOUNGHEE_PROFILE: CharacterPostureProfile = Object.freeze({
         leftLowerArm: [-0.15, -0.035, 0.025],
         rightLowerArm: [-0.14, 0.035, -0.025],
       }),
+      variant("younghee.thinking.look-up", 0.20, {
+        spine: [0.004, 0, 0],
+        chest: [0.004, 0.012, 0.006],
+        neck: [-0.018, -0.012, 0.010],
+        head: [-0.036, -0.018, 0.020],
+        leftLowerArm: [-0.055, -0.010, 0.010],
+        rightLowerArm: [-0.080, 0.016, -0.012],
+      }),
     ]),
     listening: Object.freeze([
-      variant("younghee.listening.forward", 0.58, {
+      variant("younghee.listening.forward", 0.34, {
         spine: [-0.010, 0, 0],
         chest: [-0.016, 0, 0.008],
         head: [-0.008, 0, 0.012],
         leftLowerArm: [-0.035, 0, 0],
       }),
-      variant("younghee.listening.soft-side", 0.42, {
+      variant("younghee.listening.soft-side", 0.28, {
         chest: [-0.008, 0.012, -0.010],
         neck: [0, -0.008, -0.010],
         head: [-0.004, -0.014, -0.022],
         rightShoulder: [0, 0, -0.010],
       }),
+      variant("younghee.listening.upright-open", 0.22, {
+        spine: [-0.004, 0, 0],
+        chest: [-0.010, -0.006, 0.006],
+        head: [-0.006, 0.008, 0.006],
+        leftShoulder: [0, 0, -0.012],
+        rightShoulder: [0, 0, 0.010],
+        leftLowerArm: [-0.045, 0, 0.008],
+        rightLowerArm: [-0.038, 0, -0.006],
+      }),
+      variant("younghee.listening.quiet-collected", 0.16, {
+        chest: [-0.004, 0.006, -0.004],
+        head: [-0.002, -0.008, -0.010],
+        leftUpperArm: [0.012, -0.012, 0.016],
+        rightUpperArm: [-0.010, 0.012, -0.014],
+        leftLowerArm: [-0.095, -0.012, 0.012],
+        rightLowerArm: [-0.085, 0.012, -0.010],
+      }),
     ]),
     speaking: Object.freeze([
-      variant("younghee.speaking.open", 0.62, {
+      variant("younghee.speaking.open", 0.32, {
         chest: [-0.006, 0, 0.010],
         leftShoulder: [0, 0, -0.014],
         rightShoulder: [0, 0, 0.010],
         leftUpperArm: [0.016, -0.008, 0.012],
         rightUpperArm: [-0.010, 0.006, -0.008],
       }),
-      variant("younghee.speaking.centered", 0.38, {
+      variant("younghee.speaking.centered", 0.24, {
         chest: [-0.004, -0.008, -0.006],
         head: [0, 0.010, 0.010],
         leftLowerArm: [-0.050, 0, 0.010],
         rightLowerArm: [-0.035, 0, -0.008],
       }),
+      variant("younghee.speaking.left-present", 0.24, {
+        chest: [-0.008, 0.012, -0.004],
+        head: [-0.002, -0.008, -0.006],
+        leftShoulder: [0, 0, -0.016],
+        leftUpperArm: [0.028, -0.012, 0.018],
+        leftLowerArm: [-0.080, -0.018, 0.018],
+        rightLowerArm: [-0.030, 0, -0.006],
+      }),
+      variant("younghee.speaking.right-present", 0.20, {
+        chest: [-0.008, -0.012, 0.004],
+        head: [-0.002, 0.008, 0.006],
+        rightShoulder: [0, 0, 0.014],
+        rightUpperArm: [-0.026, 0.012, -0.016],
+        rightLowerArm: [-0.075, 0.018, -0.016],
+        leftLowerArm: [-0.032, 0, 0.006],
+      }),
     ]),
     engaged: Object.freeze([
-      variant("younghee.engaged.left-soft", 0.50, {
+      variant("younghee.engaged.left-soft", 0.25, {
         chest: [0, 0.008, -0.006],
         head: [0, -0.006, -0.010],
         leftShoulder: [0, 0, 0.008],
       }),
-      variant("younghee.engaged.right-soft", 0.50, {
+      variant("younghee.engaged.right-soft", 0.25, {
         chest: [0, -0.008, 0.006],
         head: [0, 0.006, 0.010],
         rightShoulder: [0, 0, -0.008],
+      }),
+      variant("younghee.engaged.casual-open", 0.27, {
+        spine: [-0.002, 0, 0],
+        chest: [-0.004, 0, 0.008],
+        head: [-0.002, 0, 0.006],
+        leftShoulder: [0, 0, -0.010],
+        rightShoulder: [0, 0, 0.008],
+        leftLowerArm: [-0.035, 0, 0.006],
+        rightLowerArm: [-0.030, 0, -0.004],
+      }),
+      variant("younghee.engaged.quiet-collected", 0.23, {
+        chest: [0.004, -0.006, -0.004],
+        head: [0.004, 0.006, -0.006],
+        leftUpperArm: [0.010, -0.010, 0.012],
+        rightUpperArm: [-0.010, 0.010, -0.012],
+        leftLowerArm: [-0.070, -0.010, 0.010],
+        rightLowerArm: [-0.065, 0.010, -0.010],
       }),
     ]),
   }),
@@ -150,15 +229,36 @@ const CHEOLSU_PROFILE: CharacterPostureProfile = Object.freeze({
   opennessBias: -0.004,
   elbowBias: 0.010,
   variants: Object.freeze({
+    noticing: Object.freeze([
+      variant("cheolsu.noticing.upright-catch", 0.46, {
+        spine: [-0.004, 0, 0],
+        chest: [-0.010, 0, 0.002],
+        neck: [-0.008, 0, 0],
+        head: [-0.012, 0, 0],
+      }),
+      variant("cheolsu.noticing.measured-side", 0.32, {
+        chest: [-0.006, -0.012, 0.004],
+        neck: [-0.004, 0.010, 0.004],
+        head: [-0.008, 0.020, 0.006],
+        rightShoulder: [0, 0, -0.006],
+      }),
+      variant("cheolsu.noticing.slight-back", 0.22, {
+        spine: [0.006, 0, 0],
+        chest: [0.008, 0, 0],
+        head: [-0.014, -0.006, 0],
+        leftLowerArm: [-0.025, 0, 0],
+        rightLowerArm: [-0.025, 0, 0],
+      }),
+    ]),
     thinking: Object.freeze([
-      variant("cheolsu.thinking.chin-rest", 0.34, {
+      variant("cheolsu.thinking.chin-rest", 0.28, {
         chest: [0.014, -0.014, 0.004],
         head: [0.018, 0.010, -0.012],
         rightUpperArm: [-0.12, 0.06, -0.12],
         rightLowerArm: [-0.58, 0.07, 0.035],
         rightHand: [0.065, -0.025, -0.020],
       }),
-      variant("cheolsu.thinking.downward", 0.38, {
+      variant("cheolsu.thinking.downward", 0.30, {
         spine: [0.010, 0, 0],
         chest: [0.015, 0.010, 0],
         neck: [0.022, -0.010, 0],
@@ -166,7 +266,7 @@ const CHEOLSU_PROFILE: CharacterPostureProfile = Object.freeze({
         leftLowerArm: [-0.08, 0, 0],
         rightLowerArm: [-0.10, 0, 0],
       }),
-      variant("cheolsu.thinking.contained", 0.28, {
+      variant("cheolsu.thinking.contained", 0.24, {
         chest: [0.010, -0.010, 0],
         leftUpperArm: [0.018, -0.018, 0.018],
         rightUpperArm: [-0.018, 0.018, -0.018],
@@ -174,40 +274,90 @@ const CHEOLSU_PROFILE: CharacterPostureProfile = Object.freeze({
         rightLowerArm: [-0.16, 0.025, -0.018],
         head: [0.020, 0.008, 0],
       }),
+      variant("cheolsu.thinking.side-consider", 0.18, {
+        spine: [0.006, 0, 0],
+        chest: [0.010, 0.012, -0.004],
+        neck: [0.012, -0.012, -0.004],
+        head: [0.022, -0.022, -0.008],
+        leftLowerArm: [-0.070, -0.008, 0.006],
+        rightLowerArm: [-0.095, 0.014, -0.008],
+      }),
     ]),
     listening: Object.freeze([
-      variant("cheolsu.listening.upright", 0.62, {
+      variant("cheolsu.listening.upright", 0.34, {
         chest: [-0.008, 0, 0],
         neck: [-0.004, 0, 0],
         head: [-0.006, 0, 0],
       }),
-      variant("cheolsu.listening.forward", 0.38, {
+      variant("cheolsu.listening.forward", 0.26, {
         spine: [-0.008, 0, 0],
         chest: [-0.012, -0.006, 0],
         head: [-0.006, 0.008, -0.006],
       }),
+      variant("cheolsu.listening.still", 0.24, {
+        spine: [-0.002, 0, 0],
+        chest: [-0.004, 0.004, 0],
+        head: [-0.004, -0.004, 0],
+        leftLowerArm: [-0.040, 0, 0],
+        rightLowerArm: [-0.040, 0, 0],
+      }),
+      variant("cheolsu.listening.side-attentive", 0.16, {
+        chest: [-0.006, 0.008, -0.004],
+        neck: [-0.004, -0.008, -0.004],
+        head: [-0.006, -0.014, -0.008],
+        leftShoulder: [0, 0, 0.004],
+      }),
     ]),
     speaking: Object.freeze([
-      variant("cheolsu.speaking.restrained", 0.68, {
+      variant("cheolsu.speaking.restrained", 0.38, {
         chest: [-0.004, 0, 0],
         leftLowerArm: [-0.028, 0, 0],
         rightLowerArm: [-0.024, 0, 0],
       }),
-      variant("cheolsu.speaking.open-small", 0.32, {
+      variant("cheolsu.speaking.open-small", 0.24, {
         chest: [-0.005, -0.006, 0.004],
         leftShoulder: [0, 0, -0.008],
         rightShoulder: [0, 0, 0.006],
         leftUpperArm: [0.010, 0, 0.008],
       }),
+      variant("cheolsu.speaking.measured-side", 0.20, {
+        chest: [-0.004, 0.008, -0.002],
+        head: [-0.002, -0.006, -0.004],
+        leftUpperArm: [0.014, -0.006, 0.008],
+        leftLowerArm: [-0.048, -0.008, 0.006],
+        rightLowerArm: [-0.025, 0, 0],
+      }),
+      variant("cheolsu.speaking.upright", 0.18, {
+        spine: [-0.003, 0, 0],
+        chest: [-0.005, 0, 0.002],
+        head: [-0.003, 0, 0],
+        leftLowerArm: [-0.035, 0, 0],
+        rightLowerArm: [-0.032, 0, 0],
+      }),
     ]),
     engaged: Object.freeze([
-      variant("cheolsu.engaged.balanced", 0.64, {
+      variant("cheolsu.engaged.balanced", 0.30, {
         chest: [0.002, 0, 0],
         head: [0.002, 0, 0],
       }),
-      variant("cheolsu.engaged.side", 0.36, {
+      variant("cheolsu.engaged.side", 0.22, {
         chest: [0.003, -0.006, 0.004],
         head: [0.002, 0.008, 0.006],
+      }),
+      variant("cheolsu.engaged.rest-upright", 0.28, {
+        spine: [-0.002, 0, 0],
+        chest: [-0.003, 0, 0],
+        neck: [-0.002, 0, 0],
+        leftLowerArm: [-0.030, 0, 0],
+        rightLowerArm: [-0.030, 0, 0],
+      }),
+      variant("cheolsu.engaged.contained", 0.20, {
+        chest: [0.004, 0.004, -0.002],
+        head: [0.004, -0.004, -0.004],
+        leftUpperArm: [0.008, -0.008, 0.010],
+        rightUpperArm: [-0.008, 0.008, -0.010],
+        leftLowerArm: [-0.060, -0.008, 0.006],
+        rightLowerArm: [-0.060, 0.008, -0.006],
       }),
     ]),
   }),
@@ -263,13 +413,17 @@ function emptyVariantPose(): Record<PostureBoneName, [number, number, number]> {
 }
 
 function variantDwellSeconds(state: CharacterState, random: () => number): number {
-  const [minimum, spread] = state === "thinking"
-    ? [2.8, 2.8]
-    : state === "speaking"
-      ? [4.0, 4.0]
-      : state === "listening"
-        ? [4.5, 4.5]
-        : [6.0, 6.0];
+  const [minimum, spread] = state === "noticing"
+    ? [1.2, 1.0]
+    : state === "thinking"
+      ? [2.8, 2.8]
+      : state === "speaking"
+        ? [3.6, 3.4]
+        : state === "listening"
+          ? [4.2, 3.8]
+          : state === "engaged"
+            ? [5.5, 4.5]
+            : [8.0, 4.0];
   return minimum + random() * spread;
 }
 
