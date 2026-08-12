@@ -1,0 +1,84 @@
+name: patch-hg046-gaze
+
+on:
+  push:
+    branches:
+      - codex/hg-046-gaze-repertoire
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: codex/hg-046-gaze-repertoire
+      - name: Patch renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/web-client/src/character/vrm-renderer.ts")
+          text = path.read_text()
+
+          changes = [
+              (
+                  'import { EmotionPostureController } from "./vrm-emotion-posture.js";\n',
+                  'import { EmotionPostureController } from "./vrm-emotion-posture.js";\n'
+                  'import { GazeBehaviorController } from "./vrm-gaze-behavior.js";\n',
+              ),
+              (
+                  '  private readonly emotionPosture: EmotionPostureController;\n  private renderer: WebGLRenderer | null = null;\n',
+                  '  private readonly emotionPosture: EmotionPostureController;\n'
+                  '  private readonly gaze: GazeBehaviorController;\n'
+                  '  private renderer: WebGLRenderer | null = null;\n',
+              ),
+              (
+                  '  private nextSaccadeAt = 1.2 + Math.random() * 2.2;\n'
+                  '  private saccadeX = 0;\n'
+                  '  private saccadeY = 0;\n',
+                  '',
+              ),
+              (
+                  '    this.emotionPosture = new EmotionPostureController(characterId);\n'
+                  '    this.camera.position.set(\n',
+                  '    this.emotionPosture = new EmotionPostureController(characterId);\n'
+                  '    this.gaze = new GazeBehaviorController(characterId);\n'
+                  '    this.camera.position.set(\n',
+              ),
+              (
+                  '    this.emotionPosture.reset();\n    this.gestureQueue.length = 0;\n',
+                  '    this.emotionPosture.reset();\n'
+                  '    this.gaze.reset(this.elapsed);\n'
+                  '    this.gestureQueue.length = 0;\n',
+              ),
+          ]
+
+          for old, new in changes:
+              count = text.count(old)
+              if count == 0 and new and new in text:
+                  continue
+              if count != 1:
+                  raise SystemExit(f"expected one renderer match, got {count}: {old[:90]!r}")
+              text = text.replace(old, new)
+
+          start = text.index('  private updateLookAt(state: CharacterState, delta: number): void {')
+          end = text.index('  private updateExpressions(delta: number): void {', start)
+          replacement = '''  private updateLookAt(state: CharacterState, delta: number): void {\n    const gaze = this.gaze.update(\n      delta,\n      this.elapsed,\n      state,\n      this.presentation.emotion,\n    );\n    this.lookAtTarget.position.x = gaze.x;\n    this.lookAtTarget.position.y = gaze.y;\n    const targetZ = this.camera.position.z;\n    const zBlend = 1 - Math.exp(-4.5 * delta);\n    this.lookAtTarget.position.z += (targetZ - this.lookAtTarget.position.z) * zBlend;\n  }\n\n'''
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text)
+          PY
+      - name: Commit renderer wiring
+        run: |
+          if git diff --quiet -- apps/web-client/src/character/vrm-renderer.ts; then
+            echo "Renderer already patched"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web-client/src/character/vrm-renderer.ts
+          git commit -m "HG-046: wire gaze behavior into renderer"
+          git push origin HEAD:codex/hg-046-gaze-repertoire
