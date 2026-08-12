@@ -149,7 +149,11 @@ class GuardedToolExecutor:
         if adapter is None:
             return ToolExecutionResult(proposal_id, False, "adapter_not_configured")
         assert decision.decision_id is not None
-        if not self._replay.consume(decision.decision_id):
+        try:
+            consumed = self._replay.consume(decision.decision_id)
+        except Exception:
+            return ToolExecutionResult(proposal_id, False, "replay_protection_unavailable")
+        if not consumed:
             return ToolExecutionResult(proposal_id, False, "policy_decision_replayed")
 
         try:
