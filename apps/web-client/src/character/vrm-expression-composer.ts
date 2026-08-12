@@ -333,7 +333,7 @@ export class VrmExpressionComposer {
     state: CharacterState,
     emotion: CharacterEmotion,
   ): ReadonlyMap<string, number> {
-    const target = state === "sleeping"
+    const target: ExpressionTarget = state === "sleeping"
       ? Object.freeze({})
       : composeExpressionTarget(emotion, this.style, this.capabilities);
     const profile = STYLE_PROFILES[this.style];
