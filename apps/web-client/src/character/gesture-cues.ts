@@ -1,3 +1,7 @@
+import {
+  RESPONSE_REVEAL_START_EVENT,
+  type ResponseRevealDetail,
+} from "./performance-events.js";
 import { publishCharacterGesture } from "./gesture-bus.js";
 import type { CharacterGesture } from "./semantic.js";
 
@@ -77,39 +81,25 @@ export function inferCharacterGestures(text: string): readonly CharacterGesture[
 }
 
 export class GestureCueBridge {
-  private observer: MutationObserver | null = null;
-  private responseHost: HTMLElement | null = null;
   private readonly assistantSeen = new Set<string>();
   private readonly pendingUserGestures = new Map<string, CharacterGesture>();
 
   install(): void {
     document.addEventListener("submit", this.onSubmit, true);
-    this.tryAttachResponse();
-    this.observer = new MutationObserver(() => {
-      this.tryAttachResponse();
-      this.processResponse();
-    });
-    this.observer.observe(document.documentElement, {
-      childList: true,
-      characterData: true,
-      subtree: true,
-    });
+    window.addEventListener(
+      RESPONSE_REVEAL_START_EVENT,
+      this.onResponseRevealStart as EventListener,
+    );
   }
 
   dispose(): void {
     document.removeEventListener("submit", this.onSubmit, true);
-    this.observer?.disconnect();
-    this.observer = null;
-    this.responseHost = null;
+    window.removeEventListener(
+      RESPONSE_REVEAL_START_EVENT,
+      this.onResponseRevealStart as EventListener,
+    );
     this.assistantSeen.clear();
     this.pendingUserGestures.clear();
-  }
-
-  private tryAttachResponse(): void {
-    if (this.responseHost !== null && this.responseHost.isConnected) {
-      return;
-    }
-    this.responseHost = document.querySelector<HTMLElement>("[data-response]");
   }
 
   private readonly onSubmit = (event: SubmitEvent): void => {
@@ -129,9 +119,15 @@ export class GestureCueBridge {
     }
   };
 
-  private processResponse(): void {
-    const text = this.responseHost?.textContent?.trim() ?? "";
-    if (text === "") {
+  private readonly onResponseRevealStart = (
+    event: CustomEvent<ResponseRevealDetail>,
+  ): void => {
+    this.processResponse(event.detail.text);
+  };
+
+  private processResponse(text: string): void {
+    const normalized = text.trim();
+    if (normalized === "") {
       return;
     }
 
@@ -143,7 +139,7 @@ export class GestureCueBridge {
     }
     this.pendingUserGestures.clear();
 
-    for (const gesture of inferCharacterGestures(text)) {
+    for (const gesture of inferCharacterGestures(normalized)) {
       const key = gestureKey(gesture);
       if (this.assistantSeen.has(key)) {
         continue;
