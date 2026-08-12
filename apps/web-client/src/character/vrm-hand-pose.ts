@@ -45,6 +45,8 @@ export type FingerBoneName = (typeof FINGER_BONE_NAMES)[number];
 export type HandPoseName = "relaxed" | "open";
 export type FingerRotation = readonly [number, number, number];
 
+const FINGER_BONE_SET: ReadonlySet<string> = new Set(FINGER_BONE_NAMES);
+
 const RELAXED_CURL_BY_SUFFIX = Object.freeze({
   ThumbMetacarpal: 0.055,
   ThumbProximal: 0.095,
@@ -77,6 +79,10 @@ function sideSign(side: CharacterSide): number {
   // Normalized humanoid fingers extend in opposite X directions. Mirroring the
   // Z-axis curl keeps the relaxed pose symmetric across left and right hands.
   return side === "left" ? -1 : 1;
+}
+
+export function isFingerBoneName(name: string): name is FingerBoneName {
+  return FINGER_BONE_SET.has(name);
 }
 
 export function fingerBonesForSide(side: CharacterSide): readonly FingerBoneName[] {
