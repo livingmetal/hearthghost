@@ -39,6 +39,7 @@ jobs:
           import json
           import subprocess
           from pathlib import Path
+          from textwrap import dedent
 
           reports = json.loads(Path("upstream-report.json").read_text(encoding="utf-8"))
           if not reports:
@@ -62,33 +63,36 @@ jobs:
                   changed_lines = "- Compare window reached the safety threshold; inspect the upstream compare manually."
 
               focus_lines = "\n".join(f"- {item}" for item in report["focus"])
-              body = f"""{marker}
-          ## Upstream character review
+              body = dedent(
+                  f"""\
+                  {marker}
+                  ## Upstream character review
 
-          HearthGhost detected changes in **{report['displayName']}** that intersect the character-rendering watch scope.
+                  HearthGhost detected changes in **{report['displayName']}** that intersect the character-rendering watch scope.
 
-          - Repository: `{report['repository']}`
-          - Reviewed baseline: `{report['baselineSha']}`
-          - Current upstream head: `{report['headSha']}`
-          - Upstream license: `{report['license']}`
-          - Integration policy: `{report['integrationPolicy']}`
-          - Compare: {report['compareUrl']}
+                  - Repository: `{report['repository']}`
+                  - Reviewed baseline: `{report['baselineSha']}`
+                  - Current upstream head: `{report['headSha']}`
+                  - Upstream license: `{report['license']}`
+                  - Integration policy: `{report['integrationPolicy']}`
+                  - Compare: {report['compareUrl']}
 
-          ### Relevant changed files
+                  ### Relevant changed files
 
-          {changed_lines}
+                  {changed_lines}
 
-          ### HearthGhost review focus
+                  ### HearthGhost review focus
 
-          {focus_lines}
+                  {focus_lines}
 
-          ### Adoption rule
+                  ### Adoption rule
 
-          Do not automatically copy or merge upstream code. Review the diff, adapt useful behavior behind HearthGhost's renderer/semantic boundaries, preserve attribution when copied code requires it, run CI, and only then advance `upstream/character-sources.json` to the reviewed upstream SHA.
-          """
+                  Do not automatically copy or merge upstream code. Review the diff, adapt useful behavior behind HearthGhost's renderer/semantic boundaries, preserve attribution when copied code requires it, run CI, and only then advance `upstream/character-sources.json` to the reviewed upstream SHA.
+                  """
+              ).strip() + "\n"
 
               existing = next(
-                  (issue for issue in open_issues if marker in (issue.get("body") or """")),
+                  (issue for issue in open_issues if marker in (issue.get("body") or "")),
                   None,
               )
               if existing is None:
@@ -119,8 +123,12 @@ jobs:
                       "comment",
                       issue_number,
                       "--body",
-                      f"Upstream advanced again to `{report['headSha']}`. Review the latest compare: {report['compareUrl']}",
+                      f"Upstream advanced again to `{report['headSha']}`. Review the refreshed compare in the issue body.",
                   ],
+                  check=True,
+              )
+              subprocess.run(
+                  ["gh", "issue", "edit", issue_number, "--body", body],
                   check=True,
               )
           PY
