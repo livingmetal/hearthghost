@@ -298,6 +298,40 @@ MIGRATIONS = (
         $$;
         """,
     ),
+    Migration(
+        7,
+        "behavior_preference_expression_style_v1",
+        """
+        ALTER TABLE behavior_preference_records
+        ADD COLUMN IF NOT EXISTS expression_style TEXT NOT NULL DEFAULT 'balanced';
+
+        UPDATE behavior_preference_records
+        SET expression_style = 'playful'
+        WHERE character_name = '영희' AND expression_style = 'balanced';
+
+        UPDATE behavior_preference_records
+        SET expression_style = 'reserved'
+        WHERE character_name = '철수' AND expression_style = 'balanced';
+
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'behavior_preference_expression_style_check'
+                  AND conrelid = 'behavior_preference_records'::regclass
+            ) THEN
+                ALTER TABLE behavior_preference_records
+                ADD CONSTRAINT behavior_preference_expression_style_check CHECK (
+                    expression_style IN (
+                        'balanced', 'playful', 'reserved',
+                        'tsundere', 'mesugaki', 'yandere'
+                    )
+                );
+            END IF;
+        END;
+        $$;
+        """,
+    ),
 )
 
 

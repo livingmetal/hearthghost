@@ -3,6 +3,7 @@ import {
   characterIdFromViewportLabel,
   presenceMotionFor,
 } from "./presence-performance.js";
+import type { ExpressionStyleId } from "./expression-style.js";
 import type { CharacterRenderer } from "./renderer.js";
 import {
   INITIAL_PRESENTATION,
@@ -20,6 +21,7 @@ export class CharacterViewport {
   private presenceAnimation: Animation | null = null;
   private entranceCycle = 0;
   private exitCycle = 0;
+  private expressionStyle: ExpressionStyleId | null = null;
 
   constructor(
     private readonly element: HTMLElement,
@@ -29,6 +31,9 @@ export class CharacterViewport {
   async mount(): Promise<void> {
     this.applyPresenceMetadata();
     await this.renderer.mount(this.element);
+    if (this.expressionStyle !== null) {
+      this.renderer.setExpressionStyle?.(this.expressionStyle);
+    }
     this.applyPresentation();
     this.resize();
     if (typeof ResizeObserver !== "undefined") {
@@ -44,7 +49,10 @@ export class CharacterViewport {
     const prior = this.renderer;
     prior.suspend();
     try {
-      await renderer.mount(this.element);
+        await renderer.mount(this.element);
+      if (this.expressionStyle !== null) {
+        renderer.setExpressionStyle?.(this.expressionStyle);
+      }
       renderer.present(this.presentation);
       this.presenceAnimation?.cancel();
       this.presenceAnimation = null;
@@ -78,6 +86,11 @@ export class CharacterViewport {
 
   snapshot(): CharacterPresentation {
     return this.presentation;
+  }
+
+  setExpressionStyle(style: ExpressionStyleId): void {
+    this.expressionStyle = style;
+    this.renderer.setExpressionStyle?.(style);
   }
 
   characterId(): "younghee" | "cheolsu" | null {

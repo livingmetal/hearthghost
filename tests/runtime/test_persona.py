@@ -67,6 +67,15 @@ class PersonaTests(unittest.TestCase):
             PersonaProfile(verbosity="short")
         with self.assertRaises(ValueError):
             PersonaProfile(name="")
+        with self.assertRaises(ValueError):
+            PersonaProfile(expression_style="raw-morph")
+
+    def test_expression_style_is_presentation_only_and_not_llm_instruction(self):
+        persona = PersonaProfile(name="영희", expression_style="tsundere")
+        self.assertEqual(persona.expression_style, "tsundere")
+        instructions = persona.conversation_instructions()
+        self.assertNotIn("tsundere", instructions)
+        self.assertNotIn("expression_style", instructions)
 
 
 if __name__ == "__main__":

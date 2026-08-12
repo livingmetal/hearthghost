@@ -68,6 +68,7 @@ class PostgresBehaviorPreferenceRepositoryTests(unittest.TestCase):
                 verbosity="concise",
                 formality="neutral",
                 initiative="moderate",
+                expression_style="yandere",
             ),
             followup_timeout_sec=30,
             proactive_frequency="moderate",
@@ -98,7 +99,8 @@ class PostgresBehaviorPreferenceRepositoryTests(unittest.TestCase):
         self.assertNotIn(record.persona.name, sql)
         self.assertEqual(params[0:2], ("user", "owner"))
         self.assertEqual(params[2], "Luna")
-        self.assertEqual(params[9], 1)
+        self.assertEqual(params[7], "yandere")
+        self.assertEqual(params[10], 1)
 
     def test_update_requires_scope_scope_id_and_expected_revision(self):
         schema = FakeCursor()
@@ -136,6 +138,7 @@ class PostgresBehaviorPreferenceRepositoryTests(unittest.TestCase):
         record = repository.get("user", "owner")
         query = connector._cursors
         self.assertEqual(record.persona.name, "Luna")
+        self.assertEqual(record.persona.expression_style, "yandere")
         self.assertEqual(record.revision, 7)
         self.assertEqual(record.followup_timeout_sec, 30)
 
@@ -152,11 +155,16 @@ class PostgresBehaviorPreferenceRepositoryTests(unittest.TestCase):
     def test_naive_timestamp_or_invalid_persona_fails_closed_on_decode(self):
         rows = [
             (
-                "user", "owner", "Luna", "high", "concise", "neutral", "moderate",
+                "user", "owner", "Luna", "high", "concise", "neutral", "moderate", "balanced",
                 30, "moderate", 1, datetime(2026, 8, 11, 13), "android-personal-01",
             ),
             (
-                "user", "owner", "Luna", "invalid", "concise", "neutral", "moderate",
+                "user", "owner", "Luna", "invalid", "concise", "neutral", "moderate", "balanced",
+                30, "moderate", 1, datetime(2026, 8, 11, 13, tzinfo=timezone.utc), "android-personal-01",
+            ),
+        ,
+            (
+                "user", "owner", "Luna", "high", "concise", "neutral", "moderate", "raw-morph",
                 30, "moderate", 1, datetime(2026, 8, 11, 13, tzinfo=timezone.utc), "android-personal-01",
             ),
         ]

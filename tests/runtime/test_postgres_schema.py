@@ -41,7 +41,7 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
         cursor = FakeCursor()
         connector = Connector(cursor)
         version = ensure_postgres_schema("postgresql://db/hearthghost", connect=connector)
-        self.assertEqual(version, 6)
+        self.assertEqual(version, 7)
         self.assertEqual(connector.calls[0][1]["connect_timeout"], 5)
         first_sql, first_params = cursor.executed[0]
         self.assertIn("pg_advisory_xact_lock", first_sql)
@@ -58,7 +58,7 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
             (5, "behavior_preference_records_v1"),
         ])
         version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
-        self.assertEqual(version, 6)
+        self.assertEqual(version, 7)
         inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
         self.assertEqual(inserted, [(6, "reminder_delivery_lease_v1")])
         migration_sql = next(sql for sql, _ in cursor.executed if "ADD COLUMN IF NOT EXISTS delivery_state" in sql)
@@ -79,7 +79,7 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
             (4, "reminder_records_v1"),
         ])
         version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
-        self.assertEqual(version, 6)
+        self.assertEqual(version, 7)
         inserted = [params for sql, params in cursor.executed if "INSERT INTO hearthghost_schema_migrations" in sql]
         self.assertEqual(inserted, [(5, "behavior_preference_records_v1"), (6, "reminder_delivery_lease_v1")])
 
@@ -93,7 +93,7 @@ class PostgresSchemaMigrationTests(unittest.TestCase):
             (6, "reminder_delivery_lease_v1"),
         ])
         version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))
-        self.assertEqual(version, 6)
+        self.assertEqual(version, 7)
         self.assertFalse(any("INSERT INTO hearthghost_schema_migrations" in sql for sql, _ in cursor.executed))
 
     def test_future_database_version_fails_closed(self):

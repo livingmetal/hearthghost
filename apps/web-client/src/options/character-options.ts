@@ -3,6 +3,7 @@ import {
   characterById,
   type HearthGhostCharacterId,
 } from "../character/catalog.js";
+import type { ExpressionStyleId } from "../character/expression-style.js";
 import type {
   PersonaFormality,
   PersonaHumor,
@@ -21,6 +22,7 @@ export interface CharacterOptionsElements {
   readonly personaVerbosity: HTMLSelectElement;
   readonly personaFormality: HTMLSelectElement;
   readonly personaInitiative: HTMLSelectElement;
+  readonly personaExpressionStyle: HTMLSelectElement;
   readonly personaNew: HTMLButtonElement;
   readonly personaSave: HTMLButtonElement;
   readonly personaDelete: HTMLButtonElement;
@@ -83,6 +85,7 @@ export function characterOptionsMarkup(
             ${personaSelectMarkup("Response length", "verbosity", ["concise", "normal", "detailed"], persona.verbosity)}
             ${personaSelectMarkup("Formality", "formality", ["casual", "neutral", "formal"], persona.formality)}
             ${personaSelectMarkup("Initiative", "initiative", ["low", "moderate", "high"], persona.initiative)}
+            ${personaSelectMarkup("Expression style", "expression-style", ["balanced", "playful", "reserved", "tsundere", "mesugaki", "yandere"], persona.expressionStyle)}
           </div>
           <div class="persona-actions">
             <button type="button" data-persona-new>New</button>
@@ -121,6 +124,7 @@ export function requireCharacterOptions(root: ParentNode): CharacterOptionsEleme
     personaVerbosity: root.querySelector<HTMLSelectElement>("[data-persona-verbosity]"),
     personaFormality: root.querySelector<HTMLSelectElement>("[data-persona-formality]"),
     personaInitiative: root.querySelector<HTMLSelectElement>("[data-persona-initiative]"),
+    personaExpressionStyle: root.querySelector<HTMLSelectElement>("[data-persona-expression-style]"),
     personaNew: root.querySelector<HTMLButtonElement>("[data-persona-new]"),
     personaSave: root.querySelector<HTMLButtonElement>("[data-persona-save]"),
     personaDelete: root.querySelector<HTMLButtonElement>("[data-persona-delete]"),
@@ -167,6 +171,7 @@ export function writePersonaForm(elements: CharacterOptionsElements, profile: Pe
   elements.personaVerbosity.value = profile.verbosity;
   elements.personaFormality.value = profile.formality;
   elements.personaInitiative.value = profile.initiative;
+  elements.personaExpressionStyle.value = profile.expressionStyle;
   elements.personaDelete.disabled = profile.builtIn;
 }
 
@@ -179,7 +184,8 @@ export function readPersonaForm(
     verbosity: elements.personaVerbosity.value as PersonaVerbosity,
     formality: elements.personaFormality.value as PersonaFormality,
     initiative: elements.personaInitiative.value as PersonaInitiative,
-  };
+      expressionStyle: elements.personaExpressionStyle.value as ExpressionStyleId,
+    };
 }
 
 export function synchronizeCharacterOptionsCatalog(root: ParentNode): boolean {

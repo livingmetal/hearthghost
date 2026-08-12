@@ -12,6 +12,7 @@ import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
 import type { HearthGhostCharacterId } from "./catalog.js";
 import type { CharacterRenderer } from "./renderer.js";
+import type { ExpressionStyleId } from "./expression-style.js";
 import { VrmBaseAnimationLayer } from "./vrm-base-animation.js";
 import { ProceduralIdleBaseMotion, type VrmBaseMotionFrame } from "./vrm-base-motion.js";
 import {
@@ -162,6 +163,10 @@ export class VrmCharacterRenderer implements CharacterRenderer {
 
   present(presentation: CharacterPresentation): void {
     this.presentation = presentation;
+  }
+
+  setExpressionStyle(style: ExpressionStyleId): void {
+    this.expressionComposer.setStyle(style);
   }
 
   performGesture(gesture: CharacterGesture): void {

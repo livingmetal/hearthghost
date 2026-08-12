@@ -1,5 +1,10 @@
 import type { HearthGhostCharacterId } from "../character/catalog.js";
 import type { CharacterPreferenceStorage } from "../character/preferences.js";
+import {
+  defaultExpressionStyleForCharacter,
+  isExpressionStyleId,
+  type ExpressionStyleId,
+} from "../character/expression-style.js";
 
 export type PersonaHumor = "low" | "moderate" | "high";
 export type PersonaVerbosity = "concise" | "normal" | "detailed";
@@ -13,10 +18,12 @@ export interface PersonaProfilePreset {
   readonly verbosity: PersonaVerbosity;
   readonly formality: PersonaFormality;
   readonly initiative: PersonaInitiative;
+  readonly expressionStyle: ExpressionStyleId;
   readonly builtIn: boolean;
 }
 
-const PROFILE_STORAGE_KEY = "hearthghost.persona.profiles.v1";
+const PROFILE_STORAGE_KEY = "hearthghost.persona.profiles.v2";
+const LEGACY_PROFILE_STORAGE_KEY = "hearthghost.persona.profiles.v1";
 const ACTIVE_PROFILE_STORAGE_KEY = "hearthghost.persona.active.v1";
 const CUSTOM_ID = /^custom-[a-z0-9-]{8,80}$/;
 const HUMOR = ["low", "moderate", "high"] as const;
@@ -25,8 +32,8 @@ const FORMALITY = ["casual", "neutral", "formal"] as const;
 const INITIATIVE = ["low", "moderate", "high"] as const;
 const MAX_CUSTOM_PROFILES = 12;
 export const SERVER_ACTIVE_PERSONA_ID = "custom-server-active";
-export const SERVER_PERSONA_QUERY = "페르소나조회:v1";
-const SERVER_PERSONA_STATE_PREFIX = "페르소나상태:v1:";
+export const SERVER_PERSONA_QUERY = "페르소나조회:v2";
+const SERVER_PERSONA_STATE_PREFIX = "페르소나상태:v2:";
 
 export const BUILT_IN_PERSONA_PROFILES: readonly PersonaProfilePreset[] = Object.freeze([
   Object.freeze({
@@ -36,6 +43,7 @@ export const BUILT_IN_PERSONA_PROFILES: readonly PersonaProfilePreset[] = Object
     verbosity: "normal",
     formality: "casual",
     initiative: "low",
+    expressionStyle: "playful",
     builtIn: true,
   }),
   Object.freeze({
@@ -45,6 +53,7 @@ export const BUILT_IN_PERSONA_PROFILES: readonly PersonaProfilePreset[] = Object
     verbosity: "concise",
     formality: "casual",
     initiative: "low",
+    expressionStyle: "reserved",
     builtIn: true,
   }),
 ]);
@@ -54,7 +63,10 @@ export function loadPersonaProfiles(
 ): readonly PersonaProfilePreset[] {
   const custom: PersonaProfilePreset[] = [];
   try {
-    const decoded = storage === null ? null : JSON.parse(storage.getItem(PROFILE_STORAGE_KEY) ?? "null");
+    const serialized = storage?.getItem(PROFILE_STORAGE_KEY)
+      ?? storage?.getItem(LEGACY_PROFILE_STORAGE_KEY)
+      ?? "null";
+    const decoded = storage === null ? null : JSON.parse(serialized);
     if (Array.isArray(decoded)) {
       for (const value of decoded.slice(0, MAX_CUSTOM_PROFILES)) {
         const profile = parseCustomProfile(value);
@@ -134,13 +146,14 @@ export function deleteCustomPersonaProfile(
 
 export function personaProfileCommand(profile: PersonaProfilePreset): string {
   const validated = validateProfile(profile);
-  return `페르소나:v1:${JSON.stringify({
+  return `페르소나:v2:${JSON.stringify({
     name: validated.name,
     humor: validated.humor,
     verbosity: validated.verbosity,
     formality: validated.formality,
     initiative: validated.initiative,
-  })}`;
+      expressionStyle: validated.expressionStyle,
+    })}`;
 }
 
 export function newCustomPersonaId(): string {
@@ -164,6 +177,7 @@ export function findMatchingPersonaProfile(
     && profile.verbosity === serverProfile.verbosity
     && profile.formality === serverProfile.formality
     && profile.initiative === serverProfile.initiative
+      && profile.expressionStyle === serverProfile.expressionStyle
   ) ?? null;
 }
 
@@ -191,7 +205,7 @@ export function parseServerPersonaState(responseText: string): PersonaProfilePre
     typeof payload !== "object"
     || payload === null
     || Array.isArray(payload)
-    || Object.keys(payload).sort().join(",") !== "formality,humor,initiative,name,verbosity"
+    || Object.keys(payload).sort().join(",") !== "expressionStyle,formality,humor,initiative,name,verbosity"
   ) {
     throw new Error("Core persona state response is invalid");
   }
@@ -204,7 +218,10 @@ function parseCustomProfile(value: unknown): PersonaProfilePreset | null {
   }
   const profile = value as Record<string, unknown>;
   if (
-    Object.keys(profile).sort().join(",") !== "builtIn,formality,humor,id,initiative,name,verbosity"
+    ![
+      "builtIn,expressionStyle,formality,humor,id,initiative,name,verbosity",
+      "builtIn,formality,humor,id,initiative,name,verbosity",
+    ].includes(Object.keys(profile).sort().join(","))
     || profile.builtIn !== false
     || typeof profile.id !== "string"
     || !CUSTOM_ID.test(profile.id)
@@ -212,7 +229,15 @@ function parseCustomProfile(value: unknown): PersonaProfilePreset | null {
     return null;
   }
   try {
-    return Object.freeze(validateProfile(profile as unknown as PersonaProfilePreset));
+    const upgraded = Object.hasOwn(profile, "expressionStyle")
+      ? profile
+      : {
+          ...profile,
+          expressionStyle: defaultExpressionStyleForCharacter(
+            profile.name === "영희" ? "younghee" : profile.name === "철수" ? "cheolsu" : null,
+          ),
+        };
+    return Object.freeze(validateProfile(upgraded as unknown as PersonaProfilePreset));
   } catch {
     return null;
   }
@@ -229,7 +254,8 @@ function validateProfile(profile: PersonaProfilePreset): PersonaProfilePreset {
     || !VERBOSITY.includes(profile.verbosity)
     || !FORMALITY.includes(profile.formality)
     || !INITIATIVE.includes(profile.initiative)
-  ) {
+      || !isExpressionStyleId(profile.expressionStyle)
+    ) {
     throw new Error("Persona fields are invalid");
   }
   return profile;

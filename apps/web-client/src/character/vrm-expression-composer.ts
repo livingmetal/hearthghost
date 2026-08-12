@@ -1,16 +1,13 @@
 import type { HearthGhostCharacterId } from "./catalog.js";
+import {
+  defaultExpressionStyleForCharacter,
+  type ExpressionStyleId,
+} from "./expression-style.js";
 import type { CharacterEmotion, CharacterState } from "./semantic.js";
 
-export const EXPRESSION_STYLE_IDS = [
-  "balanced",
-  "playful",
-  "reserved",
-  "tsundere",
-  "mesugaki",
-  "yandere",
-] as const;
-
-export type ExpressionStyleId = (typeof EXPRESSION_STYLE_IDS)[number];
+export { EXPRESSION_STYLE_IDS } from "./expression-style.js";
+export { defaultExpressionStyleForCharacter };
+export type { ExpressionStyleId };
 
 type LogicalExpressionChannel =
   | "happy"
@@ -238,18 +235,6 @@ function resolveExpressionName(
     }
   }
   return null;
-}
-
-export function defaultExpressionStyleForCharacter(
-  characterId: HearthGhostCharacterId | null,
-): ExpressionStyleId {
-  if (characterId === "younghee") {
-    return "playful";
-  }
-  if (characterId === "cheolsu") {
-    return "reserved";
-  }
-  return "balanced";
 }
 
 export function composeExpressionTarget(
