@@ -1,7 +1,8 @@
 import { publishCharacterGesture } from "./gesture-bus.js";
 import type { CharacterGesture } from "./semantic.js";
 
-const NEGATION_PATTERN = /(?:하지\s*마|하지마|말고|말아|안\s*(?:해|해줘|하)|don't|do not)/iu;
+const NEGATION_PATTERN = /(?:하지\s*마|지\s*마|지\s*말(?:고|아|자)?|말고|말아|안\s*(?:해|해줘|하)|don't|do not)/iu;
+const WAVE_VERB = "(?:흔들|흔든|흔들어|흔들고|wave)";
 const RECENT_USER_GESTURE_MILLIS = 5_000;
 
 function gestureKey(gesture: CharacterGesture): string {
@@ -36,15 +37,22 @@ export function inferCharacterGestures(text: string): readonly CharacterGesture[
     appendUnique(gestures, { gesture: "raise_hand", side: "right" });
   }
 
-  if (/(?:왼손|왼팔|left\s+(?:hand|arm)).{0,18}(?:흔들|wave)/iu.test(normalized)) {
+  const leftWave = new RegExp(`(?:왼손|왼팔|left\\s+(?:hand|arm)).{0,18}${WAVE_VERB}`, "iu");
+  const rightWave = new RegExp(`(?:오른손|오른팔|right\\s+(?:hand|arm)).{0,18}${WAVE_VERB}`, "iu");
+  const generalWave = new RegExp(
+    `(?:손|hand).{0,18}${WAVE_VERB}|${WAVE_VERB}.{0,12}(?:손|hand)`,
+    "iu",
+  );
+
+  if (leftWave.test(normalized)) {
     appendUnique(gestures, { gesture: "wave", side: "left" });
   }
-  if (/(?:오른손|오른팔|right\s+(?:hand|arm)).{0,18}(?:흔들|wave)/iu.test(normalized)) {
+  if (rightWave.test(normalized)) {
     appendUnique(gestures, { gesture: "wave", side: "right" });
   }
   if (
     !gestures.some((gesture) => gesture.gesture === "wave")
-    && /(?:손|hand).{0,18}(?:흔들|wave)|(?:흔들|wave).{0,12}(?:손|hand)/iu.test(normalized)
+    && generalWave.test(normalized)
   ) {
     appendUnique(gestures, { gesture: "wave", side: "right" });
   }
@@ -56,10 +64,10 @@ export function inferCharacterGestures(text: string): readonly CharacterGesture[
     appendUnique(gestures, { gesture: "turn", direction: "left" });
   }
 
-  if (/(?:고개.{0,10}끄덕|끄덕(?:여|인다|임)|\bnod\b)/iu.test(normalized)) {
+  if (/(?:고개.{0,10}끄덕|끄덕(?:여|인다|임|이고|이며)|\bnod\b)/iu.test(normalized)) {
     appendUnique(gestures, { gesture: "nod" });
   }
-  if (/(?:고개.{0,10}(?:젓|저어|흔들)|도리도리|shake.{0,8}head)/iu.test(normalized)) {
+  if (/(?:고개.{0,10}(?:젓|저어|흔들|흔든)|도리도리|shake.{0,8}head)/iu.test(normalized)) {
     appendUnique(gestures, { gesture: "shake_head" });
   }
   if (/(?:허리|고개).{0,10}숙|(?:인사|절)(?:해|한다|하)|\bbow\b/iu.test(normalized)) {
