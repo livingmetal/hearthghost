@@ -24,9 +24,11 @@ Client options keep appearance and persona independent:
 - **Persona** selects the assistant name plus the typed `humor`, `verbosity`,
   `formality`, and `initiative` preferences. Core is authoritative for the
   active values and persists them in the authenticated principal's scope. On
-  every conversation open, the server returns all five typed fields and the
-  client hydrates its options from that profile without writing local defaults
-  back. A device may keep a small preset cache only as an editing convenience.
+  conversation open, a new client issues a versioned read-only persona query
+  over the existing authenticated conversation and hydrates all five fields
+  without writing local defaults back. The original name-only wire profile is
+  retained for compatibility with installed clients. A device may keep a small
+  preset cache only as an editing convenience.
 
 The persona UI cannot supply a system prompt, tool instructions, credentials,
 policy, Node trust, capabilities, renderer commands, or arbitrary key/value
