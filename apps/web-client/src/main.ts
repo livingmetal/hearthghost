@@ -11,6 +11,12 @@ import {
   type HearthGhostCharacterDefinition,
 } from "./character/catalog.js";
 import { CharacterExperienceController } from "./character/experience.js";
+import {
+  browserCharacterPreferenceStorage,
+  DEFAULT_CHARACTER_ID,
+  loadPreferredCharacterId,
+  savePreferredCharacterId,
+} from "./character/preferences.js";
 import type { CharacterDisplayProfile } from "./character/profile.js";
 import { loadCharacterRenderer } from "./character/renderer-loader.js";
 import { CharacterViewport } from "./character/viewport.js";
@@ -43,6 +49,14 @@ if (root === null) {
   throw new Error("HearthGhost client root is missing");
 }
 
+const preferenceStorage = browserCharacterPreferenceStorage();
+let preferredCharacterId = loadPreferredCharacterId(preferenceStorage);
+const startupCharacter = characterById(preferredCharacterId)
+  ?? characterById(DEFAULT_CHARACTER_ID);
+if (startupCharacter === null) {
+  throw new Error("HearthGhost has no bundled default character");
+}
+
 const androidPlatform = Capacitor.getPlatform() === "android"
   ? new AndroidNodePlatform()
   : null;
@@ -54,8 +68,9 @@ const voiceInput = androidPlatform === null ? null : new AndroidVoiceInput();
 const voiceOutput = androidPlatform === null ? null : new AndroidVoiceOutput();
 let voiceStatus: VoiceInputStatus | null = null;
 let ttsStatus: VoiceOutputStatus | null = null;
-let activeCharacter: HearthGhostCharacterDefinition | null = null;
-let renderedCharacterId: string | null = null;
+let activeCharacter: HearthGhostCharacterDefinition | null = startupCharacter;
+let renderedCharacterId: string | null = startupCharacter.id;
+let initialVrmFallback = false;
 
 root.innerHTML = `
   <main class="app-shell">
@@ -66,6 +81,19 @@ root.innerHTML = `
       </div>
       <div class="top-actions">
         <button class="quiet-button" type="button" data-connect>Connect</button>
+        <details class="app-options" data-options>
+          <summary>Options</summary>
+          <div class="options-panel" aria-label="HearthGhost options">
+            <label for="character-option">Character</label>
+            <select id="character-option" class="character-select" data-character-select aria-label="Character profile">
+              <option value="younghee">영희 · Avatar A</option>
+              <option value="cheolsu">철수 · Avatar C</option>
+            </select>
+            <p class="character-setting-status" data-character-setting-status>
+              Saved on this device. Core persona syncs when a trusted conversation is available.
+            </p>
+          </div>
+        </details>
         <details class="system-status">
           <summary>System</summary>
           <div class="status-bar" aria-label="Privacy and security status">
@@ -83,14 +111,9 @@ root.innerHTML = `
     <section class="character-stage" aria-label="HearthGhost character and response">
       <div class="character-identity" aria-live="polite">
         <span class="character-identity-label">Character</span>
-        <strong data-character-name>HearthGhost</strong>
-        <select class="character-select" data-character-select aria-label="Character profile" disabled>
-          <option value="">Default</option>
-          <option value="younghee">영희 · Avatar A</option>
-          <option value="cheolsu">철수 · Avatar C</option>
-        </select>
+        <strong data-character-name>${startupCharacter.name}</strong>
       </div>
-      <section class="character-viewport" aria-label="HearthGhost character viewport"></section>
+      <section class="character-viewport" aria-label="${startupCharacter.name} character viewport"></section>
       <div class="response-layer">
         <output class="response" data-response aria-live="polite"></output>
       </div>
@@ -136,6 +159,8 @@ const microphoneStatus = root.querySelector<HTMLElement>("[data-microphone-statu
 const speechStatus = root.querySelector<HTMLElement>("[data-speech-status]");
 const characterName = root.querySelector<HTMLElement>("[data-character-name]");
 const characterSelect = root.querySelector<HTMLSelectElement>("[data-character-select]");
+const characterSettingStatus = root.querySelector<HTMLElement>("[data-character-setting-status]");
+const optionsDetails = root.querySelector<HTMLDetailsElement>("[data-options]");
 const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
@@ -150,16 +175,29 @@ if (viewportElement === null) {
   throw new Error("CharacterViewport element is missing");
 }
 const characterViewportElement = viewportElement;
+if (characterSelect !== null) {
+  characterSelect.value = preferredCharacterId;
+}
 const history = new EphemeralSessionHistory();
 const historyView = new SessionHistoryView(historyHost);
-const rendererKind = document.documentElement.dataset.characterRenderer === "vrm"
-  ? "vrm"
-  : "dom";
-const viewport = new CharacterViewport(
+
+let viewport = new CharacterViewport(
   characterViewportElement,
-  await loadCharacterRenderer(rendererKind),
+  await loadCharacterRenderer("vrm", startupCharacter.assetUrl),
 );
-await viewport.mount();
+try {
+  await viewport.mount();
+} catch {
+  viewport.dispose();
+  viewport = new CharacterViewport(
+    characterViewportElement,
+    await loadCharacterRenderer("dom"),
+  );
+  await viewport.mount();
+  renderedCharacterId = null;
+  initialVrmFallback = true;
+}
+
 const character = new CharacterExperienceController(viewport);
 const conversation = androidPlatform === null
   ? null
@@ -172,49 +210,104 @@ const voiceConversation = conversation === null
   ? null
   : new VoiceConversationController(attention, conversation);
 
+if (initialVrmFallback && notice !== null) {
+  notice.textContent = `${startupCharacter.sample} VRM could not be loaded. The fallback character is active.`;
+}
+
 function currentVoiceProfile(): VoiceProfileId {
   return activeCharacter?.voice.id ?? "default";
 }
 
-async function applyCharacterProfile(profile: CharacterDisplayProfile | null): Promise<void> {
-  if (profile === null) {
-    return;
+function setCharacterSettingStatus(message: string): void {
+  if (characterSettingStatus !== null) {
+    characterSettingStatus.textContent = message;
   }
-  if (characterName !== null) {
-    characterName.textContent = profile.name;
-  }
-  characterViewportElement.setAttribute("aria-label", `${profile.name} character viewport`);
+}
 
-  const selected = characterByName(profile.name);
+function rememberCharacter(characterDefinition: HearthGhostCharacterDefinition): void {
+  preferredCharacterId = characterDefinition.id;
+  const saved = savePreferredCharacterId(preferenceStorage, characterDefinition.id);
+  setCharacterSettingStatus(saved
+    ? "Saved on this device. Core persona syncs when a trusted conversation is available."
+    : "Character changed for this run, but persistent browser storage is unavailable.");
+}
+
+async function displayCharacter(
+  selected: HearthGhostCharacterDefinition,
+  persistPreference: boolean,
+): Promise<void> {
+  if (persistPreference) {
+    rememberCharacter(selected);
+  }
   activeCharacter = selected;
+  if (characterName !== null) {
+    characterName.textContent = selected.name;
+  }
   if (characterSelect !== null) {
-    characterSelect.value = selected?.id ?? "";
+    characterSelect.value = selected.id;
   }
+  characterViewportElement.setAttribute("aria-label", `${selected.name} character viewport`);
 
-  if (selected === null) {
-    if (renderedCharacterId !== null) {
-      await viewport.replaceRenderer(await loadCharacterRenderer("dom"));
-      renderedCharacterId = null;
-    }
-    await refreshVoiceStatus();
-    return;
-  }
-  if (renderedCharacterId === selected.id) {
-    await refreshVoiceStatus();
-    return;
-  }
-
-  try {
-    await viewport.replaceRenderer(await loadCharacterRenderer("vrm", selected.assetUrl));
-    renderedCharacterId = selected.id;
-  } catch {
-    await viewport.replaceRenderer(await loadCharacterRenderer("dom"));
-    renderedCharacterId = null;
-    if (notice !== null) {
-      notice.textContent = `${selected.sample} VRM is not bundled yet. ${selected.name} persona and voice are active with the fallback character.`;
+  if (renderedCharacterId !== selected.id) {
+    try {
+      await viewport.replaceRenderer(await loadCharacterRenderer("vrm", selected.assetUrl));
+      renderedCharacterId = selected.id;
+    } catch {
+      if (notice !== null) {
+        notice.textContent = `${selected.sample} VRM could not be loaded. The previous renderer remains active.`;
+      }
     }
   }
   await refreshVoiceStatus();
+}
+
+async function applyCharacterProfile(
+  profile: CharacterDisplayProfile | null,
+  persistPreference = true,
+): Promise<void> {
+  if (profile === null) {
+    return;
+  }
+  const selected = characterByName(profile.name);
+  if (selected === null) {
+    if (characterName !== null) {
+      characterName.textContent = profile.name;
+    }
+    activeCharacter = null;
+    await refreshVoiceStatus();
+    return;
+  }
+  await displayCharacter(selected, persistPreference);
+}
+
+async function synchronizePreferredCharacterToCore(
+  openedProfile: CharacterDisplayProfile | null,
+): Promise<void> {
+  if (conversation === null) {
+    return;
+  }
+  const preferred = characterById(preferredCharacterId)
+    ?? characterById(DEFAULT_CHARACTER_ID);
+  if (preferred === null) {
+    return;
+  }
+  const openedCharacter = openedProfile === null
+    ? null
+    : characterByName(openedProfile.name);
+  if (openedCharacter?.id === preferred.id) {
+    await displayCharacter(preferred, false);
+    return;
+  }
+  const synchronized = await conversation.submit(selectionCommand(preferred));
+  await applyCharacterProfile(synchronized.characterProfile, false);
+}
+
+async function ensureConversationCharacter(): Promise<void> {
+  if (conversation === null || conversation.snapshot().conversationSessionId !== null) {
+    return;
+  }
+  const opened = await conversation.open();
+  await synchronizePreferredCharacterToCore(opened.characterProfile);
 }
 
 function currentCharacterName(): string {
@@ -273,9 +366,6 @@ function showSnapshot(): void {
       || voiceInput === null
       || voiceStatus?.onDeviceAvailable === false
       || voiceStatus?.listening === true;
-  }
-  if (characterSelect !== null) {
-    characterSelect.disabled = !conversationAllowed || conversation === null;
   }
   wakeButton?.classList.toggle("is-awake", attentionSnapshot.state === "engaged");
 }
@@ -390,40 +480,50 @@ characterSelect?.addEventListener("change", () => {
   void (async () => {
     const requested = characterById(characterSelect.value);
     if (requested === null) {
-      characterSelect.value = activeCharacter?.id ?? "";
+      characterSelect.value = preferredCharacterId;
       return;
     }
-    if (conversation === null || !attention.canAcceptConversationInput()) {
-      characterSelect.value = activeCharacter?.id ?? "";
-      character.showConcern();
-      if (notice !== null) {
-        notice.textContent = "Wake the trusted character session before changing profiles.";
-      }
-      return;
-    }
+
+    rememberCharacter(requested);
     try {
+      await displayCharacter(requested, false);
+      optionsDetails?.removeAttribute("open");
+
+      const canSyncNow = conversation !== null
+        && node.canUseCapability("conversation.text")
+        && attention.canAcceptConversationInput();
+      if (!canSyncNow) {
+        setCharacterSettingStatus(
+          "Saved on this device. Core persona will sync when the next trusted conversation starts.",
+        );
+        if (notice !== null) {
+          notice.textContent = `${requested.name} will be used at the next launch and conversation.`;
+        }
+        return;
+      }
+
       if (conversation.snapshot().conversationSessionId === null) {
         const opened = await conversation.open();
-        await applyCharacterProfile(opened.characterProfile);
+        await synchronizePreferredCharacterToCore(opened.characterProfile);
+      } else {
+        const synchronized = await conversation.submit(selectionCommand(requested));
+        await applyCharacterProfile(synchronized.characterProfile, false);
       }
-      character.beginThinking();
-      const snapshot = await conversation.submit(selectionCommand(requested));
-      await applyCharacterProfile(snapshot.characterProfile);
       attention.recordAddressedActivity();
       character.acknowledgeSuccess();
-      const reply = snapshot.responseText ?? `${requested.name} 캐릭터로 전환했어요.`;
-      if (response !== null) {
-        response.textContent = reply;
-      }
+      setCharacterSettingStatus("Saved on this device and synchronized with Core.");
       if (notice !== null) {
         notice.textContent = `${requested.name}: ${requested.sample} / local voice profile selected.`;
       }
       showSnapshot();
     } catch (error) {
-      characterSelect.value = activeCharacter?.id ?? "";
-      character.showConcern();
+      setCharacterSettingStatus(
+        "Saved on this device. Core synchronization is pending until a trusted conversation is available.",
+      );
       if (notice !== null) {
-        notice.textContent = error instanceof Error ? error.message : "Character selection failed";
+        notice.textContent = error instanceof Error
+          ? `Character saved locally; Core sync pending: ${error.message}`
+          : "Character saved locally; Core sync pending.";
       }
     }
   })();
@@ -504,10 +604,7 @@ form?.addEventListener("submit", (event) => {
     }
     const submittedText = messageInput.value.trim();
     try {
-      if (conversation.snapshot().conversationSessionId === null) {
-        const opened = await conversation.open();
-        await applyCharacterProfile(opened.characterProfile);
-      }
+      await ensureConversationCharacter();
       character.beginThinking();
       const snapshot = await conversation.submit(submittedText);
       await applyCharacterProfile(snapshot.characterProfile);
@@ -543,6 +640,7 @@ if (voiceInput !== null && voiceConversation !== null) {
       voiceStatus = voiceStatus === null ? null : { ...voiceStatus, listening: false };
       character.beginThinking();
       try {
+        await ensureConversationCharacter();
         const snapshot = await voiceConversation.acceptTranscript(event);
         await applyCharacterProfile(snapshot.characterProfile);
         const reply = snapshot.responseText ?? "";
