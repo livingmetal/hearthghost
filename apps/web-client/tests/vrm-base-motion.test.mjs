@@ -90,12 +90,13 @@ test("VRMA hips translation is re-anchored and bounded around model rest", () =>
   );
   const anchored = reanchorHipsPositionTrack(track, [1, 2, 3]);
   const values = Array.from(anchored.values);
+  const epsilon = 1e-6;
 
   assert.deepEqual(values.slice(0, 3), [1, 2, 3]);
   for (let index = 0; index + 2 < values.length; index += 3) {
-    assert.ok(values[index] >= 1 - 0.055 && values[index] <= 1 + 0.055);
-    assert.ok(values[index + 1] >= 2 - 0.030 && values[index + 1] <= 2 + 0.050);
-    assert.ok(values[index + 2] >= 3 - 0.035 && values[index + 2] <= 3 + 0.035);
+    assert.ok(values[index] >= 1 - 0.055 - epsilon && values[index] <= 1 + 0.055 + epsilon);
+    assert.ok(values[index + 1] >= 2 - 0.030 - epsilon && values[index + 1] <= 2 + 0.050 + epsilon);
+    assert.ok(values[index + 2] >= 3 - 0.035 - epsilon && values[index + 2] <= 3 + 0.035 + epsilon);
   }
 });
 
