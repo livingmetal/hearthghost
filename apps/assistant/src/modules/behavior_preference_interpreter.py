@@ -158,6 +158,10 @@ class BehaviorPreferenceService:
             return PreferenceApplication(True, False, "preference_rejected")
         return PreferenceApplication(True, True, "preference_applied", snapshot)
 
+    def snapshot(self, *, scope: str, scope_id: str) -> BehaviorPreferenceSnapshot:
+        """Read the validated active profile for an already-resolved principal."""
+        return self._manager.snapshot(scope=scope, scope_id=scope_id)
+
 
 def _normalize_input(text: object) -> str:
     if not isinstance(text, str):

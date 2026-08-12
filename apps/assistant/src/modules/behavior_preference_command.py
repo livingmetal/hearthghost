@@ -40,6 +40,8 @@ _CHARACTER_SELECTION = re.compile(
     re.IGNORECASE,
 )
 _PERSONA_PROFILE_PREFIX = "페르소나:v1:"
+_PERSONA_PROFILE_QUERY = "페르소나조회:v1"
+_PERSONA_PROFILE_STATE_PREFIX = "페르소나상태:v1:"
 _PERSONA_PROFILE_FIELDS = frozenset(
     {"name", "humor", "verbosity", "formality", "initiative"}
 )
@@ -66,6 +68,7 @@ class BehaviorPreferenceCommandService:
 
     def handle(self, *, node_id: str, text: str) -> BehaviorPreferenceCommandResult:
         selection = _parse_character_selection(text)
+        persona_query = text == _PERSONA_PROFILE_QUERY
         persona_profile = None
         if isinstance(text, str) and text.startswith(_PERSONA_PROFILE_PREFIX):
             try:
@@ -77,7 +80,12 @@ class BehaviorPreferenceCommandService:
                     "persona_profile_invalid",
                     "페르소나 설정 형식이 올바르지 않아 변경하지 않았어요.",
                 )
-        if selection is None and persona_profile is None and not _looks_like_preference(text):
+        if (
+            selection is None
+            and persona_profile is None
+            and not persona_query
+            and not _looks_like_preference(text)
+        ):
             return BehaviorPreferenceCommandResult(False, False, "not_preference_command")
         try:
             principal = self._principals.resolve(node_id)
@@ -85,6 +93,36 @@ class BehaviorPreferenceCommandService:
             return _denied("principal_resolution_failed")
         if principal is None:
             return _denied("principal_unresolved")
+
+        if persona_query:
+            try:
+                snapshot = self._preferences.snapshot(
+                    scope=principal.scope.value,
+                    scope_id=principal.scope_id,
+                )
+            except (TypeError, ValueError, RuntimeError):
+                return BehaviorPreferenceCommandResult(
+                    True,
+                    False,
+                    "persona_profile_read_failed",
+                    "서버 페르소나 설정을 안전하게 읽지 못했어요.",
+                )
+            persona = snapshot.persona
+            payload = {
+                "name": persona.name,
+                "humor": persona.humor,
+                "verbosity": persona.verbosity,
+                "formality": persona.formality,
+                "initiative": persona.initiative,
+            }
+            return BehaviorPreferenceCommandResult(
+                True,
+                False,
+                "persona_profile_read",
+                _PERSONA_PROFILE_STATE_PREFIX
+                + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                snapshot,
+            )
 
         try:
             if persona_profile is not None:

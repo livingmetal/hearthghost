@@ -22,13 +22,11 @@ CONNECTION = (
 
 
 class AndroidPersonaProfileTests(unittest.TestCase):
-    def test_native_transport_accepts_only_typed_server_persona_fields(self):
+    def test_native_transport_accepts_name_only_character_profile(self):
         source = CONNECTION.read_text(encoding="utf-8")
         self.assertIn('"character_profile"', source)
-        self.assertIn('setOf("name", "humor", "verbosity", "formality", "initiative")', source)
-        self.assertIn('.put("name", name)', source)
-        self.assertIn('requiredChoice(profile, "humor"', source)
-        self.assertIn('requiredChoice(', source)
+        self.assertIn('requireExactFields(profile, setOf("name"), true)', source)
+        self.assertIn('new JSObject().put("name", name)', source)
         self.assertIn("MAX_CHARACTER_NAME_LENGTH = 80", source)
         self.assertIn("hasUnsupportedCharacterNameCodePoint", source)
 

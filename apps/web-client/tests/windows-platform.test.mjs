@@ -6,14 +6,6 @@ import {
   WindowsNodePlatform,
 } from "../.test-dist/node/windows-platform.js";
 
-const youngheeProfile = {
-  name: "영희",
-  humor: "moderate",
-  verbosity: "normal",
-  formality: "casual",
-  initiative: "low",
-};
-
 function fakeBridge(handler) {
   return { request: handler };
 }
@@ -49,7 +41,7 @@ test("Windows platform parses strict display-only conversation results", async (
       return {
         nodeSessionId: "node-session-1",
         conversationSessionId: "conversation-1",
-        characterProfile: youngheeProfile,
+        characterProfile: { name: "영희" },
         events: [{ type: "character.state", payload: { state: "engaged" } }],
       };
     }
@@ -57,13 +49,13 @@ test("Windows platform parses strict display-only conversation results", async (
       return {
         conversationSessionId: "conversation-1",
         responseText: "응, 듣고 있어.",
-        characterProfile: youngheeProfile,
+        characterProfile: { name: "영희" },
         events: [],
       };
     }
     if (method === "conversation.close") {
       return {
-        characterProfile: youngheeProfile,
+        characterProfile: { name: "영희" },
         events: [],
       };
     }
@@ -86,7 +78,7 @@ test("Windows platform rejects authority-looking character profile fields", asyn
   const platform = new WindowsNodePlatform(fakeBridge(async () => ({
     nodeSessionId: "node-session-1",
     conversationSessionId: "conversation-1",
-    characterProfile: { ...youngheeProfile, capability: "camera.stream" },
+    characterProfile: { name: "영희", capability: "camera.stream" },
     events: [],
   })));
 

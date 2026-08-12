@@ -355,16 +355,11 @@ internal sealed class NodeProtocolClient : IAsyncDisposable
             throw new WindowsNodeException("conversation_session_mismatch");
         }
         JsonElement profile = RequiredObject(result, "character_profile");
-        string[] profileFields = profile.EnumerateObject().Select(property => property.Name).Order().ToArray();
-        if (!profileFields.SequenceEqual(new[] { "formality", "humor", "initiative", "name", "verbosity" }))
+        if (profile.EnumerateObject().Select(property => property.Name).ToArray() is not ["name"])
         {
             throw new WindowsNodeException("character_profile_invalid");
         }
         _ = RequiredString(profile, "name", 80);
-        RequireChoice(profile, "humor", "low", "moderate", "high");
-        RequireChoice(profile, "verbosity", "concise", "normal", "detailed");
-        RequireChoice(profile, "formality", "casual", "neutral", "formal");
-        RequireChoice(profile, "initiative", "low", "moderate", "high");
         JsonElement events = RequiredArray(result, "events", 8);
         string? responseText = requireResponseText
             ? RequiredString(result, "response_text", MaxResponseTextLength)
@@ -541,15 +536,6 @@ internal sealed class NodeProtocolClient : IAsyncDisposable
             throw new WindowsNodeException($"{name}_missing");
         }
         return value;
-    }
-
-    private static void RequireChoice(JsonElement parent, string name, params string[] choices)
-    {
-        string value = RequiredString(parent, name, 16);
-        if (!choices.Contains(value, StringComparer.Ordinal))
-        {
-            throw new WindowsNodeException("character_profile_invalid");
-        }
     }
 
     private static string? OptionalString(JsonElement parent, string name, int maxLength)

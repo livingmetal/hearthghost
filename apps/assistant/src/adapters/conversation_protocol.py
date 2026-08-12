@@ -33,7 +33,7 @@ from apps.assistant.src.modules.node_security import (
     CapabilityRequest,
 )
 from apps.assistant.src.modules.orchestrator import ConversationOrchestrator
-from apps.assistant.src.modules.persona import PersonaProfile, require_persona_name
+from apps.assistant.src.modules.persona import require_persona_name
 from apps.assistant.src.modules.productivity_command import ProductivityCommandService
 from apps.assistant.src.modules.reminder_command import ReminderCommandService
 from apps.assistant.src.ports.llm import ProposedAction
@@ -305,14 +305,7 @@ class ConversationProtocol:
 
     @staticmethod
     def _character_profile(preferences: BehaviorPreferenceSnapshot) -> dict[str, str]:
-        persona = preferences.persona
-        return {
-            "name": require_persona_name(persona.name),
-            "humor": persona.humor,
-            "verbosity": persona.verbosity,
-            "formality": persona.formality,
-            "initiative": persona.initiative,
-        }
+        return {"name": require_persona_name(preferences.persona.name)}
 
 
 def read_conversation_command(channel) -> ConversationCommand:
@@ -416,26 +409,13 @@ def _wire_proposal(proposal: ProposedAction) -> dict[str, object]:
 def _read_character_profile(value: object) -> dict[str, str] | None:
     if value is None:
         return None
-    fields = {"name", "humor", "verbosity", "formality", "initiative"}
-    if not isinstance(value, dict) or set(value) != fields:
+    if not isinstance(value, dict) or set(value) != {"name"}:
         raise NodeProtocolError("Conversation result character profile is invalid")
     try:
-        persona = PersonaProfile(
-            name=require_persona_name(value.get("name")),
-            humor=value.get("humor"),
-            verbosity=value.get("verbosity"),
-            formality=value.get("formality"),
-            initiative=value.get("initiative"),
-        )
-    except (TypeError, ValueError) as error:
+        name = require_persona_name(value.get("name"))
+    except ValueError as error:
         raise NodeProtocolError("Conversation result character profile is invalid") from error
-    return {
-        "name": persona.name,
-        "humor": persona.humor,
-        "verbosity": persona.verbosity,
-        "formality": persona.formality,
-        "initiative": persona.initiative,
-    }
+    return {"name": name}
 
 
 def _read_events(value: object) -> tuple[dict[str, object], ...]:

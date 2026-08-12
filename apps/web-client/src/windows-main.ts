@@ -42,9 +42,10 @@ import {
   loadPersonaProfiles,
   newCustomPersonaId,
   personaProfileCommand,
-  personaProfileFromServer,
+  parseServerPersonaState,
   saveActivePersonaId,
   saveCustomPersonaProfile,
+  SERVER_PERSONA_QUERY,
   type PersonaProfilePreset,
 } from "./options/persona-profiles.js";
 import {
@@ -170,6 +171,7 @@ async function ensureConversationOpen(): Promise<void> {
   }
   const opened = await conversation.open();
   await applyCharacterProfile(opened.characterProfile);
+  await hydratePersonaFromCore();
 }
 
 function rememberCharacter(selected: HearthGhostCharacterDefinition): boolean {
@@ -214,9 +216,13 @@ async function applyCharacterProfile(
   if (profile === null) {
     return;
   }
-  let selected = findMatchingPersonaProfile(personaProfiles, profile);
+  characterName.textContent = profile.name;
+}
+
+function adoptServerPersona(serverPersona: PersonaProfilePreset): void {
+  let selected = findMatchingPersonaProfile(personaProfiles, serverPersona);
   if (selected === null) {
-    selected = personaProfileFromServer(profile);
+    selected = serverPersona;
     try {
       personaProfiles = saveCustomPersonaProfile(preferenceStorage, personaProfiles, selected);
     } catch {
@@ -232,6 +238,15 @@ async function applyCharacterProfile(
   populatePersonaOptions(characterOptions, personaProfiles, selected.id);
   writePersonaForm(characterOptions, selected);
   characterName.textContent = selected.name;
+}
+
+async function hydratePersonaFromCore(): Promise<void> {
+  const snapshot = await conversation.submit(SERVER_PERSONA_QUERY);
+  const response = snapshot.responseText;
+  if (response === null) {
+    throw new Error("Core omitted the active persona state");
+  }
+  adoptServerPersona(parseServerPersonaState(response));
 }
 
 async function synchronizeActivePersonaToCore(): Promise<void> {

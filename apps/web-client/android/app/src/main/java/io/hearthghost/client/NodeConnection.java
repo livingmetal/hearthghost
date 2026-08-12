@@ -345,46 +345,12 @@ final class NodeConnection {
     }
 
     private JSObject validatedCharacterProfileOutput(JSONObject profile) throws Exception {
-        requireExactFields(
-            profile,
-            setOf("name", "humor", "verbosity", "formality", "initiative"),
-            true
-        );
+        requireExactFields(profile, setOf("name"), true);
         String name = requiredBoundedString(profile, "name", MAX_CHARACTER_NAME_LENGTH);
         if (!name.equals(name.trim()) || hasUnsupportedCharacterNameCodePoint(name)) {
             throw new NodeTransportException("character_profile_invalid");
         }
-        String humor = requiredChoice(profile, "humor", setOf("low", "moderate", "high"));
-        String verbosity = requiredChoice(
-            profile,
-            "verbosity",
-            setOf("concise", "normal", "detailed")
-        );
-        String formality = requiredChoice(
-            profile,
-            "formality",
-            setOf("casual", "neutral", "formal")
-        );
-        String initiative = requiredChoice(
-            profile,
-            "initiative",
-            setOf("low", "moderate", "high")
-        );
-        return new JSObject()
-            .put("name", name)
-            .put("humor", humor)
-            .put("verbosity", verbosity)
-            .put("formality", formality)
-            .put("initiative", initiative);
-    }
-
-    private String requiredChoice(JSONObject document, String name, Set<String> choices)
-        throws Exception {
-        String value = requiredBoundedString(document, name, 16);
-        if (!choices.contains(value)) {
-            throw new NodeTransportException("character_profile_invalid");
-        }
-        return value;
+        return new JSObject().put("name", name);
     }
 
     private boolean hasUnsupportedCharacterNameCodePoint(String value) {

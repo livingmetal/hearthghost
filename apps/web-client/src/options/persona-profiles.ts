@@ -1,5 +1,4 @@
 import type { HearthGhostCharacterId } from "../character/catalog.js";
-import type { CharacterDisplayProfile } from "../character/profile.js";
 import type { CharacterPreferenceStorage } from "../character/preferences.js";
 
 export type PersonaHumor = "low" | "moderate" | "high";
@@ -26,6 +25,8 @@ const FORMALITY = ["casual", "neutral", "formal"] as const;
 const INITIATIVE = ["low", "moderate", "high"] as const;
 const MAX_CUSTOM_PROFILES = 12;
 export const SERVER_ACTIVE_PERSONA_ID = "custom-server-active";
+export const SERVER_PERSONA_QUERY = "페르소나조회:v1";
+const SERVER_PERSONA_STATE_PREFIX = "페르소나상태:v1:";
 
 export const BUILT_IN_PERSONA_PROFILES: readonly PersonaProfilePreset[] = Object.freeze([
   Object.freeze({
@@ -155,7 +156,7 @@ export function createCustomPersonaProfile(
 
 export function findMatchingPersonaProfile(
   profiles: readonly PersonaProfilePreset[],
-  serverProfile: CharacterDisplayProfile,
+  serverProfile: Omit<PersonaProfilePreset, "id" | "builtIn">,
 ): PersonaProfilePreset | null {
   return profiles.find((profile) =>
     profile.name === serverProfile.name
@@ -167,9 +168,34 @@ export function findMatchingPersonaProfile(
 }
 
 export function personaProfileFromServer(
-  serverProfile: CharacterDisplayProfile,
+  serverProfile: Omit<PersonaProfilePreset, "id" | "builtIn">,
 ): PersonaProfilePreset {
   return createCustomPersonaProfile(SERVER_ACTIVE_PERSONA_ID, serverProfile);
+}
+
+export function parseServerPersonaState(responseText: string): PersonaProfilePreset {
+  if (
+    typeof responseText !== "string"
+    || !responseText.startsWith(SERVER_PERSONA_STATE_PREFIX)
+    || responseText.length > 1_000
+  ) {
+    throw new Error("Core persona state response is invalid");
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(responseText.slice(SERVER_PERSONA_STATE_PREFIX.length));
+  } catch {
+    throw new Error("Core persona state response is invalid");
+  }
+  if (
+    typeof payload !== "object"
+    || payload === null
+    || Array.isArray(payload)
+    || Object.keys(payload).sort().join(",") !== "formality,humor,initiative,name,verbosity"
+  ) {
+    throw new Error("Core persona state response is invalid");
+  }
+  return personaProfileFromServer(payload as Omit<PersonaProfilePreset, "id" | "builtIn">);
 }
 
 function parseCustomProfile(value: unknown): PersonaProfilePreset | null {

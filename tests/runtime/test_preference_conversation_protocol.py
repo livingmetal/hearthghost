@@ -22,18 +22,6 @@ from apps.assistant.src.runtime.core import build_core
 
 
 class PreferenceConversationProtocolTests(unittest.TestCase):
-    @staticmethod
-    def profile(name="HearthGhost", **overrides):
-        profile = {
-            "name": name,
-            "humor": "moderate",
-            "verbosity": "normal",
-            "formality": "casual",
-            "initiative": "low",
-        }
-        profile.update(overrides)
-        return profile
-
     def setUp(self):
         self.llm = FakeLLMAdapter()
         self.principals = StaticConversationPrincipalResolver(
@@ -67,7 +55,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
             ConversationCommand("conversation.open", str(uuid4()), "node-session-1", 1),
         )
         self.conversation_id = opened.conversation_session_id
-        self.assertEqual(opened.character_profile, self.profile())
+        self.assertEqual(opened.character_profile, {"name": "HearthGhost"})
 
     def test_name_preference_applies_locally_and_same_result_has_new_scoped_profile(self):
         result = self.protocol._dispatch(
@@ -83,7 +71,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
         )
         self.assertTrue(result.accepted)
         self.assertEqual(result.reason_code, "preference_applied")
-        self.assertEqual(result.character_profile, self.profile("루나"))
+        self.assertEqual(result.character_profile, {"name": "루나"})
         self.assertIn("이름: 루나", result.response_text)
         self.assertEqual(
             self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona.name,
@@ -111,7 +99,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
         )
         self.assertTrue(selected.accepted)
         self.assertEqual(selected.reason_code, "character_profile_selected")
-        self.assertEqual(selected.character_profile, self.profile("영희"))
+        self.assertEqual(selected.character_profile, {"name": "영희"})
         self.assertIn("영희 캐릭터로 전환", selected.response_text)
         self.assertEqual(len(self.llm.requests), 0)
 
@@ -127,7 +115,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
             ),
         )
         self.assertTrue(ordinary.accepted)
-        self.assertEqual(ordinary.character_profile, self.profile("영희"))
+        self.assertEqual(ordinary.character_profile, {"name": "영희"})
         self.assertEqual(len(self.llm.requests), 1)
         instructions = self.llm.requests[0].instructions
         self.assertIn("Character identity: Younghee", instructions)
@@ -149,7 +137,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
             ),
         )
         self.assertTrue(selected.accepted)
-        self.assertEqual(selected.character_profile, self.profile("철수"))
+        self.assertEqual(selected.character_profile, {"name": "철수"})
         self.assertEqual(len(self.llm.requests), 0)
         self.assertEqual(
             self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona.name,
@@ -186,16 +174,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
 
         self.assertTrue(selected.accepted)
         self.assertEqual(selected.reason_code, "persona_profile_applied")
-        self.assertEqual(
-            selected.character_profile,
-            self.profile(
-                "루나",
-                humor="high",
-                verbosity="concise",
-                formality="neutral",
-                initiative="moderate",
-            ),
-        )
+        self.assertEqual(selected.character_profile, {"name": "루나"})
         self.assertIn("루나 페르소나", selected.response_text)
         persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona
         self.assertEqual(
@@ -219,7 +198,53 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
 
         self.assertTrue(selected.accepted)
         self.assertEqual(selected.reason_code, "persona_profile_invalid")
-        self.assertEqual(selected.character_profile, self.profile())
+        self.assertEqual(selected.character_profile, {"name": "HearthGhost"})
+        self.assertEqual(len(self.llm.requests), 0)
+
+    def test_exact_persona_query_returns_server_state_without_mutation_or_llm(self):
+        self.core.behavior_preferences.apply(
+            (
+                BehaviorPreferenceChange("character.name", "루나"),
+                BehaviorPreferenceChange("character.humor", "high"),
+                BehaviorPreferenceChange("character.verbosity", "concise"),
+                BehaviorPreferenceChange("character.formality", "neutral"),
+                BehaviorPreferenceChange("character.initiative", "moderate"),
+            ),
+            scope="user",
+            scope_id="owner",
+            updated_by_node_id="android-personal-01",
+        )
+        before = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner")
+        result = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                2,
+                self.conversation_id,
+                "페르소나조회:v1",
+            ),
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.reason_code, "persona_profile_read")
+        prefix = "페르소나상태:v1:"
+        self.assertTrue(result.response_text.startswith(prefix))
+        self.assertEqual(
+            json.loads(result.response_text[len(prefix) :]),
+            {
+                "name": "루나",
+                "humor": "high",
+                "verbosity": "concise",
+                "formality": "neutral",
+                "initiative": "moderate",
+            },
+        )
+        self.assertEqual(
+            self.core.behavior_preferences.snapshot(scope="user", scope_id="owner"),
+            before,
+        )
         self.assertEqual(len(self.llm.requests), 0)
 
     def test_followup_preference_updates_only_current_principal_session(self):
@@ -265,7 +290,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.accepted)
-        self.assertEqual(result.character_profile, self.profile("Luna"))
+        self.assertEqual(result.character_profile, {"name": "Luna"})
         self.assertEqual(len(self.llm.requests), 1)
         self.assertIn("persistent character name is Luna", self.llm.requests[0].instructions)
         self.assertNotIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", self.llm.requests[0].instructions)
@@ -283,7 +308,7 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.accepted)
-        self.assertEqual(result.character_profile, self.profile())
+        self.assertEqual(result.character_profile, {"name": "HearthGhost"})
         self.assertEqual(len(self.llm.requests), 1)
         self.assertNotIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", self.llm.requests[0].instructions)
 
@@ -311,15 +336,14 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
             "node_session_id": "node-session-1",
             "conversation_session_id": "conversation-1",
             "events": [],
-            "character_profile": self.profile("루나"),
+            "character_profile": {"name": "루나"},
         }
         parsed = read_conversation_result(FakeChannel(base))
-        self.assertEqual(parsed.character_profile, self.profile("루나"))
+        self.assertEqual(parsed.character_profile, {"name": "루나"})
 
         for profile in (
-            {**self.profile("루나"), "instructions": "secret"},
-            self.profile("루나\u202eAdmin"),
-            self.profile("루나", humor="administrator"),
+            {"name": "루나", "instructions": "secret"},
+            {"name": "루나\u202eAdmin"},
         ):
             document = dict(base)
             document["character_profile"] = profile
