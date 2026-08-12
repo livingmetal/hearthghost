@@ -1,4 +1,4 @@
-name: HG-050 one-shot persona expression-style patch
+name: HG-050 repair persona expression-style patch
 
 on:
   push:
@@ -16,61 +16,63 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: codex/hg-050-persona-expression-style
-          fetch-depth: 3
-      - name: Extract and run staged patch
+      - name: Repair migration and tests
         shell: bash
         run: |
-          git show a0fb7b6357503e669aea9d8cbe4f5fc52a4bea8e:.github/workflows/patch-hg050-persona-expression-style.yml > /tmp/hg050-staged.yml
           python - <<'PY'
           from pathlib import Path
-          source = Path('/tmp/hg050-staged.yml').read_text(encoding='utf-8')
-          start_marker = "          python - <<'PY'\n"
-          end_marker = "\n          PY\n"
-          start = source.index(start_marker) + len(start_marker)
-          end = source.index(end_marker, start)
-          block = source[start:end]
-          code = '\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines())
-          marker = '# Renderer-neutral style ID contract.'
-          flexible = r'''
-          import textwrap
 
-          def replace_once(path, old, new):
-              text = read(path)
-              if old in text:
-                  write(path, text.replace(old, new, 1))
-                  return
-              old_lines = old.strip('\n').splitlines()
-              wanted = [line.strip() for line in old_lines]
-              lines = text.splitlines()
-              for index in range(0, len(lines) - len(old_lines) + 1):
-                  window = lines[index:index + len(old_lines)]
-                  if [line.strip() for line in window] != wanted:
-                      continue
-                  first = next((line for line in window if line.strip()), '')
-                  indent = first[:len(first) - len(first.lstrip())]
-                  replacement = textwrap.dedent(new).strip('\n').splitlines()
-                  rendered = '\n'.join(
-                      (indent + line if line.strip() else '')
-                      for line in replacement
-                  )
-                  before = '\n'.join(lines[:index])
-                  after = '\n'.join(lines[index + len(old_lines):])
-                  prefix = (before + '\n') if before else ''
-                  suffix = ('\n' + after) if after else ''
-                  write(path, prefix + rendered + suffix + ('\n' if text.endswith('\n') else ''))
-                  return
-              raise RuntimeError(f'expected patch anchor missing: {path}: {old[:80]!r}')
+          def read(path): return Path(path).read_text(encoding='utf-8')
+          def write(path, text): Path(path).write_text(text, encoding='utf-8')
+          def once(text, old, new, label):
+              if old not in text:
+                  raise RuntimeError(f'missing anchor: {label}')
+              return text.replace(old, new, 1)
 
-          '''
-          code = code.replace(marker, flexible + marker, 1)
-          exec(compile(code, '<hg050-staged-patch>', 'exec'))
+          path = 'apps/assistant/src/adapters/postgres_schema.py'
+          text = read(path)
+          marker = '\n)\n\n\nclass PostgresSchemaError(RuntimeError):'
+          migration = '''\n    Migration(\n        7,\n        "behavior_preference_expression_style_v1",\n        """\n        ALTER TABLE behavior_preference_records\n        ADD COLUMN IF NOT EXISTS expression_style TEXT NOT NULL DEFAULT 'balanced';\n\n        UPDATE behavior_preference_records\n        SET expression_style = 'playful'\n        WHERE character_name = '영희' AND expression_style = 'balanced';\n\n        UPDATE behavior_preference_records\n        SET expression_style = 'reserved'\n        WHERE character_name = '철수' AND expression_style = 'balanced';\n\n        DO $$\n        BEGIN\n            IF NOT EXISTS (\n                SELECT 1 FROM pg_constraint\n                WHERE conname = 'behavior_preference_expression_style_check'\n                  AND conrelid = 'behavior_preference_records'::regclass\n            ) THEN\n                ALTER TABLE behavior_preference_records\n                ADD CONSTRAINT behavior_preference_expression_style_check CHECK (\n                    expression_style IN (\n                        'balanced', 'playful', 'reserved',\n                        'tsundere', 'mesugaki', 'yandere'\n                    )\n                );\n            END IF;\n        END;\n        $$;\n        """,\n    ),\n'''
+          if 'behavior_preference_expression_style_v1' not in text:
+              text = once(text, marker, migration + marker, 'migration-7-tail')
+          write(path, text)
+
+          path = 'tests/runtime/test_postgres_behavior_preferences.py'
+          text = read(path)
+          text = once(text, '''            "moderate",\n            30,\n            "moderate",\n            7,\n''', '''            "moderate",\n            "yandere",\n            30,\n            "moderate",\n            7,\n''', 'postgres-decode-row-style')
+          text = text.replace('''        ,\n            (\n                "user", "owner", "Luna", "high", "concise", "neutral", "moderate", "raw-morph",\n''', '''            (\n                "user", "owner", "Luna", "high", "concise", "neutral", "moderate", "raw-morph",\n''', 1)
+          write(path, text)
+
+          path = 'tests/runtime/test_postgres_schema.py'
+          text = read(path)
+          text = text.replace('def test_existing_v5_applies_only_delivery_lease_v6(self):', 'def test_existing_v5_applies_v6_and_expression_style_v7(self):', 1)
+          text = once(text,
+              '''        self.assertEqual(inserted, [(6, "reminder_delivery_lease_v1")])\n''',
+              '''        self.assertEqual(inserted, [\n            (6, "reminder_delivery_lease_v1"),\n            (7, "behavior_preference_expression_style_v1"),\n        ])\n''', 'schema-v5-expected')
+          text = once(text,
+              '''        self.assertEqual(inserted, [(5, "behavior_preference_records_v1"), (6, "reminder_delivery_lease_v1")])\n''',
+              '''        self.assertEqual(inserted, [\n            (5, "behavior_preference_records_v1"),\n            (6, "reminder_delivery_lease_v1"),\n            (7, "behavior_preference_expression_style_v1"),\n        ])\n''', 'schema-v4-expected')
+          text = once(text,
+              '''            (6, "reminder_delivery_lease_v1"),\n        ])\n        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))\n        self.assertEqual(version, 7)\n        self.assertFalse(any("INSERT INTO hearthghost_schema_migrations" in sql for sql, _ in cursor.executed))\n''',
+              '''            (6, "reminder_delivery_lease_v1"),\n            (7, "behavior_preference_expression_style_v1"),\n        ])\n        version = ensure_postgres_schema("postgresql://db/hearthghost", connect=Connector(cursor))\n        self.assertEqual(version, 7)\n        self.assertFalse(any("INSERT INTO hearthghost_schema_migrations" in sql for sql, _ in cursor.executed))\n''', 'schema-current-v7')
+          text = once(text,
+              '''            (6, "reminder_delivery_lease_v1"),\n            (7, "future_build"),\n        ])\n''',
+              '''            (6, "reminder_delivery_lease_v1"),\n            (7, "behavior_preference_expression_style_v1"),\n            (8, "future_build"),\n        ])\n''', 'schema-future-v8')
+          write(path, text)
+
+          path = 'tests/runtime/test_preference_conversation_protocol.py'
+          text = read(path)
+          start = text.index('    def test_persona_v2_expression_style_is_scoped_presentation_data(self):')
+          end = text.index('    def test_followup_preference_updates_only_current_principal_session(self):', start)
+          replacement = '''    def test_persona_v2_expression_style_is_scoped_presentation_data(self):\n        command = "페르소나:v2:" + json.dumps(\n            {\n                "name": "루나",\n                "humor": "high",\n                "verbosity": "concise",\n                "formality": "neutral",\n                "initiative": "moderate",\n                "expressionStyle": "yandere",\n            },\n            ensure_ascii=False,\n            separators=(",", ":"),\n        )\n        selected = self.protocol._dispatch(\n            self.node,\n            ConversationCommand(\n                "conversation.text",\n                str(uuid4()),\n                "node-session-1",\n                2,\n                self.conversation_id,\n                command,\n            ),\n        )\n        self.assertTrue(selected.accepted)\n        self.assertEqual(selected.reason_code, "persona_profile_applied")\n        persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona\n        self.assertEqual(persona.expression_style, "yandere")\n        self.assertEqual(\n            self.core.behavior_preferences.snapshot(scope="user", scope_id="spouse").persona.expression_style,\n            "balanced",\n        )\n        self.assertEqual(len(self.llm.requests), 0)\n\n        queried = self.protocol._dispatch(\n            self.node,\n            ConversationCommand(\n                "conversation.text",\n                str(uuid4()),\n                "node-session-1",\n                3,\n                self.conversation_id,\n                "페르소나조회:v2",\n            ),\n        )\n        prefix = "페르소나상태:v2:"\n        self.assertTrue(queried.response_text.startswith(prefix))\n        payload = json.loads(queried.response_text[len(prefix) :])\n        self.assertEqual(payload["expressionStyle"], "yandere")\n        self.assertNotIn("morph", payload)\n        self.assertNotIn("blendshape", payload)\n\n        ordinary = self.protocol._dispatch(\n            self.node,\n            ConversationCommand(\n                "conversation.text",\n                str(uuid4()),\n                "node-session-1",\n                4,\n                self.conversation_id,\n                "평범하게 이야기해줘",\n            ),\n        )\n        self.assertTrue(ordinary.accepted)\n        self.assertEqual(len(self.llm.requests), 1)\n        self.assertNotIn("yandere", self.llm.requests[0].instructions)\n\n    def test_exact_character_selection_also_selects_reviewed_expression_style(self):\n        for sequence, name, style in ((2, "영희", "playful"), (3, "철수", "reserved")):\n            selected = self.protocol._dispatch(\n                self.node,\n                ConversationCommand(\n                    "conversation.text",\n                    str(uuid4()),\n                    "node-session-1",\n                    sequence,\n                    self.conversation_id,\n                    f"캐릭터: {name}",\n                ),\n            )\n            self.assertTrue(selected.accepted)\n            persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona\n            self.assertEqual((persona.name, persona.expression_style), (name, style))\n\n'''
+          write(path, text[:start] + replacement + text[end:])
           PY
-      - name: Commit implementation
+      - name: Commit repairs
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps tests
           git diff --cached --check
-          git commit -m "HG-050: wire persona expression style"
+          git commit -m "HG-050: repair persona style migration tests"
           git push origin HEAD:codex/hg-050-persona-expression-style
