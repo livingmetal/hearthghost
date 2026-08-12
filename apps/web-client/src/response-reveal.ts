@@ -91,9 +91,6 @@ export class ResponseRevealController {
       this.host?.setAttribute("aria-busy", "false");
       return;
     }
-    if (text === this.fullText) {
-      return;
-    }
     this.beginReveal(text);
   }
 
@@ -166,7 +163,10 @@ export class ResponseRevealController {
   };
 
   private readonly onSpeechError = (event: CustomEvent<SpeechPresentationDetail>): void => {
-    if (!sameSpeechText(this.fullText, event.detail.text)) {
+    if (
+      !sameSpeechText(this.fullText, event.detail.text)
+      || (this.activeUtteranceId !== null && this.activeUtteranceId !== event.detail.utteranceId)
+    ) {
       return;
     }
     this.finishReveal();

@@ -254,7 +254,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       this.saccadeY = (Math.random() - 0.5) * 0.10;
       this.nextSaccadeAt = this.elapsed + 1.0 + Math.random() * 2.8;
     }
-    const targetX = state === "thinking" ? 0.34 : this.saccadeX;
+    const targetX = state === "thinking" ? 0.34 : state === "sleeping" ? 0 : this.saccadeX;
     const targetY = state === "sleeping"
       ? 1.28
       : state === "thinking"
