@@ -7,6 +7,7 @@ import {
   loadActivePersonaId,
   loadPersonaProfiles,
   personaProfileCommand,
+  personaProfileFromServer,
   saveActivePersonaId,
   saveCustomPersonaProfile,
 } from "../.test-dist/options/persona-profiles.js";
@@ -68,6 +69,20 @@ test("Core command contains only the versioned typed persona fields", () => {
     initiative: "moderate",
   });
   assert.equal(command.includes("prompt"), false);
+});
+
+test("server active persona hydrates device options without changing appearance", () => {
+  const hydrated = personaProfileFromServer({
+    name: "서버 루나",
+    humor: "low",
+    verbosity: "detailed",
+    formality: "formal",
+    initiative: "high",
+  });
+  assert.equal(hydrated.id, "custom-server-active");
+  assert.equal(hydrated.name, "서버 루나");
+  assert.equal(hydrated.formality, "formal");
+  assert.equal(hydrated.builtIn, false);
 });
 
 test("invalid or corrupt custom profiles fail closed", () => {

@@ -1,4 +1,5 @@
 import type { HearthGhostCharacterId } from "../character/catalog.js";
+import type { CharacterDisplayProfile } from "../character/profile.js";
 import type { CharacterPreferenceStorage } from "../character/preferences.js";
 
 export type PersonaHumor = "low" | "moderate" | "high";
@@ -24,6 +25,7 @@ const VERBOSITY = ["concise", "normal", "detailed"] as const;
 const FORMALITY = ["casual", "neutral", "formal"] as const;
 const INITIATIVE = ["low", "moderate", "high"] as const;
 const MAX_CUSTOM_PROFILES = 12;
+export const SERVER_ACTIVE_PERSONA_ID = "custom-server-active";
 
 export const BUILT_IN_PERSONA_PROFILES: readonly PersonaProfilePreset[] = Object.freeze([
   Object.freeze({
@@ -149,6 +151,25 @@ export function createCustomPersonaProfile(
   fields: Omit<PersonaProfilePreset, "id" | "builtIn">,
 ): PersonaProfilePreset {
   return Object.freeze(validateProfile({ id, ...fields, builtIn: false }));
+}
+
+export function findMatchingPersonaProfile(
+  profiles: readonly PersonaProfilePreset[],
+  serverProfile: CharacterDisplayProfile,
+): PersonaProfilePreset | null {
+  return profiles.find((profile) =>
+    profile.name === serverProfile.name
+    && profile.humor === serverProfile.humor
+    && profile.verbosity === serverProfile.verbosity
+    && profile.formality === serverProfile.formality
+    && profile.initiative === serverProfile.initiative
+  ) ?? null;
+}
+
+export function personaProfileFromServer(
+  serverProfile: CharacterDisplayProfile,
+): PersonaProfilePreset {
+  return createCustomPersonaProfile(SERVER_ACTIVE_PERSONA_ID, serverProfile);
 }
 
 function parseCustomProfile(value: unknown): PersonaProfilePreset | null {

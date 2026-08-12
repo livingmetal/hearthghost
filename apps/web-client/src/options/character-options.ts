@@ -90,7 +90,7 @@ export function characterOptionsMarkup(
             <button type="button" data-persona-delete>Delete</button>
           </div>
           <p class="character-setting-status" data-persona-setting-status>
-            Profiles stay on this device; active typed settings sync to Core.
+            Core stores the active persona; this device only caches editing presets.
           </p>
         </section>
       </div>

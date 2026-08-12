@@ -22,9 +22,11 @@ Client options keep appearance and persona independent:
   is device-local presentation state and never changes the assistant's name or
   conversational behavior.
 - **Persona** selects the assistant name plus the typed `humor`, `verbosity`,
-  `formality`, and `initiative` preferences. A device may keep a small local
-  library of presets, while the active values are validated and persisted by
-  Core in the authenticated principal's scope.
+  `formality`, and `initiative` preferences. Core is authoritative for the
+  active values and persists them in the authenticated principal's scope. On
+  every conversation open, the server returns all five typed fields and the
+  client hydrates its options from that profile without writing local defaults
+  back. A device may keep a small preset cache only as an editing convenience.
 
 The persona UI cannot supply a system prompt, tool instructions, credentials,
 policy, Node trust, capabilities, renderer commands, or arbitrary key/value

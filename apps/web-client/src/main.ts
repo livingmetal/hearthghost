@@ -40,10 +40,12 @@ import {
 import {
   createCustomPersonaProfile,
   deleteCustomPersonaProfile,
+  findMatchingPersonaProfile,
   loadActivePersonaId,
   loadPersonaProfiles,
   newCustomPersonaId,
   personaProfileCommand,
+  personaProfileFromServer,
   saveActivePersonaId,
   saveCustomPersonaProfile,
   type PersonaProfilePreset,
@@ -268,9 +270,24 @@ async function applyCharacterProfile(
   if (profile === null) {
     return;
   }
-  if (characterName !== null) {
-    characterName.textContent = profile.name;
+  let selected = findMatchingPersonaProfile(personaProfiles, profile);
+  if (selected === null) {
+    selected = personaProfileFromServer(profile);
+    try {
+      personaProfiles = saveCustomPersonaProfile(preferenceStorage, personaProfiles, selected);
+    } catch {
+      personaProfiles = Object.freeze([
+        ...personaProfiles.filter((candidate) => candidate.id !== selected?.id),
+        selected,
+      ]);
+    }
   }
+  activePersonaId = selected.id;
+  activePersona = selected;
+  saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
+  populatePersonaOptions(characterOptions, personaProfiles, selected.id);
+  writePersonaForm(characterOptions, selected);
+  if (characterName !== null) characterName.textContent = selected.name;
 }
 
 async function synchronizeActivePersonaToCore(): Promise<void> {
@@ -287,7 +304,6 @@ async function ensureConversationCharacter(): Promise<void> {
   }
   const opened = await conversation.open();
   await applyCharacterProfile(opened.characterProfile);
-  await synchronizeActivePersonaToCore();
 }
 
 function currentCharacterName(): string {
@@ -555,26 +571,25 @@ async function applySelectedPersona(): Promise<void> {
     && node.canUseCapability("conversation.text")
     && attention.canAcceptConversationInput();
   if (!canApply) {
-    setPersonaOptionsStatus(characterOptions, "Saved locally. Connect and Wake to apply it to Core.");
+    setPersonaOptionsStatus(characterOptions, "Draft cached locally. Connect and Wake to save it to Core.");
     return;
   }
   try {
     if (conversation.snapshot().conversationSessionId === null) {
       await ensureConversationCharacter();
-    } else {
-      await synchronizeActivePersonaToCore();
     }
+    await synchronizeActivePersonaToCore();
     attention.recordAddressedActivity();
     character.acknowledgeSuccess();
-    setPersonaOptionsStatus(characterOptions, "Saved locally and applied to Core.");
+    setPersonaOptionsStatus(characterOptions, "Saved to Core and cached on this device.");
     if (notice !== null) {
       notice.textContent = `${activePersona.name} persona is active; appearance is unchanged.`;
     }
   } catch (error) {
     character.showConcern();
     setPersonaOptionsStatus(characterOptions, error instanceof Error
-      ? `Saved locally; Core apply pending: ${error.message}`
-      : "Saved locally; Core apply pending.");
+      ? `Draft cached locally; Core save pending: ${error.message}`
+      : "Draft cached locally; Core save pending.");
   }
 }
 
