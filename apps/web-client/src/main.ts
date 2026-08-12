@@ -6,8 +6,6 @@ import "./history.css";
 import { AttentionController } from "./attention/controller.js";
 import {
   characterById,
-  characterByName,
-  selectionCommand,
   type HearthGhostCharacterDefinition,
 } from "./character/catalog.js";
 import { CharacterExperienceController } from "./character/experience.js";
@@ -29,6 +27,27 @@ import {
 } from "./node/android-platform.js";
 import { ClientNode } from "./node/client-node.js";
 import type { NodePlatformPort } from "./node/platform.js";
+import {
+  characterOptionsMarkup,
+  populatePersonaOptions,
+  readPersonaForm,
+  requireCharacterOptions,
+  selectCharacterOption,
+  setCharacterOptionsStatus,
+  setPersonaOptionsStatus,
+  writePersonaForm,
+} from "./options/character-options.js";
+import {
+  createCustomPersonaProfile,
+  deleteCustomPersonaProfile,
+  loadActivePersonaId,
+  loadPersonaProfiles,
+  newCustomPersonaId,
+  personaProfileCommand,
+  saveActivePersonaId,
+  saveCustomPersonaProfile,
+  type PersonaProfilePreset,
+} from "./options/persona-profiles.js";
 import {
   AndroidVoiceInput,
   type VoiceInputStatus,
@@ -56,6 +75,10 @@ const startupCharacter = characterById(preferredCharacterId)
 if (startupCharacter === null) {
   throw new Error("HearthGhost has no bundled default character");
 }
+let personaProfiles = loadPersonaProfiles(preferenceStorage);
+let activePersonaId = loadActivePersonaId(preferenceStorage, personaProfiles, startupCharacter.id);
+let activePersona = requirePersona(activePersonaId);
+let creatingPersona = false;
 
 const androidPlatform = Capacitor.getPlatform() === "android"
   ? new AndroidNodePlatform()
@@ -81,19 +104,7 @@ root.innerHTML = `
       </div>
       <div class="top-actions">
         <button class="quiet-button" type="button" data-connect>Connect</button>
-        <details class="app-options" data-options>
-          <summary>Options</summary>
-          <div class="options-panel" aria-label="HearthGhost options">
-            <label for="character-option">Character</label>
-            <select id="character-option" class="character-select" data-character-select aria-label="Character profile">
-              <option value="younghee">영희 · Avatar A</option>
-              <option value="cheolsu">철수 · Avatar C</option>
-            </select>
-            <p class="character-setting-status" data-character-setting-status>
-              Saved on this device. Core persona syncs when a trusted conversation is available.
-            </p>
-          </div>
-        </details>
+        ${characterOptionsMarkup(startupCharacter.id, personaProfiles, activePersonaId)}
         <details class="system-status">
           <summary>System</summary>
           <div class="status-bar" aria-label="Privacy and security status">
@@ -110,8 +121,8 @@ root.innerHTML = `
 
     <section class="character-stage" aria-label="HearthGhost character and response">
       <div class="character-identity" aria-live="polite">
-        <span class="character-identity-label">Character</span>
-        <strong data-character-name>${startupCharacter.name}</strong>
+        <span class="character-identity-label">Persona</span>
+        <strong data-character-name>${activePersona.name}</strong>
       </div>
       <section class="character-viewport" aria-label="${startupCharacter.name} character viewport"></section>
       <div class="response-layer">
@@ -158,9 +169,8 @@ const attentionStatus = root.querySelector<HTMLElement>("[data-attention-status]
 const microphoneStatus = root.querySelector<HTMLElement>("[data-microphone-status]");
 const speechStatus = root.querySelector<HTMLElement>("[data-speech-status]");
 const characterName = root.querySelector<HTMLElement>("[data-character-name]");
-const characterSelect = root.querySelector<HTMLSelectElement>("[data-character-select]");
-const characterSettingStatus = root.querySelector<HTMLElement>("[data-character-setting-status]");
-const optionsDetails = root.querySelector<HTMLDetailsElement>("[data-options]");
+const characterOptions = requireCharacterOptions(root);
+writePersonaForm(characterOptions, activePersona);
 const notice = root.querySelector<HTMLElement>("[data-notice]");
 const response = root.querySelector<HTMLOutputElement>("[data-response]");
 const form = root.querySelector<HTMLFormElement>("[data-conversation]");
@@ -175,9 +185,7 @@ if (viewportElement === null) {
   throw new Error("CharacterViewport element is missing");
 }
 const characterViewportElement = viewportElement;
-if (characterSelect !== null) {
-  characterSelect.value = preferredCharacterId;
-}
+selectCharacterOption(characterOptions, preferredCharacterId);
 const history = new EphemeralSessionHistory();
 const historyView = new SessionHistoryView(historyHost);
 
@@ -219,16 +227,14 @@ function currentVoiceProfile(): VoiceProfileId {
 }
 
 function setCharacterSettingStatus(message: string): void {
-  if (characterSettingStatus !== null) {
-    characterSettingStatus.textContent = message;
-  }
+  setCharacterOptionsStatus(characterOptions, message);
 }
 
 function rememberCharacter(characterDefinition: HearthGhostCharacterDefinition): void {
   preferredCharacterId = characterDefinition.id;
   const saved = savePreferredCharacterId(preferenceStorage, characterDefinition.id);
   setCharacterSettingStatus(saved
-    ? "Saved on this device. Core persona syncs when a trusted conversation is available."
+    ? "Appearance saved on this device."
     : "Character changed for this run, but persistent browser storage is unavailable.");
 }
 
@@ -240,12 +246,7 @@ async function displayCharacter(
     rememberCharacter(selected);
   }
   activeCharacter = selected;
-  if (characterName !== null) {
-    characterName.textContent = selected.name;
-  }
-  if (characterSelect !== null) {
-    characterSelect.value = selected.id;
-  }
+  selectCharacterOption(characterOptions, selected.id);
   characterViewportElement.setAttribute("aria-label", `${selected.name} character viewport`);
 
   if (renderedCharacterId !== selected.id) {
@@ -263,43 +264,21 @@ async function displayCharacter(
 
 async function applyCharacterProfile(
   profile: CharacterDisplayProfile | null,
-  persistPreference = true,
 ): Promise<void> {
   if (profile === null) {
     return;
   }
-  const selected = characterByName(profile.name);
-  if (selected === null) {
-    if (characterName !== null) {
-      characterName.textContent = profile.name;
-    }
-    activeCharacter = null;
-    await refreshVoiceStatus();
-    return;
+  if (characterName !== null) {
+    characterName.textContent = profile.name;
   }
-  await displayCharacter(selected, persistPreference);
 }
 
-async function synchronizePreferredCharacterToCore(
-  openedProfile: CharacterDisplayProfile | null,
-): Promise<void> {
+async function synchronizeActivePersonaToCore(): Promise<void> {
   if (conversation === null) {
     return;
   }
-  const preferred = characterById(preferredCharacterId)
-    ?? characterById(DEFAULT_CHARACTER_ID);
-  if (preferred === null) {
-    return;
-  }
-  const openedCharacter = openedProfile === null
-    ? null
-    : characterByName(openedProfile.name);
-  if (openedCharacter?.id === preferred.id) {
-    await displayCharacter(preferred, false);
-    return;
-  }
-  const synchronized = await conversation.submit(selectionCommand(preferred));
-  await applyCharacterProfile(synchronized.characterProfile, false);
+  const synchronized = await conversation.submit(personaProfileCommand(activePersona));
+  await applyCharacterProfile(synchronized.characterProfile);
 }
 
 async function ensureConversationCharacter(): Promise<void> {
@@ -307,7 +286,8 @@ async function ensureConversationCharacter(): Promise<void> {
     return;
   }
   const opened = await conversation.open();
-  await synchronizePreferredCharacterToCore(opened.characterProfile);
+  await applyCharacterProfile(opened.characterProfile);
+  await synchronizeActivePersonaToCore();
 }
 
 function currentCharacterName(): string {
@@ -476,49 +456,26 @@ wakeButton?.addEventListener("click", () => {
   messageInput?.focus();
 });
 
-characterSelect?.addEventListener("change", () => {
+characterOptions.appearanceSelect.addEventListener("change", () => {
   void (async () => {
-    const requested = characterById(characterSelect.value);
+    const requested = characterById(characterOptions.appearanceSelect.value);
     if (requested === null) {
-      characterSelect.value = preferredCharacterId;
+      selectCharacterOption(characterOptions, preferredCharacterId);
       return;
     }
 
     rememberCharacter(requested);
     try {
       await displayCharacter(requested, false);
-      optionsDetails?.removeAttribute("open");
-
-      const canSyncNow = conversation !== null
-        && node.canUseCapability("conversation.text")
-        && attention.canAcceptConversationInput();
-      if (!canSyncNow) {
-        setCharacterSettingStatus(
-          "Saved on this device. Core persona will sync when the next trusted conversation starts.",
-        );
-        if (notice !== null) {
-          notice.textContent = `${requested.name} will be used at the next launch and conversation.`;
-        }
-        return;
-      }
-
-      if (conversation.snapshot().conversationSessionId === null) {
-        const opened = await conversation.open();
-        await synchronizePreferredCharacterToCore(opened.characterProfile);
-      } else {
-        const synchronized = await conversation.submit(selectionCommand(requested));
-        await applyCharacterProfile(synchronized.characterProfile, false);
-      }
-      attention.recordAddressedActivity();
       character.acknowledgeSuccess();
-      setCharacterSettingStatus("Saved on this device and synchronized with Core.");
+      setCharacterSettingStatus("Appearance saved on this device.");
       if (notice !== null) {
-        notice.textContent = `${requested.name}: ${requested.sample} / local voice profile selected.`;
+        notice.textContent = `${requested.name}: ${requested.sample} / local voice selected. Persona was not changed.`;
       }
       showSnapshot();
     } catch (error) {
       setCharacterSettingStatus(
-        "Saved on this device. Core synchronization is pending until a trusted conversation is available.",
+        "Appearance changed for this run; persistent storage is unavailable.",
       );
       if (notice !== null) {
         notice.textContent = error instanceof Error
@@ -528,6 +485,106 @@ characterSelect?.addEventListener("change", () => {
     }
   })();
 });
+
+characterOptions.personaSelect.addEventListener("change", () => {
+  const selected = personaProfiles.find((profile) => profile.id === characterOptions.personaSelect.value);
+  if (selected === undefined) {
+    writePersonaForm(characterOptions, activePersona);
+    return;
+  }
+  creatingPersona = false;
+  activePersonaId = selected.id;
+  activePersona = selected;
+  saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
+  writePersonaForm(characterOptions, selected);
+  void applySelectedPersona();
+});
+
+characterOptions.personaNew.addEventListener("click", () => {
+  creatingPersona = true;
+  characterOptions.personaSelect.value = "";
+  characterOptions.personaName.value = "";
+  characterOptions.personaHumor.value = "moderate";
+  characterOptions.personaVerbosity.value = "normal";
+  characterOptions.personaFormality.value = "casual";
+  characterOptions.personaInitiative.value = "low";
+  characterOptions.personaDelete.disabled = true;
+  setPersonaOptionsStatus(characterOptions, "Enter a name, then choose Save & apply.");
+  characterOptions.personaName.focus();
+});
+
+characterOptions.personaSave.addEventListener("click", () => {
+  try {
+    const selected = personaProfiles.find((profile) => profile.id === characterOptions.personaSelect.value);
+    const id = !creatingPersona && selected !== undefined && !selected.builtIn
+      ? selected.id
+      : newCustomPersonaId();
+    const profile = createCustomPersonaProfile(id, readPersonaForm(characterOptions));
+    personaProfiles = saveCustomPersonaProfile(preferenceStorage, personaProfiles, profile);
+    activePersonaId = profile.id;
+    activePersona = profile;
+    creatingPersona = false;
+    saveActivePersonaId(preferenceStorage, personaProfiles, profile.id);
+    populatePersonaOptions(characterOptions, personaProfiles, profile.id);
+    writePersonaForm(characterOptions, profile);
+    void applySelectedPersona();
+  } catch (error) {
+    setPersonaOptionsStatus(characterOptions, error instanceof Error ? error.message : "Persona could not be saved.");
+  }
+});
+
+characterOptions.personaDelete.addEventListener("click", () => {
+  const selected = personaProfiles.find((profile) => profile.id === characterOptions.personaSelect.value);
+  if (selected === undefined || selected.builtIn) {
+    return;
+  }
+  personaProfiles = deleteCustomPersonaProfile(preferenceStorage, personaProfiles, selected.id);
+  activePersonaId = preferredCharacterId;
+  activePersona = requirePersona(activePersonaId);
+  saveActivePersonaId(preferenceStorage, personaProfiles, activePersonaId);
+  populatePersonaOptions(characterOptions, personaProfiles, activePersonaId);
+  writePersonaForm(characterOptions, activePersona);
+  void applySelectedPersona();
+});
+
+async function applySelectedPersona(): Promise<void> {
+  if (characterName !== null) {
+    characterName.textContent = activePersona.name;
+  }
+  const canApply = conversation !== null
+    && node.canUseCapability("conversation.text")
+    && attention.canAcceptConversationInput();
+  if (!canApply) {
+    setPersonaOptionsStatus(characterOptions, "Saved locally. Connect and Wake to apply it to Core.");
+    return;
+  }
+  try {
+    if (conversation.snapshot().conversationSessionId === null) {
+      await ensureConversationCharacter();
+    } else {
+      await synchronizeActivePersonaToCore();
+    }
+    attention.recordAddressedActivity();
+    character.acknowledgeSuccess();
+    setPersonaOptionsStatus(characterOptions, "Saved locally and applied to Core.");
+    if (notice !== null) {
+      notice.textContent = `${activePersona.name} persona is active; appearance is unchanged.`;
+    }
+  } catch (error) {
+    character.showConcern();
+    setPersonaOptionsStatus(characterOptions, error instanceof Error
+      ? `Saved locally; Core apply pending: ${error.message}`
+      : "Saved locally; Core apply pending.");
+  }
+}
+
+function requirePersona(id: string): PersonaProfilePreset {
+  const profile = personaProfiles.find((candidate) => candidate.id === id) ?? personaProfiles[0];
+  if (profile === undefined) {
+    throw new Error("HearthGhost has no persona profiles");
+  }
+  return profile;
+}
 
 for (const templateButton of root.querySelectorAll<HTMLButtonElement>("[data-template]")) {
   templateButton.addEventListener("click", () => {

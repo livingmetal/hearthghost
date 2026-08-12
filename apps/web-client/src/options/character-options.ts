@@ -3,11 +3,28 @@ import {
   characterById,
   type HearthGhostCharacterId,
 } from "../character/catalog.js";
+import type {
+  PersonaFormality,
+  PersonaHumor,
+  PersonaInitiative,
+  PersonaProfilePreset,
+  PersonaVerbosity,
+} from "./persona-profiles.js";
 
 export interface CharacterOptionsElements {
   readonly details: HTMLDetailsElement;
-  readonly select: HTMLSelectElement;
-  readonly status: HTMLElement;
+  readonly appearanceSelect: HTMLSelectElement;
+  readonly appearanceStatus: HTMLElement;
+  readonly personaSelect: HTMLSelectElement;
+  readonly personaName: HTMLInputElement;
+  readonly personaHumor: HTMLSelectElement;
+  readonly personaVerbosity: HTMLSelectElement;
+  readonly personaFormality: HTMLSelectElement;
+  readonly personaInitiative: HTMLSelectElement;
+  readonly personaNew: HTMLButtonElement;
+  readonly personaSave: HTMLButtonElement;
+  readonly personaDelete: HTMLButtonElement;
+  readonly personaStatus: HTMLElement;
 }
 
 function escapeAttribute(value: string): string {
@@ -24,52 +41,145 @@ function optionLabel(entry: (typeof CHARACTER_CATALOG)[number]): string {
 
 export function characterOptionsMarkup(
   selectedId: HearthGhostCharacterId,
+  profiles: readonly PersonaProfilePreset[],
+  selectedPersonaId: string,
 ): string {
-  const options = CHARACTER_CATALOG.map((entry) => {
+  const appearanceOptions = CHARACTER_CATALOG.map((entry) => {
     const selected = entry.id === selectedId ? " selected" : "";
     return `<option value="${escapeAttribute(entry.id)}"${selected}>${optionLabel(entry)}</option>`;
   }).join("");
+  const personaOptions = profiles.map((profile) => {
+    const selected = profile.id === selectedPersonaId ? " selected" : "";
+    const suffix = profile.builtIn ? " · built-in" : " · custom";
+    return `<option value="${escapeAttribute(profile.id)}"${selected}>${escapeAttribute(profile.name + suffix)}</option>`;
+  }).join("");
+  const persona = profiles.find((profile) => profile.id === selectedPersonaId) ?? profiles[0];
+  if (persona === undefined) {
+    throw new Error("At least one persona profile is required");
+  }
 
   return `
     <details class="app-options" data-options>
       <summary>Options</summary>
       <div class="options-panel" aria-label="HearthGhost options">
-        <label for="character-option">Character</label>
-        <select id="character-option" class="character-select" data-character-select aria-label="Character profile">
-          ${options}
-        </select>
-        <p class="character-setting-status" data-character-setting-status>
-          Saved on this device. Core persona syncs when a trusted conversation is available.
-        </p>
+        <section class="option-section" aria-labelledby="appearance-options-title">
+          <h2 id="appearance-options-title">Appearance</h2>
+          <label for="character-option">VRM model and local voice</label>
+          <select id="character-option" class="character-select" data-character-select aria-label="Character appearance">
+            ${appearanceOptions}
+          </select>
+          <p class="character-setting-status" data-character-setting-status>Saved on this device.</p>
+        </section>
+        <section class="option-section" aria-labelledby="persona-options-title">
+          <h2 id="persona-options-title">Persona</h2>
+          <label for="persona-option">Profile</label>
+          <select id="persona-option" class="character-select" data-persona-select aria-label="Persona profile">
+            ${personaOptions}
+          </select>
+          <label for="persona-name">Name</label>
+          <input id="persona-name" class="persona-name-input" data-persona-name maxlength="80" value="${escapeAttribute(persona.name)}" />
+          <div class="persona-field-grid">
+            ${personaSelectMarkup("Humor", "humor", ["low", "moderate", "high"], persona.humor)}
+            ${personaSelectMarkup("Response length", "verbosity", ["concise", "normal", "detailed"], persona.verbosity)}
+            ${personaSelectMarkup("Formality", "formality", ["casual", "neutral", "formal"], persona.formality)}
+            ${personaSelectMarkup("Initiative", "initiative", ["low", "moderate", "high"], persona.initiative)}
+          </div>
+          <div class="persona-actions">
+            <button type="button" data-persona-new>New</button>
+            <button type="button" data-persona-save>Save & apply</button>
+            <button type="button" data-persona-delete>Delete</button>
+          </div>
+          <p class="character-setting-status" data-persona-setting-status>
+            Profiles stay on this device; active typed settings sync to Core.
+          </p>
+        </section>
       </div>
     </details>
   `;
 }
 
-export function requireCharacterOptions(
-  root: ParentNode,
-): CharacterOptionsElements {
-  const details = root.querySelector<HTMLDetailsElement>("[data-options]");
-  const select = root.querySelector<HTMLSelectElement>("[data-character-select]");
-  const status = root.querySelector<HTMLElement>("[data-character-setting-status]");
-  if (details === null || select === null || status === null) {
+function personaSelectMarkup(
+  label: string,
+  field: string,
+  values: readonly string[],
+  selectedValue: string,
+): string {
+  const options = values.map((value) =>
+    `<option value="${value}"${value === selectedValue ? " selected" : ""}>${value}</option>`
+  ).join("");
+  return `<label>${label}<select data-persona-${field}>${options}</select></label>`;
+}
+
+export function requireCharacterOptions(root: ParentNode): CharacterOptionsElements {
+  const elements = {
+    details: root.querySelector<HTMLDetailsElement>("[data-options]"),
+    appearanceSelect: root.querySelector<HTMLSelectElement>("[data-character-select]"),
+    appearanceStatus: root.querySelector<HTMLElement>("[data-character-setting-status]"),
+    personaSelect: root.querySelector<HTMLSelectElement>("[data-persona-select]"),
+    personaName: root.querySelector<HTMLInputElement>("[data-persona-name]"),
+    personaHumor: root.querySelector<HTMLSelectElement>("[data-persona-humor]"),
+    personaVerbosity: root.querySelector<HTMLSelectElement>("[data-persona-verbosity]"),
+    personaFormality: root.querySelector<HTMLSelectElement>("[data-persona-formality]"),
+    personaInitiative: root.querySelector<HTMLSelectElement>("[data-persona-initiative]"),
+    personaNew: root.querySelector<HTMLButtonElement>("[data-persona-new]"),
+    personaSave: root.querySelector<HTMLButtonElement>("[data-persona-save]"),
+    personaDelete: root.querySelector<HTMLButtonElement>("[data-persona-delete]"),
+    personaStatus: root.querySelector<HTMLElement>("[data-persona-setting-status]"),
+  };
+  if (Object.values(elements).some((element) => element === null)) {
     throw new Error("Shared character options are missing");
   }
-  return { details, select, status };
+  return elements as CharacterOptionsElements;
 }
 
-export function setCharacterOptionsStatus(
-  elements: CharacterOptionsElements,
-  message: string,
-): void {
-  elements.status.textContent = message;
+export function setCharacterOptionsStatus(elements: CharacterOptionsElements, message: string): void {
+  elements.appearanceStatus.textContent = message;
 }
 
-export function selectCharacterOption(
+export function setPersonaOptionsStatus(elements: CharacterOptionsElements, message: string): void {
+  elements.personaStatus.textContent = message;
+}
+
+export function selectCharacterOption(elements: CharacterOptionsElements, id: HearthGhostCharacterId): void {
+  elements.appearanceSelect.value = id;
+}
+
+export function populatePersonaOptions(
   elements: CharacterOptionsElements,
-  id: HearthGhostCharacterId,
+  profiles: readonly PersonaProfilePreset[],
+  selectedId: string,
 ): void {
-  elements.select.value = id;
+  const fragment = document.createDocumentFragment();
+  for (const profile of profiles) {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = `${profile.name} · ${profile.builtIn ? "built-in" : "custom"}`;
+    fragment.append(option);
+  }
+  elements.personaSelect.replaceChildren(fragment);
+  elements.personaSelect.value = selectedId;
+}
+
+export function writePersonaForm(elements: CharacterOptionsElements, profile: PersonaProfilePreset): void {
+  elements.personaSelect.value = profile.id;
+  elements.personaName.value = profile.name;
+  elements.personaHumor.value = profile.humor;
+  elements.personaVerbosity.value = profile.verbosity;
+  elements.personaFormality.value = profile.formality;
+  elements.personaInitiative.value = profile.initiative;
+  elements.personaDelete.disabled = profile.builtIn;
+}
+
+export function readPersonaForm(
+  elements: CharacterOptionsElements,
+): Omit<PersonaProfilePreset, "id" | "builtIn"> {
+  return {
+    name: elements.personaName.value.trim(),
+    humor: elements.personaHumor.value as PersonaHumor,
+    verbosity: elements.personaVerbosity.value as PersonaVerbosity,
+    formality: elements.personaFormality.value as PersonaFormality,
+    initiative: elements.personaInitiative.value as PersonaInitiative,
+  };
 }
 
 export function synchronizeCharacterOptionsCatalog(root: ParentNode): boolean {

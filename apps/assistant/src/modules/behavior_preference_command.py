@@ -12,6 +12,7 @@ without paying for or trusting an LLM classification round trip.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 
@@ -38,6 +39,10 @@ _CHARACTER_SELECTION = re.compile(
     rf"^\s*(?:캐릭터|character)\s*[:=]\s*({YOUNGHEE_NAME}|{CHEOLSU_NAME})\s*$",
     re.IGNORECASE,
 )
+_PERSONA_PROFILE_PREFIX = "페르소나:v1:"
+_PERSONA_PROFILE_FIELDS = frozenset(
+    {"name", "humor", "verbosity", "formality", "initiative"}
+)
 
 
 @dataclass(frozen=True)
@@ -61,7 +66,18 @@ class BehaviorPreferenceCommandService:
 
     def handle(self, *, node_id: str, text: str) -> BehaviorPreferenceCommandResult:
         selection = _parse_character_selection(text)
-        if selection is None and not _looks_like_preference(text):
+        persona_profile = None
+        if isinstance(text, str) and text.startswith(_PERSONA_PROFILE_PREFIX):
+            try:
+                persona_profile = _parse_persona_profile(text)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return BehaviorPreferenceCommandResult(
+                    True,
+                    False,
+                    "persona_profile_invalid",
+                    "페르소나 설정 형식이 올바르지 않아 변경하지 않았어요.",
+                )
+        if selection is None and persona_profile is None and not _looks_like_preference(text):
             return BehaviorPreferenceCommandResult(False, False, "not_preference_command")
         try:
             principal = self._principals.resolve(node_id)
@@ -71,7 +87,17 @@ class BehaviorPreferenceCommandService:
             return _denied("principal_unresolved")
 
         try:
-            if selection is not None:
+            if persona_profile is not None:
+                result = self._preferences.apply_explicit(
+                    [
+                        BehaviorPreferenceChange(f"character.{field}", persona_profile[field])
+                        for field in ("name", "humor", "verbosity", "formality", "initiative")
+                    ],
+                    scope=principal.scope.value,
+                    scope_id=principal.scope_id,
+                    updated_by_node_id=node_id,
+                )
+            elif selection is not None:
                 result = self._preferences.apply_explicit(
                     [BehaviorPreferenceChange("character.name", selection)],
                     scope=principal.scope.value,
@@ -96,14 +122,22 @@ class BehaviorPreferenceCommandService:
         if result.applied and result.snapshot is not None:
             persona = result.snapshot.persona
             message = (
-                f"{persona.name} 캐릭터로 전환했어요."
-                if selection is not None
-                else f"캐릭터 설정을 반영했어요. 이름: {persona.name}"
+                f"{persona.name} 페르소나를 적용했어요."
+                if persona_profile is not None
+                else (
+                    f"{persona.name} 캐릭터로 전환했어요."
+                    if selection is not None
+                    else f"캐릭터 설정을 반영했어요. 이름: {persona.name}"
+                )
             )
             return BehaviorPreferenceCommandResult(
                 True,
                 True,
-                "character_profile_selected" if selection is not None else "preference_applied",
+                (
+                    "persona_profile_applied"
+                    if persona_profile is not None
+                    else "character_profile_selected" if selection is not None else "preference_applied"
+                ),
                 message,
                 result.snapshot,
             )
@@ -129,6 +163,24 @@ def _parse_character_selection(text: object) -> str | None:
     if selected == CHEOLSU_NAME:
         return CHEOLSU_NAME
     return None
+
+
+def _parse_persona_profile(text: object) -> dict[str, str]:
+    if (
+        not isinstance(text, str)
+        or not text.startswith(_PERSONA_PROFILE_PREFIX)
+        or len(text) > 1_000
+        or "\x00" in text
+    ):
+        raise ValueError("persona profile command is invalid")
+    payload = json.loads(text[len(_PERSONA_PROFILE_PREFIX) :])
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != _PERSONA_PROFILE_FIELDS
+        or any(not isinstance(value, str) for value in payload.values())
+    ):
+        raise ValueError("persona profile fields are invalid")
+    return payload
 
 
 def _looks_like_preference(text: object) -> bool:

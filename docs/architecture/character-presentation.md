@@ -14,6 +14,24 @@ Ghost Identity
 └─ Appearance / Renderer
 ```
 
+## Appearance and persona selection
+
+Client options keep appearance and persona independent:
+
+- **Appearance** selects a bundled local VRM model and local voice profile. It
+  is device-local presentation state and never changes the assistant's name or
+  conversational behavior.
+- **Persona** selects the assistant name plus the typed `humor`, `verbosity`,
+  `formality`, and `initiative` preferences. A device may keep a small local
+  library of presets, while the active values are validated and persisted by
+  Core in the authenticated principal's scope.
+
+The persona UI cannot supply a system prompt, tool instructions, credentials,
+policy, Node trust, capabilities, renderer commands, or arbitrary key/value
+data. It sends one versioned deterministic command containing exactly the five
+allowed string fields; Core rejects malformed, extra, or invalid fields before
+calling an LLM or changing the stored profile.
+
 ## Renderer abstraction
 
 The application shell and HearthGhost Core must not depend directly on VRM, PNGAL output, Live2D, or any future renderer.
