@@ -136,7 +136,7 @@ export class CharacterViewport {
 
   private applyPresenceToSurface(): void {
     const surface = this.element.firstElementChild;
-    if (!(surface instanceof HTMLElement)) {
+    if (typeof HTMLElement === "undefined" || !(surface instanceof HTMLElement)) {
       return;
     }
     const profile = this.presenceProfile();
