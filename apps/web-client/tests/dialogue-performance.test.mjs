@@ -28,6 +28,11 @@ test("embodied acknowledgement does not stack an automatic nod on explicit gestu
   assert.equal(plan.beats.some((beat) => beat.gesture !== null), false);
 });
 
+test("explanatory geuraeseo does not look like an agreement cue", () => {
+  const plan = planDialoguePerformance("그래서 다음 단계에서는 캐시를 먼저 확인해.");
+  assert.equal(plan.beats.some((beat) => beat.gesture?.gesture === "nod"), false);
+});
+
 test("uncertainty can use a bounded shrug and only once", () => {
   const plan = planDialoguePerformance("확실하지 않지만 한 가지 가능성은 있어. 모르겠으면 확인해보자.");
   const gestures = plan.beats.flatMap((beat) => beat.gesture === null ? [] : [beat.gesture]);
