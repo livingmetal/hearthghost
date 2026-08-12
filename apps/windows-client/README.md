@@ -22,7 +22,10 @@ npm ci
 npm run windows:dev
 ```
 
-`windows:dev` retrieves the pinned AvatarSample A/C assets, verifies their exact Git blob identities, writes them only into `public/models`, and starts Vite on loopback.
+`windows:dev` retrieves the pinned AvatarSample A/C VRMs and the pinned AIRI
+`idle_loop.vrma`, verifies their exact Git blob identities, writes them only
+into the local `public` presentation tree, and starts Vite on loopback. The
+running Windows client does not fetch those character assets from GitHub.
 
 ## Configure the native Node
 
@@ -53,8 +56,7 @@ The WebView2 shell accepts bridge messages only from the configured loopback ori
 
 - `Connect` opens a native TLS 1.3 Node session.
 - Core must trust the Node and grant `conversation.text` before Send or character selection is enabled.
-- `영희 · Avatar A` and `철수 · Avatar C` use the same principal-scoped Persona commands as Android.
-- VRM assets are rendered locally.
+- Character appearance and the VRM base idle are rendered locally by the shared web renderer.
 - Conversation history is in-memory only and clears when the page closes.
 
 ## Not implemented yet
