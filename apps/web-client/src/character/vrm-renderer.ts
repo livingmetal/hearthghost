@@ -26,8 +26,8 @@ import { NaturalPostureController, type VrmPostureFrame } from "./vrm-posture.js
 import { EmotionPostureController } from "./vrm-emotion-posture.js";
 import { GazeBehaviorController } from "./vrm-gaze-behavior.js";
 import { actionMotionFrame, type VrmActionMotionFrame } from "./vrm-action-motion.js";
+import { VrmExpressionComposer } from "./vrm-expression-composer.js";
 import type {
-  CharacterEmotion,
   CharacterGesture,
   CharacterPresentation,
   CharacterSide,
@@ -76,17 +76,6 @@ interface ActiveGesture {
 
 const MAX_GESTURE_QUEUE = 8;
 
-const EMOTION_EXPRESSION_TARGETS: Readonly<
-  Record<CharacterEmotion, Readonly<Record<string, number>>>
-> = Object.freeze({
-  neutral: Object.freeze({}),
-  happy: Object.freeze({ happy: 0.42 }),
-  amused: Object.freeze({ happy: 0.34, relaxed: 0.12 }),
-  curious: Object.freeze({ surprised: 0.12, happy: 0.05 }),
-  concerned: Object.freeze({ sad: 0.26 }),
-  surprised: Object.freeze({ surprised: 0.48 }),
-});
-
 export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(
@@ -97,7 +86,6 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   );
   private readonly clock = new Clock();
   private readonly lookAtTarget = new Object3D();
-  private readonly expressionValues = new Map<string, number>();
   private readonly expressionNames = new Map<string, string>();
   private readonly drivenBones = new Map<DrivenBoneName, BoneRestPose>();
   private readonly gestureQueue: CharacterGesture[] = [];
@@ -107,6 +95,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly posture: NaturalPostureController;
   private readonly emotionPosture: EmotionPostureController;
   private readonly gaze: GazeBehaviorController;
+  private readonly expressionComposer: VrmExpressionComposer;
   private renderer: WebGLRenderer | null = null;
   private vrm: VRM | null = null;
   private frame: number | null = null;
@@ -131,6 +120,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.posture = new NaturalPostureController(characterId);
     this.emotionPosture = new EmotionPostureController(characterId);
     this.gaze = new GazeBehaviorController(characterId);
+    this.expressionComposer = new VrmExpressionComposer(characterId);
     this.camera.position.set(
       VRM_CAMERA_FRAMING.cameraX,
       VRM_CAMERA_FRAMING.cameraY,
@@ -209,7 +199,6 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.vrm = null;
     this.drivenBones.clear();
     this.expressionNames.clear();
-    this.expressionValues.clear();
     this.renderer?.dispose();
     this.renderer?.domElement.remove();
     this.renderer = null;
@@ -249,6 +238,8 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.gestureQueue.length = 0;
     this.activeGesture = null;
     this.indexExpressions(vrm);
+    this.expressionComposer.reset();
+    this.expressionComposer.setCapabilities(this.expressionNames.keys());
     const lookAt = vrm.lookAt;
     if (lookAt !== null && lookAt !== undefined) {
       lookAt.target = this.lookAtTarget;
@@ -743,14 +734,12 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   }
 
   private updateExpressions(delta: number): void {
-    const target = EMOTION_EXPRESSION_TARGETS[this.presentation.emotion]
-      ?? EMOTION_EXPRESSION_TARGETS.neutral;
-    for (const name of ["happy", "relaxed", "surprised", "sad"] as const) {
-      const from = this.expressionValues.get(name) ?? 0;
-      const to = target[name] ?? 0;
-      const blend = 1 - Math.exp(-7 * delta);
-      const value = from + (to - from) * blend;
-      this.expressionValues.set(name, value);
+    const frame = this.expressionComposer.update(
+      delta,
+      this.presentation.state,
+      this.presentation.emotion,
+    );
+    for (const [name, value] of frame) {
       this.setExpression(name, value);
     }
   }
