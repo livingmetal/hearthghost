@@ -10,9 +10,19 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
+import type { HearthGhostCharacterId } from "./catalog.js";
 import type { CharacterRenderer } from "./renderer.js";
+import { VrmBaseAnimationLayer } from "./vrm-base-animation.js";
+import { ProceduralIdleBaseMotion, type VrmBaseMotionFrame } from "./vrm-base-motion.js";
+import {
+  FINGER_BONE_NAMES,
+  fingerBonesForSide,
+  handPoseDelta,
+  handPoseRotation,
+} from "./vrm-hand-pose.js";
 import { VRM_CAMERA_FRAMING } from "./vrm-framing.js";
 import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";
+import { NaturalPostureController, type VrmPostureFrame } from "./vrm-posture.js";
 import type {
   CharacterEmotion,
   CharacterGesture,
@@ -26,6 +36,9 @@ interface BoneRestPose {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+  readonly px: number;
+  readonly py: number;
+  readonly pz: number;
 }
 
 const DRIVEN_BONE_NAMES = [
@@ -46,9 +59,11 @@ const DRIVEN_BONE_NAMES = [
   "rightHand",
   "rightUpperLeg",
   "rightLowerLeg",
+  ...FINGER_BONE_NAMES,
 ] as const;
 
 type DrivenBoneName = (typeof DRIVEN_BONE_NAMES)[number];
+type RotationTuple = readonly [number, number, number];
 
 interface ActiveGesture {
   readonly gesture: CharacterGesture;
@@ -58,7 +73,9 @@ interface ActiveGesture {
 
 const MAX_GESTURE_QUEUE = 8;
 
-const EMOTION_EXPRESSION_TARGETS: Readonly<Record<CharacterEmotion, Readonly<Record<string, number>>>> = Object.freeze({
+const EMOTION_EXPRESSION_TARGETS: Readonly<
+  Record<CharacterEmotion, Readonly<Record<string, number>>>
+> = Object.freeze({
   neutral: Object.freeze({}),
   happy: Object.freeze({ happy: 0.42 }),
   amused: Object.freeze({ happy: 0.34, relaxed: 0.12 }),
@@ -82,6 +99,9 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly drivenBones = new Map<DrivenBoneName, BoneRestPose>();
   private readonly gestureQueue: CharacterGesture[] = [];
   private readonly viewManipulation = new VrmViewManipulation();
+  private readonly baseAnimation = new VrmBaseAnimationLayer();
+  private readonly baseMotion = new ProceduralIdleBaseMotion();
+  private readonly posture: NaturalPostureController;
   private renderer: WebGLRenderer | null = null;
   private vrm: VRM | null = null;
   private frame: number | null = null;
@@ -95,18 +115,17 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private rootRestX = 0;
   private rootRestY = 0;
   private rootRestZ = 0;
-  private stageX = 0;
-  private stageZ = 0;
-  private stageTargetX = 0;
-  private stageTargetZ = 0;
-  private nextStageShiftAt = 4.5 + Math.random() * 2.5;
   private activeGesture: ActiveGesture | null = null;
   private presentation: CharacterPresentation = {
     state: "sleeping",
     emotion: "neutral",
   };
 
-  constructor(private readonly assetUrl: string | null = null) {
+  constructor(
+    private readonly assetUrl: string | null = null,
+    characterId: HearthGhostCharacterId | null = null,
+  ) {
+    this.posture = new NaturalPostureController(characterId);
     this.camera.position.set(
       VRM_CAMERA_FRAMING.cameraX,
       VRM_CAMERA_FRAMING.cameraY,
@@ -177,6 +196,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.suspend();
     this.gestureQueue.length = 0;
     this.activeGesture = null;
+    this.baseAnimation.dispose();
     if (this.vrm !== null) {
       this.vrm.scene.removeFromParent();
       VRMUtils.deepDispose(this.vrm.scene);
@@ -204,6 +224,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     VRMUtils.combineMorphs(vrm);
     VRMUtils.rotateVRM0(vrm);
 
+    this.baseAnimation.dispose();
     if (this.vrm !== null) {
       this.vrm.scene.removeFromParent();
       VRMUtils.deepDispose(this.vrm.scene);
@@ -216,17 +237,23 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.rootRestX = vrm.scene.position.x;
     this.rootRestY = vrm.scene.position.y;
     this.rootRestZ = vrm.scene.position.z;
-    this.stageX = 0;
-    this.stageZ = 0;
-    this.stageTargetX = 0;
-    this.stageTargetZ = 0;
-    this.nextStageShiftAt = this.elapsed + 4.5 + Math.random() * 2.5;
+    this.baseMotion.reset(this.elapsed);
+    this.posture.reset(this.elapsed);
     this.gestureQueue.length = 0;
     this.activeGesture = null;
     this.indexExpressions(vrm);
     const lookAt = vrm.lookAt;
     if (lookAt !== null && lookAt !== undefined) {
       lookAt.target = this.lookAtTarget;
+    }
+
+    try {
+      await this.baseAnimation.load(vrm);
+    } catch {
+      // A missing or malformed optional VRMA never prevents the approved VRM
+      // from loading. The foot-planted procedural base motion remains available.
+      this.baseAnimation.dispose();
+      this.baseMotion.reset(this.elapsed);
     }
   }
 
@@ -279,6 +306,9 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         x: node.rotation.x,
         y: node.rotation.y,
         z: node.rotation.z,
+        px: node.position.x,
+        py: node.position.y,
+        pz: node.position.z,
       });
     }
   }
@@ -303,8 +333,13 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.elapsed += delta;
     if (this.vrm !== null) {
       this.resetFramePose();
-      this.updateStageMotion(this.presentation.state, delta);
+      const hasAuthoredBase = this.baseAnimation.update(delta, this.presentation.state);
+      if (!hasAuthoredBase) {
+        this.applyBaseMotion(this.baseMotion.update(delta, this.presentation.state));
+      }
       this.updateBodyMotion(this.presentation.state);
+      this.applyPosture(this.posture.update(delta, this.elapsed, this.presentation.state));
+      this.applyRelaxedHands();
       this.updateGesture();
       this.updateLookAt(this.presentation.state, delta);
       this.updateExpressions(delta);
@@ -317,59 +352,86 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   }
 
   private updateBodyMotion(state: CharacterState): void {
-    const activity = state === "speaking"
-      ? 1.35
-      : state === "noticing"
-        ? 1.15
-        : state === "sleeping"
-          ? 0.28
-          : 0.8;
-    const breath = Math.sin(this.elapsed * 1.8) * 0.012 * activity;
-    const sway = Math.sin(this.elapsed * 0.72) * 0.012 * activity;
-    const speakingNod = state === "speaking" ? Math.sin(this.elapsed * 3.4) * 0.014 : 0;
-    const thinkingTilt = state === "thinking" ? 0.055 : 0;
-    const sleepingDrop = state === "sleeping" ? 0.07 : 0;
-    const stance = Math.sin(this.elapsed * 0.31) * activity;
-    const armDrift = Math.sin(this.elapsed * 0.46 + 0.8) * activity;
+  const activity = state === "speaking"
+    ? 1.18
+    : state === "noticing"
+      ? 1.02
+      : state === "sleeping"
+        ? 0.22
+        : 0.68;
+  const breath = Math.sin(this.elapsed * 1.8) * 0.010 * activity;
+  const upperBodySway = Math.sin(this.elapsed * 0.70) * 0.0035 * activity;
+  const speakingNod = state === "speaking" ? Math.sin(this.elapsed * 3.2) * 0.009 : 0;
+  const sleepingDrop = state === "sleeping" ? 0.045 : 0;
 
-    this.setBoneRotation("hips", 0, sway * 0.45, sway * 0.4 + stance * 0.006);
-    this.setBoneRotation("spine", breath * 0.55, sway * 0.38, -sway * 0.25);
-    this.setBoneRotation("chest", breath, sway * 0.5, sway * 0.42);
-    this.setBoneRotation("neck", sleepingDrop * 0.35, -sway * 0.35, thinkingTilt * 0.35);
-    this.setBoneRotation("head", sleepingDrop + speakingNod, -sway * 0.6, thinkingTilt);
-    this.offsetBoneRotation("leftUpperLeg", 0.018 + stance * 0.008, 0, -stance * 0.004);
-    this.offsetBoneRotation("rightUpperLeg", 0.018 - stance * 0.008, 0, -stance * 0.004);
-    this.offsetBoneRotation("leftLowerLeg", -0.026 - stance * 0.006, 0, 0);
-    this.offsetBoneRotation("rightLowerLeg", -0.026 + stance * 0.006, 0, 0);
+  this.offsetBoneRotation("hips", 0, upperBodySway * 0.16, 0);
+  this.offsetBoneRotation("spine", breath * 0.45, upperBodySway * 0.22, -upperBodySway * 0.16);
+  this.offsetBoneRotation("chest", breath, upperBodySway * 0.34, upperBodySway * 0.24);
+  this.offsetBoneRotation("neck", sleepingDrop * 0.28, -upperBodySway * 0.20, 0);
+  this.offsetBoneRotation("head", sleepingDrop + speakingNod, -upperBodySway * 0.34, 0);
 
-    if (state === "thinking") {
-      this.applyThinkingPose();
-      return;
-    }
-    const speakingLift = state === "speaking" ? 0.035 : 0;
-    this.offsetBoneRotation("leftShoulder", 0, 0, -armDrift * 0.004);
-    this.offsetBoneRotation("rightShoulder", 0, 0, armDrift * 0.004);
-    this.offsetBoneRotation("leftUpperArm", speakingLift + armDrift * 0.012, 0, armDrift * 0.009);
-    this.offsetBoneRotation("rightUpperArm", -speakingLift - armDrift * 0.012, 0, armDrift * 0.009);
-    this.offsetBoneRotation("leftLowerArm", -speakingLift * 1.8, 0, 0);
-    this.offsetBoneRotation("rightLowerArm", -speakingLift * 1.8, 0, 0);
+  if (state === "speaking") {
+    const conversationalLift = Math.sin(this.elapsed * 1.15 + 0.4) * 0.012;
+    this.offsetBoneRotation("leftUpperArm", 0.018 + conversationalLift, 0, 0);
+    this.offsetBoneRotation("rightUpperArm", -0.014 - conversationalLift * 0.75, 0, 0);
+    this.offsetBoneRotation("leftLowerArm", -0.030, 0, 0);
+    this.offsetBoneRotation("rightLowerArm", -0.022, 0, 0);
+  }
+}
+
+  private applyBaseMotion(frame: VrmBaseMotionFrame): void {
+    this.offsetBoneTuple("hips", frame.hips);
+    this.offsetBoneTuple("spine", frame.spine);
+    this.offsetBoneTuple("chest", frame.chest);
+    this.offsetBoneTuple("neck", frame.neck);
+    this.offsetBoneTuple("head", frame.head);
+    this.offsetBoneTuple("leftShoulder", frame.leftShoulder);
+    this.offsetBoneTuple("rightShoulder", frame.rightShoulder);
+    this.offsetBoneTuple("leftUpperLeg", frame.leftUpperLeg);
+    this.offsetBoneTuple("rightUpperLeg", frame.rightUpperLeg);
+    this.offsetBoneTuple("leftLowerLeg", frame.leftLowerLeg);
+    this.offsetBoneTuple("rightLowerLeg", frame.rightLowerLeg);
   }
 
-  private applyThinkingPose(): void {
-    this.offsetBoneRotation("rightUpperArm", -0.20, 0.12, -0.20);
-    this.offsetBoneRotation("rightLowerArm", -0.88, 0.10, 0.06);
-    this.offsetBoneRotation("rightHand", 0.12, -0.06, -0.04);
-    this.offsetBoneRotation("leftUpperArm", 0.04, -0.04, 0.08);
-    this.offsetBoneRotation("leftLowerArm", -0.16, -0.04, 0.03);
-    this.offsetBoneRotation("chest", 0, -0.035, 0.02);
+  private applyPosture(frame: VrmPostureFrame): void {
+  this.offsetBoneTuple("spine", frame.spine);
+  this.offsetBoneTuple("chest", frame.chest);
+  this.offsetBoneTuple("neck", frame.neck);
+  this.offsetBoneTuple("head", frame.head);
+  this.offsetBoneTuple("leftShoulder", frame.leftShoulder);
+  this.offsetBoneTuple("rightShoulder", frame.rightShoulder);
+  this.offsetBoneTuple("leftUpperArm", frame.leftUpperArm);
+  this.offsetBoneTuple("rightUpperArm", frame.rightUpperArm);
+  this.offsetBoneTuple("leftLowerArm", frame.leftLowerArm);
+  this.offsetBoneTuple("rightLowerArm", frame.rightLowerArm);
+  this.offsetBoneTuple("leftHand", frame.leftHand);
+  this.offsetBoneTuple("rightHand", frame.rightHand);
+}
+
+  private applyRelaxedHands(): void {
+    for (const side of ["left", "right"] as const) {
+      for (const name of fingerBonesForSide(side)) {
+        const rotation = handPoseRotation(name, "relaxed");
+        this.offsetBoneRotation(name, rotation[0], rotation[1], rotation[2]);
+      }
+    }
   }
 
-  private setBoneRotation(name: DrivenBoneName, x: number, y: number, z: number): void {
-    const rest = this.drivenBones.get(name);
-    if (rest === undefined) {
-      return;
+  private openHand(side: CharacterSide, amount: number): void {
+    const blend = Math.max(0, Math.min(1, amount));
+    for (const name of fingerBonesForSide(side)) {
+      const delta = handPoseDelta(name, "relaxed", "open");
+      this.offsetBoneRotation(
+        name,
+        delta[0] * blend,
+        delta[1] * blend,
+        delta[2] * blend,
+      );
     }
-    rest.node.rotation.set(rest.x + x, rest.y + y, rest.z + z);
+  }
+
+  private offsetBoneTuple(name: DrivenBoneName, rotation: RotationTuple): void {
+    this.offsetBoneRotation(name, rotation[0], rotation[1], rotation[2]);
   }
 
   private offsetBoneRotation(name: DrivenBoneName, x: number, y: number, z: number): void {
@@ -385,39 +447,17 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private resetFramePose(): void {
     for (const rest of this.drivenBones.values()) {
       rest.node.rotation.set(rest.x, rest.y, rest.z);
+      rest.node.position.set(rest.px, rest.py, rest.pz);
     }
     if (this.vrm !== null) {
       const view = this.viewManipulation.snapshot();
       this.vrm.scene.rotation.y = this.rootRestYaw;
       this.vrm.scene.position.set(
-        this.rootRestX + view.offsetX + this.stageX,
+        this.rootRestX + view.offsetX,
         this.rootRestY + view.offsetY,
-        this.rootRestZ + this.stageZ,
+        this.rootRestZ,
       );
     }
-  }
-
-  private updateStageMotion(state: CharacterState, delta: number): void {
-    if (this.vrm === null) {
-      return;
-    }
-    if (state === "sleeping") {
-      this.stageTargetX = 0;
-      this.stageTargetZ = 0;
-    } else if (this.elapsed >= this.nextStageShiftAt && this.activeGesture === null) {
-      this.stageTargetX = (Math.random() - 0.5) * 0.16;
-      this.stageTargetZ = (Math.random() - 0.5) * 0.10;
-      this.nextStageShiftAt = this.elapsed + 5.0 + Math.random() * 4.0;
-    }
-    const blend = 1 - Math.exp(-0.75 * delta);
-    this.stageX += (this.stageTargetX - this.stageX) * blend;
-    this.stageZ += (this.stageTargetZ - this.stageZ) * blend;
-    const view = this.viewManipulation.snapshot();
-    this.vrm.scene.position.set(
-      this.rootRestX + view.offsetX + this.stageX,
-      this.rootRestY + view.offsetY,
-      this.rootRestZ + this.stageZ,
-    );
   }
 
   private updateGesture(): void {
@@ -503,10 +543,9 @@ export class VrmCharacterRenderer implements CharacterRenderer {
           + direction * Math.PI * 2 * this.easeInOut(progress);
         return;
       }
-      case "move": {
+      case "move":
         this.applyMoveGesture(gesture.direction, progress);
         return;
-      }
       case "nod": {
         const envelope = Math.sin(Math.PI * progress);
         const nod = Math.sin(progress * Math.PI * 4) * envelope;
@@ -592,6 +631,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       -sign * 0.06 * amount,
       sign * 0.04 * amount,
     );
+    this.openHand(side, amount);
     this.offsetBoneRotation("chest", 0, 0, -sign * 0.025 * amount);
     this.offsetBoneRotation("head", 0, 0, sign * 0.012 * amount);
   }
@@ -639,7 +679,8 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   }
 
   private updateExpressions(delta: number): void {
-    const target = EMOTION_EXPRESSION_TARGETS[this.presentation.emotion] ?? EMOTION_EXPRESSION_TARGETS.neutral;
+    const target = EMOTION_EXPRESSION_TARGETS[this.presentation.emotion]
+      ?? EMOTION_EXPRESSION_TARGETS.neutral;
     for (const name of ["happy", "relaxed", "surprised", "sad"] as const) {
       const from = this.expressionValues.get(name) ?? 0;
       const to = target[name] ?? 0;
@@ -776,6 +817,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
 
 export async function createVrmCharacterRenderer(
   assetUrl: string | null = null,
+  characterId: HearthGhostCharacterId | null = null,
 ): Promise<CharacterRenderer> {
-  return new VrmCharacterRenderer(assetUrl);
+  return new VrmCharacterRenderer(assetUrl, characterId);
 }
