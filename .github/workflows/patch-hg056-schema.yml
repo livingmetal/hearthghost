@@ -1,0 +1,29 @@
+name: HG-056 one-shot schema patch
+
+on:
+  push:
+    branches:
+      - codex/hg-056-durable-tool-security
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/hg-056-durable-tool-security
+      - name: Apply PostgreSQL migration patch
+        run: python .github/scripts/hg056_schema_patch.py
+      - name: Validate patch
+        run: git diff --check
+      - name: Commit migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/assistant/src/adapters/postgres_schema.py
+          git commit -m "HG-056: add durable tool decision replay migration"
+          git push origin HEAD:codex/hg-056-durable-tool-security
