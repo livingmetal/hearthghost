@@ -6,7 +6,7 @@ export type PresenceMotionPhase = "enter" | "exit";
 export interface PresenceMotionKeyframe {
   readonly opacity: number;
   readonly transform: string;
-  readonly offset?: number;
+  readonly offset: number;
 }
 
 export interface PresenceMotionVariant {
