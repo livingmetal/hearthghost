@@ -1,5 +1,6 @@
 import {
   CHARACTER_CATALOG,
+  characterById,
   type HearthGhostCharacterId,
 } from "../character/catalog.js";
 
@@ -17,13 +18,16 @@ function escapeAttribute(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
+function optionLabel(entry: (typeof CHARACTER_CATALOG)[number]): string {
+  return `${entry.name} · ${entry.sample.replace("AvatarSample_", "Avatar ")}`;
+}
+
 export function characterOptionsMarkup(
   selectedId: HearthGhostCharacterId,
 ): string {
   const options = CHARACTER_CATALOG.map((entry) => {
     const selected = entry.id === selectedId ? " selected" : "";
-    const sample = entry.sample.replace("AvatarSample_", "Avatar ");
-    return `<option value="${escapeAttribute(entry.id)}"${selected}>${entry.name} · ${sample}</option>`;
+    return `<option value="${escapeAttribute(entry.id)}"${selected}>${optionLabel(entry)}</option>`;
   }).join("");
 
   return `
@@ -66,4 +70,37 @@ export function selectCharacterOption(
   id: HearthGhostCharacterId,
 ): void {
   elements.select.value = id;
+}
+
+export function synchronizeCharacterOptionsCatalog(root: ParentNode): boolean {
+  const select = root.querySelector<HTMLSelectElement>("[data-character-select]");
+  if (select === null) {
+    return false;
+  }
+  const selected = characterById(select.value)?.id ?? null;
+  const fragment = document.createDocumentFragment();
+  for (const entry of CHARACTER_CATALOG) {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = optionLabel(entry);
+    fragment.append(option);
+  }
+  select.replaceChildren(fragment);
+  if (selected !== null) {
+    select.value = selected;
+  }
+  select.dataset.catalogSource = "shared";
+  return true;
+}
+
+if (typeof document !== "undefined" && typeof MutationObserver !== "undefined") {
+  const synchronize = (): boolean => synchronizeCharacterOptionsCatalog(document);
+  if (!synchronize()) {
+    const observer = new MutationObserver(() => {
+      if (synchronize()) {
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
 }
