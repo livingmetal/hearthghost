@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "airi",
+      "displayName": "AIRI",
+      "repository": "moeru-ai/airi",
+      "branch": "main",
+      "baselineSha": "b6011381bc34a6b85ad669363513cb1a2eea6438",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "integrationPolicy": "reference-only",
+      "focus": [
+        "VRM animation and loading",
+        "idle motion and gaze",
+        "blink and expression control",
+        "lip sync",
+        "motion or gesture selection"
+      ],
+      "watchPaths": [
+        "packages/stage-ui-three/**"
+      ]
+    },
+    {
+      "id": "pngal",
+      "displayName": "PNGAL",
+      "repository": "1mm-module/PNGAL",
+      "branch": "main",
+      "baselineSha": "5ce0fb2053aecc7bb43dfdcee10a140fd1441d96",
+      "license": "Apache-2.0",
+      "licensePath": "LICENSE",
+      "noticePath": "NOTICE",
+      "integrationPolicy": "reference-or-generated-assets",
+      "focus": [
+        "2D idle motion",
+        "eye blink and mouth animation",
+        "sprite timing",
+        "face variants",
+        "export pipeline changes useful to a future 2D renderer"
+      ],
+      "watchPaths": [
+        "resources/web/**",
+        "pipeline_server.py",
+        "index.html",
+        "README.md",
+        "README_EN.md"
+      ]
+    }
+  ]
+}
