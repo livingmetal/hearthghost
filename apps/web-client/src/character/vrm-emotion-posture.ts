@@ -146,6 +146,70 @@ function emotionTarget(
         leftLowerArm: [-0.020, 0, 0],
         rightLowerArm: [-0.020, 0, 0],
       });
+    case "angry":
+      return Object.freeze({
+        spine: [-0.002, 0, 0],
+        chest: [-0.006, 0, -0.002 * side],
+        neck: [0.004, 0, 0],
+        head: [0.006, 0.008 * side, -0.004 * side],
+        leftShoulder: [-0.006, 0, 0.012],
+        rightShoulder: [-0.006, 0, -0.012],
+        leftUpperArm: [0.004, -0.010, -0.014],
+        rightUpperArm: [-0.004, 0.010, 0.014],
+        leftLowerArm: [-0.018, 0, 0],
+        rightLowerArm: [-0.018, 0, 0],
+      });
+    case "sad":
+      return Object.freeze({
+        spine: [0.009, 0, 0],
+        chest: [0.013, 0, 0],
+        neck: [0.012, 0, 0],
+        head: [0.022, 0.004 * side, -0.006 * side],
+        leftShoulder: [0.003, 0, 0.010],
+        rightShoulder: [0.003, 0, -0.010],
+        leftUpperArm: [0.004, -0.005, -0.008],
+        rightUpperArm: [-0.004, 0.005, 0.008],
+      });
+    case "annoyed":
+      return Object.freeze({
+        spine: [0.002, 0.006 * side, 0],
+        chest: [0.004, 0.012 * side, -0.004 * side],
+        neck: [0.002, -0.006 * side, -0.006 * side],
+        head: [0.006, -0.018 * side, -0.014 * side],
+        leftShoulder: [-0.004, 0, 0.006],
+        rightShoulder: [-0.004, 0, -0.006],
+      });
+    case "embarrassed":
+      return Object.freeze({
+        spine: [0.006, -0.004 * side, 0.004 * side],
+        chest: [0.010, -0.008 * side, 0.004 * side],
+        neck: [0.010, 0.010 * side, -0.010 * side],
+        head: [0.018, 0.020 * side, -0.022 * side],
+        leftShoulder: [0.002, 0, 0.010],
+        rightShoulder: [0.002, 0, -0.010],
+        leftUpperArm: [0.004, -0.008, -0.008],
+        rightUpperArm: [-0.004, 0.008, 0.008],
+        leftLowerArm: [-0.016, 0, 0],
+        rightLowerArm: [-0.016, 0, 0],
+      });
+    case "smug":
+      return Object.freeze({
+        spine: [-0.003, 0.008 * side, -0.003 * side],
+        chest: [-0.006, 0.014 * side, 0.008 * side],
+        neck: [-0.002, -0.010 * side, 0.010 * side],
+        head: [-0.004, -0.018 * side, 0.022 * side],
+        leftShoulder: [0, 0, -0.008],
+        rightShoulder: [0, 0, 0.008],
+      });
+    case "affectionate":
+      return Object.freeze({
+        spine: [-0.005, 0, -0.002 * side],
+        chest: [-0.010, 0.006 * side, 0.006 * side],
+        neck: [-0.004, -0.006 * side, 0.010 * side],
+        head: [-0.008, -0.010 * side, 0.018 * side],
+        leftShoulder: [0, 0, -0.010],
+        rightShoulder: [0, 0, 0.010],
+      });
   }
 }
 
