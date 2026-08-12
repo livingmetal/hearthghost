@@ -1,0 +1,29 @@
+name: HG-052 one-shot dialogue performance patch
+
+on:
+  push:
+    branches:
+      - codex/hg-052-dialogue-performance-timeline
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/hg-052-dialogue-performance-timeline
+      - name: Apply HG-052 patch
+        run: python .github/scripts/hg052_patch.py
+      - name: Validate patch shape
+        run: git diff --check
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web-client/src apps/web-client/tests apps/web-client/package.json
+          git commit -m "HG-052: synchronize dialogue and character performance"
+          git push origin HEAD:codex/hg-052-dialogue-performance-timeline
