@@ -39,7 +39,6 @@ jobs:
           import json
           import subprocess
           from pathlib import Path
-          from textwrap import dedent
 
           reports = json.loads(Path("upstream-report.json").read_text(encoding="utf-8"))
           if not reports:
@@ -63,33 +62,34 @@ jobs:
                   changed_lines = "- Compare window reached the safety threshold; inspect the upstream compare manually."
 
               focus_lines = "\n".join(f"- {item}" for item in report["focus"])
-              body = dedent(
-                  f"""\
-                  {marker}
-                  ## Upstream character review
-
-                  HearthGhost detected changes in **{report['displayName']}** that intersect the character-rendering watch scope.
-
-                  - Repository: `{report['repository']}`
-                  - Reviewed baseline: `{report['baselineSha']}`
-                  - Current upstream head: `{report['headSha']}`
-                  - Upstream license: `{report['license']}`
-                  - Integration policy: `{report['integrationPolicy']}`
-                  - Compare: {report['compareUrl']}
-
-                  ### Relevant changed files
-
-                  {changed_lines}
-
-                  ### HearthGhost review focus
-
-                  {focus_lines}
-
-                  ### Adoption rule
-
-                  Do not automatically copy or merge upstream code. Review the diff, adapt useful behavior behind HearthGhost's renderer/semantic boundaries, preserve attribution when copied code requires it, run CI, and only then advance `upstream/character-sources.json` to the reviewed upstream SHA.
-                  """
-              ).strip() + "\n"
+              body = "\n".join(
+                  [
+                      marker,
+                      "## Upstream character review",
+                      "",
+                      f"HearthGhost detected changes in **{report['displayName']}** that intersect the character-rendering watch scope.",
+                      "",
+                      f"- Repository: `{report['repository']}`",
+                      f"- Reviewed baseline: `{report['baselineSha']}`",
+                      f"- Current upstream head: `{report['headSha']}`",
+                      f"- Upstream license: `{report['license']}`",
+                      f"- Integration policy: `{report['integrationPolicy']}`",
+                      f"- Compare: {report['compareUrl']}",
+                      "",
+                      "### Relevant changed files",
+                      "",
+                      changed_lines,
+                      "",
+                      "### HearthGhost review focus",
+                      "",
+                      focus_lines,
+                      "",
+                      "### Adoption rule",
+                      "",
+                      "Do not automatically copy or merge upstream code. Review the diff, adapt useful behavior behind HearthGhost's renderer/semantic boundaries, preserve attribution when copied code requires it, run CI, and only then advance `upstream/character-sources.json` to the reviewed upstream SHA.",
+                      "",
+                  ]
+              )
 
               existing = next(
                   (issue for issue in open_issues if marker in (issue.get("body") or "")),
