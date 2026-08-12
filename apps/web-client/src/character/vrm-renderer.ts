@@ -23,6 +23,7 @@ import {
 import { VRM_CAMERA_FRAMING } from "./vrm-framing.js";
 import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";
 import { NaturalPostureController, type VrmPostureFrame } from "./vrm-posture.js";
+import { EmotionPostureController } from "./vrm-emotion-posture.js";
 import type {
   CharacterEmotion,
   CharacterGesture,
@@ -102,6 +103,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly baseAnimation = new VrmBaseAnimationLayer();
   private readonly baseMotion = new ProceduralIdleBaseMotion();
   private readonly posture: NaturalPostureController;
+  private readonly emotionPosture: EmotionPostureController;
   private renderer: WebGLRenderer | null = null;
   private vrm: VRM | null = null;
   private frame: number | null = null;
@@ -127,6 +129,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     characterId: HearthGhostCharacterId | null = null,
   ) {
     this.posture = new NaturalPostureController(characterId);
+    this.emotionPosture = new EmotionPostureController(characterId);
     this.camera.position.set(
       VRM_CAMERA_FRAMING.cameraX,
       VRM_CAMERA_FRAMING.cameraY,
@@ -240,6 +243,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.rootRestZ = vrm.scene.position.z;
     this.baseMotion.reset(this.elapsed);
     this.posture.reset(this.elapsed);
+    this.emotionPosture.reset();
     this.gestureQueue.length = 0;
     this.activeGesture = null;
     this.indexExpressions(vrm);
@@ -340,6 +344,11 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       }
       this.updateBodyMotion(this.presentation.state);
       this.applyPosture(this.posture.update(delta, this.elapsed, this.presentation.state));
+      this.applyPosture(this.emotionPosture.update(
+        delta,
+        this.presentation.state,
+        this.presentation.emotion,
+      ));
       this.applyRelaxedHands();
       this.updateGesture();
       this.updateLookAt(this.presentation.state, delta);
