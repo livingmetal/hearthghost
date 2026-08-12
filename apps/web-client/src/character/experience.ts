@@ -1,4 +1,8 @@
-import type { CharacterEmotion, CharacterState } from "./semantic.js";
+import type {
+  CharacterEmotion,
+  CharacterGesture,
+  CharacterState,
+} from "./semantic.js";
 import type { CharacterViewport } from "./viewport.js";
 
 export class CharacterExperienceController {
@@ -6,6 +10,16 @@ export class CharacterExperienceController {
 
   presentServerEvent(event: unknown): void {
     this.viewport.present(event);
+  }
+
+  performGesture(gesture: CharacterGesture): void {
+    this.viewport.present({ type: "character.gesture", payload: gesture });
+  }
+
+  performGestures(gestures: readonly CharacterGesture[]): void {
+    for (const gesture of gestures) {
+      this.performGesture(gesture);
+    }
   }
 
   wakeByTouch(): void {
