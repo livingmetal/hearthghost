@@ -1,0 +1,37 @@
+name: patch-hg041-presence
+
+on:
+  push:
+    branches:
+      - codex/hg-041-character-presence
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'include presence in VRM presentation') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e450dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Patch VRM initial presentation
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('apps/web-client/src/character/vrm-renderer.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '''  private presentation: CharacterPresentation = {\n    state: "sleeping",\n    emotion: "neutral",\n  };'''
+          new = '''  private presentation: CharacterPresentation = {\n    state: "sleeping",\n    emotion: "neutral",\n    presence: "offstage",\n  };'''
+          if old not in text:
+              raise SystemExit('VRM initial presentation anchor not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web-client/src/character/vrm-renderer.ts
+          git commit -m "HG-041: include presence in VRM presentation"
+          git push origin HEAD:codex/hg-041-character-presence
