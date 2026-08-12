@@ -31,7 +31,23 @@ test("head gestures and bow are recognized", () => {
   ]);
 });
 
+test("bounded screen-space movement is inferred without coordinates", () => {
+  assert.deepEqual(inferCharacterGestures("조금 앞으로 다가와봐"), [
+    { gesture: "move", direction: "forward" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("한 걸음 뒤로 물러나"), [
+    { gesture: "move", direction: "backward" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("화면 왼쪽으로 이동해"), [
+    { gesture: "move", direction: "left" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("move right"), [
+    { gesture: "move", direction: "right" },
+  ]);
+});
+
 test("negated motion requests do not animate", () => {
   assert.deepEqual(inferCharacterGestures("손 흔들지 마"), []);
   assert.deepEqual(inferCharacterGestures("오른쪽으로 돌지 말고 가만히 있어"), []);
+  assert.deepEqual(inferCharacterGestures("앞으로 다가오지 마"), []);
 });

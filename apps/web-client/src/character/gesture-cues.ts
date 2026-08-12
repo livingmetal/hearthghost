@@ -12,7 +12,7 @@ function gestureKey(gesture: CharacterGesture): string {
   if (gesture.gesture === "wave" || gesture.gesture === "raise_hand") {
     return `${gesture.gesture}:${gesture.side}`;
   }
-  if (gesture.gesture === "turn") {
+  if (gesture.gesture === "turn" || gesture.gesture === "move") {
     return `${gesture.gesture}:${gesture.direction}`;
   }
   return gesture.gesture;
@@ -65,6 +65,19 @@ export function inferCharacterGestures(text: string): readonly CharacterGesture[
   }
   if (/(?:왼쪽|좌측|left).{0,18}(?:한\s*바퀴|돌|회전|turn|spin)/iu.test(normalized)) {
     appendUnique(gestures, { gesture: "turn", direction: "left" });
+  }
+
+  if (/(?:앞으로|앞에|가까이|내\s*쪽으로).{0,18}(?:와|오|다가|전진|이동|approach|come\s+closer|step\s+forward|move\s+forward)/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "move", direction: "forward" });
+  }
+  if (/(?:뒤로|뒤쪽|멀리).{0,18}(?:가|물러|후진|이동|retreat|step\s+back|move\s+back)/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "move", direction: "backward" });
+  }
+  if (/(?:왼쪽|좌측|left).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}left/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "move", direction: "left" });
+  }
+  if (/(?:오른쪽|우측|right).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}right/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "move", direction: "right" });
   }
 
   if (/(?:고개.{0,10}끄덕|끄덕(?:여|인다|임|이고|이며)|\bnod\b)/iu.test(normalized)) {

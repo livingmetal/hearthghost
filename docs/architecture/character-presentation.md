@@ -60,6 +60,13 @@ Example:
 
 The renderer translates the semantic state into its own visual behavior.
 
+Presentation-only gestures use a small typed allowlist. It includes bounded
+screen-space movement (`forward`, `backward`, `left`, or `right`) but never raw
+coordinates, distances, bone names, animation clips, or device commands. A VRM
+renderer may combine that movement with local stepping and posture animation;
+other renderers may reduce it to a simple translation while preserving the same
+semantic boundary.
+
 ## State and emotion are separate
 
 Conversation state and emotion must not be collapsed into one animation enum.

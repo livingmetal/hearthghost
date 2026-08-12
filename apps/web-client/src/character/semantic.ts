@@ -23,19 +23,28 @@ export const CHARACTER_GESTURES = [
   "raise_hand",
   "turn",
   "bow",
+  "move",
 ] as const;
 
 export const CHARACTER_SIDES = ["left", "right"] as const;
+export const CHARACTER_MOVE_DIRECTIONS = [
+  "forward",
+  "backward",
+  "left",
+  "right",
+] as const;
 
 export type CharacterState = (typeof CHARACTER_STATES)[number];
 export type CharacterEmotion = (typeof CHARACTER_EMOTIONS)[number];
 export type CharacterGestureName = (typeof CHARACTER_GESTURES)[number];
 export type CharacterSide = (typeof CHARACTER_SIDES)[number];
+export type CharacterMoveDirection = (typeof CHARACTER_MOVE_DIRECTIONS)[number];
 
 export type CharacterGesture =
   | Readonly<{ gesture: "wave"; side: CharacterSide }>
   | Readonly<{ gesture: "raise_hand"; side: CharacterSide }>
   | Readonly<{ gesture: "turn"; direction: CharacterSide }>
+  | Readonly<{ gesture: "move"; direction: CharacterMoveDirection }>
   | Readonly<{ gesture: "nod" }>
   | Readonly<{ gesture: "shake_head" }>
   | Readonly<{ gesture: "bow" }>;
@@ -91,6 +100,16 @@ function parseGesturePayload(value: unknown): CharacterGesture {
       || !CHARACTER_SIDES.includes(payload.direction as CharacterSide)
     ) {
       throw new Error("Turn gesture requires exactly a left or right direction");
+    }
+    return payload as CharacterGesture;
+  }
+
+  if (gesture === "move") {
+    if (
+      Object.keys(payload).length !== 2
+      || !CHARACTER_MOVE_DIRECTIONS.includes(payload.direction as CharacterMoveDirection)
+    ) {
+      throw new Error("Move gesture requires exactly a supported screen-space direction");
     }
     return payload as CharacterGesture;
   }

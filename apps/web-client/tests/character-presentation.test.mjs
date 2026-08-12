@@ -98,10 +98,12 @@ test("safe semantic gestures reach the renderer without changing presentation", 
 
   experience.performGesture({ gesture: "wave", side: "right" });
   experience.performGesture({ gesture: "turn", direction: "left" });
+  experience.performGesture({ gesture: "move", direction: "forward" });
 
   assert.deepEqual(renderer.gestures, [
     { gesture: "wave", side: "right" },
     { gesture: "turn", direction: "left" },
+    { gesture: "move", direction: "forward" },
   ]);
   assert.deepEqual(viewport.snapshot(), before);
 });
@@ -115,6 +117,14 @@ test("gesture payloads reject arbitrary renderer or bone parameters", () => {
     {
       type: "character.gesture",
       payload: { gesture: "turn", direction: "clockwise" },
+    },
+    {
+      type: "character.gesture",
+      payload: { gesture: "move", direction: "forward", distance: 100 },
+    },
+    {
+      type: "character.gesture",
+      payload: { gesture: "move", direction: "up" },
     },
     {
       type: "character.gesture",
