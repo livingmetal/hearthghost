@@ -12,7 +12,11 @@ must not escape this boundary.
 Its close conversation camera and bounded movement extents live together in
 `vrm-framing.ts`; these values remain renderer-local rather than semantic event
 fields. Direct drag, wheel, pinch, and keyboard framing adjustments are also
-bounded renderer-local state and never become Node or Core commands.
+bounded renderer-local state and never become Node or Core commands. Windows
+and the Android/web client use the same VRM renderer, so mouse-wheel and touch-
+pinch zoom share the same face-close-up bounds. Near maximum zoom, drag
+sensitivity scales down with camera distance so a face can be centered without
+large pointer movements.
 The app can lazy-load that module when an approved VRM asset is configured; no
 model or generated character asset is committed by HG-008. PixiJS remains
 deferred until a real 2D asset pipeline demonstrates a need.
