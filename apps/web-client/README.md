@@ -32,6 +32,40 @@ camera, microphone, location, Bluetooth, nearby-device, or storage access.
 Provider credentials, Home Assistant credentials, and Node private keys do not
 belong in this package.
 
+## Private model A asset
+
+HearthGhost model A / `younghee` resolves to `/models/AvatarSample_Y.vrm`.
+The reviewed user-owned VRM is intentionally not committed to the public
+repository; `public/models/*.vrm` remains ignored.
+
+Set `HEARTHGHOST_MODEL_A_PATH` to the local source file before preparing assets.
+The asset step validates the exact reviewed file before copying it into
+`public/models/AvatarSample_Y.vrm`:
+
+- byte length: `16935148`
+- SHA-256: `48af6bf879cadbc4e17431543f795010c9ca2bf31c3ca5e0b450c87b05545c11`
+- container: glTF 2.0 / VRM
+
+Windows PowerShell example:
+
+```text
+$env:HEARTHGHOST_MODEL_A_PATH = "C:\path\to\AvatarSample_Y.vrm"
+npm run windows:dev
+```
+
+Android local build uses the same private asset preparation step:
+
+```text
+$env:HEARTHGHOST_MODEL_A_PATH = "C:\path\to\AvatarSample_Y.vrm"
+npm run android:debug
+```
+
+If the reviewed VRM is already present at `public/models/AvatarSample_Y.vrm`,
+the asset step validates and reuses it. Public CI cannot redistribute this
+private model, so Android CI substitutes the pinned public AvatarSample_A only
+as a packaging fixture at the same Y path. That fixture never changes the
+production catalog slot.
+
 ## Local web checks
 
 ```text
