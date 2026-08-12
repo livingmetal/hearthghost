@@ -31,6 +31,9 @@ export const CHARACTER_GESTURES = [
   "turn",
   "bow",
   "move",
+  "clap",
+  "shrug",
+  "stretch",
 ] as const;
 
 export const CHARACTER_SIDES = ["left", "right"] as const;
@@ -55,7 +58,10 @@ export type CharacterGesture =
   | Readonly<{ gesture: "move"; direction: CharacterMoveDirection }>
   | Readonly<{ gesture: "nod" }>
   | Readonly<{ gesture: "shake_head" }>
-  | Readonly<{ gesture: "bow" }>;
+  | Readonly<{ gesture: "bow" }>
+  | Readonly<{ gesture: "clap" }>
+  | Readonly<{ gesture: "shrug" }>
+  | Readonly<{ gesture: "stretch" }>;
 
 export interface CharacterPresentation {
   readonly state: CharacterState;
