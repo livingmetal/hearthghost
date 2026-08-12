@@ -24,6 +24,7 @@ import { VRM_CAMERA_FRAMING } from "./vrm-framing.js";
 import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";
 import { NaturalPostureController, type VrmPostureFrame } from "./vrm-posture.js";
 import { EmotionPostureController } from "./vrm-emotion-posture.js";
+import { GazeBehaviorController } from "./vrm-gaze-behavior.js";
 import type {
   CharacterEmotion,
   CharacterGesture,
@@ -104,15 +105,13 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly baseMotion = new ProceduralIdleBaseMotion();
   private readonly posture: NaturalPostureController;
   private readonly emotionPosture: EmotionPostureController;
+  private readonly gaze: GazeBehaviorController;
   private renderer: WebGLRenderer | null = null;
   private vrm: VRM | null = null;
   private frame: number | null = null;
   private elapsed = 0;
   private nextBlinkAt = 2 + Math.random() * 2.5;
   private blinkElapsed = 0;
-  private nextSaccadeAt = 1.2 + Math.random() * 2.2;
-  private saccadeX = 0;
-  private saccadeY = 0;
   private rootRestYaw = 0;
   private rootRestX = 0;
   private rootRestY = 0;
@@ -130,6 +129,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   ) {
     this.posture = new NaturalPostureController(characterId);
     this.emotionPosture = new EmotionPostureController(characterId);
+    this.gaze = new GazeBehaviorController(characterId);
     this.camera.position.set(
       VRM_CAMERA_FRAMING.cameraX,
       VRM_CAMERA_FRAMING.cameraY,
@@ -244,6 +244,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.baseMotion.reset(this.elapsed);
     this.posture.reset(this.elapsed);
     this.emotionPosture.reset();
+    this.gaze.reset(this.elapsed);
     this.gestureQueue.length = 0;
     this.activeGesture = null;
     this.indexExpressions(vrm);
@@ -666,26 +667,17 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   }
 
   private updateLookAt(state: CharacterState, delta: number): void {
-    if (
-      state !== "sleeping"
-      && state !== "thinking"
-      && this.elapsed >= this.nextSaccadeAt
-    ) {
-      this.saccadeX = (Math.random() - 0.5) * 0.16;
-      this.saccadeY = (Math.random() - 0.5) * 0.10;
-      this.nextSaccadeAt = this.elapsed + 1.0 + Math.random() * 2.8;
-    }
-    const targetX = state === "thinking" ? 0.34 : state === "sleeping" ? 0 : this.saccadeX;
-    const targetY = state === "sleeping"
-      ? 1.28
-      : state === "thinking"
-        ? 1.62
-        : 1.48 + this.saccadeY;
+    const gaze = this.gaze.update(
+      delta,
+      this.elapsed,
+      state,
+      this.presentation.emotion,
+    );
+    this.lookAtTarget.position.x = gaze.x;
+    this.lookAtTarget.position.y = gaze.y;
     const targetZ = this.camera.position.z;
-    const blend = 1 - Math.exp(-4.5 * delta);
-    this.lookAtTarget.position.x += (targetX - this.lookAtTarget.position.x) * blend;
-    this.lookAtTarget.position.y += (targetY - this.lookAtTarget.position.y) * blend;
-    this.lookAtTarget.position.z += (targetZ - this.lookAtTarget.position.z) * blend;
+    const zBlend = 1 - Math.exp(-4.5 * delta);
+    this.lookAtTarget.position.z += (targetZ - this.lookAtTarget.position.z) * zBlend;
   }
 
   private updateExpressions(delta: number): void {
