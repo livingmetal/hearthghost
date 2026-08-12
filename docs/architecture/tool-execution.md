@@ -79,15 +79,34 @@ An allow decision is necessary but not sufficient. `GuardedToolExecutor` rejects
 - argument validation no longer matches
 - the decision is from the future or older than the configured freshness window
 - the decision ID was already consumed
+- replay protection is unavailable
 - no reviewed adapter is configured
 
 The default freshness window is 30 seconds.
 
 A decision ID is consumed before the adapter call. This prevents retries after an uncertain adapter failure from accidentally duplicating an external or physical action.
 
+## Durable decision replay
+
+HG-056 adds PostgreSQL migration 8 and `PostgresDecisionReplayProtector`. The database owns a unique row per consumed Policy decision:
+
+```text
+tool_policy_decision_consumptions
+  decision_id UUID PRIMARY KEY
+  consumed_at TIMESTAMPTZ
+```
+
+Consumption uses `INSERT ... ON CONFLICT DO NOTHING ... RETURNING`, so multiple Core processes sharing one PostgreSQL database cannot both consume the same decision ID. A newly started Core instance sees the same ledger and therefore cannot reuse an old decision simply because process memory was reset.
+
+The table intentionally does not store conversation text, Tool arguments, Home Assistant credentials, or provider payloads. It is a narrow security ledger rather than a dialogue log.
+
+If the PostgreSQL replay boundary raises an error, `GuardedToolExecutor` returns `replay_protection_unavailable` and does not call the Tool adapter. Database availability therefore fails toward less execution authority.
+
+`InMemoryDecisionReplayProtector` remains appropriate for isolated unit tests and development-only read paths. External writes and physical actions should use durable replay protection.
+
 ## Default composition remains deny-only
 
-HG-053 does **not** make `build_core()` capable of controlling household devices. The existing default `UnconfiguredPolicyBoundary` remains deny-only, and no Home Assistant adapter or credential is added.
+HG-053 does **not** make `build_core()` capable of controlling household devices. The existing default `UnconfiguredPolicyBoundary` remains deny-only, and no Home Assistant write credential or control adapter is added by this execution foundation.
 
 A future composition must explicitly provide:
 
@@ -97,16 +116,15 @@ A future composition must explicitly provide:
 4. reviewed adapters,
 5. durable confirmation and decision-replay state where required.
 
-The included in-memory replay protector is for development and tests. Production external writes must use durable replay protection so a Core restart cannot make an old allow decision reusable.
-
 ## Next Smart Home steps
 
-The safe order after HG-053 is:
+The safe order is:
 
 1. Device Registry and Capability Registry for approved household devices.
 2. Read-only Home Assistant adapter and state tools.
-3. Durable audit/decision replay storage.
-4. Low-risk explicit light-control tool with end-to-end confirmation and adapter tests.
-5. Broader Home Assistant capabilities only after each risk policy is reviewed.
+3. Durable decision replay storage.
+4. Persist Smart Home trust/capability administration state and add security audit records.
+5. Add one low-risk explicit light-control Tool with end-to-end confirmation and adapter tests.
+6. Broader Home Assistant capabilities only after each risk policy is reviewed.
 
 Do not add a generic Home Assistant service-call tool. Expose narrow reviewed capabilities as individual Tool definitions instead.
