@@ -17,6 +17,18 @@ and the Android/web client use the same VRM renderer, so mouse-wheel and
 two-finger touch pinch share the same face-close-up bounds. Near maximum zoom,
 drag sensitivity scales down with camera distance so a face can be centered
 without large pointer movements.
+
+Idle body motion is a separate base-motion layer. `vrm-base-motion.ts` currently
+provides a foot-planted procedural idle that shifts weight through pelvis, legs,
+spine, shoulders, neck, and head without translating the VRM scene. Only an
+explicit semantic `move` gesture may temporarily translate the avatar root.
+This layering follows the same architectural idea used by AIRI: base/idle
+animation is separate from blink, eye motion, expression, lip sync, and other
+presentation overlays. HearthGhost keeps its own implementation and contracts.
+The `VrmBaseMotionSource` boundary is intentionally narrow so a reviewed
+`.vrma`/AnimationMixer-backed source can replace the procedural idle later
+without redesigning gesture, gaze, client, or Core code.
+
 The app can lazy-load that module when an approved VRM asset is configured; no
 model or generated character asset is committed by HG-008. PixiJS remains
 deferred until a real 2D asset pipeline demonstrates a need.
