@@ -63,10 +63,11 @@ test("surprise reacts faster in noticing but remains conservative", () => {
   const controller = new EmotionPostureController("younghee");
   controller.reset();
   const first = controller.update(1 / 60, "noticing", "surprised");
+  const firstChest = first.chest[0];
   const settled = settle(controller, "noticing", "surprised", 1.5);
 
-  assert.ok(Math.abs(first.chest[0]) > 0);
-  assert.ok(settled.chest[0] > first.chest[0]);
+  assert.ok(Math.abs(firstChest) > 0);
+  assert.ok(settled.chest[0] > firstChest);
   assert.ok(maxAbs(settled) < 0.08);
 });
 
@@ -87,8 +88,10 @@ test("emotion transitions ease instead of snapping", () => {
   const controller = new EmotionPostureController("younghee");
   controller.reset();
   const before = settle(controller, "listening", "concerned");
+  const beforeHead = before.head[0];
+  const beforeShoulder = before.leftShoulder[2];
   const next = controller.update(1 / 60, "listening", "happy");
 
-  assert.ok(Math.abs(next.head[0] - before.head[0]) < 0.01);
-  assert.ok(Math.abs(next.leftShoulder[2] - before.leftShoulder[2]) < 0.01);
+  assert.ok(Math.abs(next.head[0] - beforeHead) < 0.01);
+  assert.ok(Math.abs(next.leftShoulder[2] - beforeShoulder) < 0.01);
 });
