@@ -6,6 +6,7 @@ import {
   fingerBonesForSide,
   handPoseDelta,
   handPoseRotation,
+  isFingerBoneName,
 } from "../.test-dist/character/vrm-hand-pose.js";
 
 test("hand pose covers all optional VRM finger bones exactly once", () => {
@@ -13,6 +14,10 @@ test("hand pose covers all optional VRM finger bones exactly once", () => {
   assert.equal(new Set(FINGER_BONE_NAMES).size, 30);
   assert.equal(fingerBonesForSide("left").length, 15);
   assert.equal(fingerBonesForSide("right").length, 15);
+  assert.equal(isFingerBoneName("leftIndexProximal"), true);
+  assert.equal(isFingerBoneName("rightLittleDistal"), true);
+  assert.equal(isFingerBoneName("leftHand"), false);
+  assert.equal(isFingerBoneName("head"), false);
 });
 
 test("relaxed fingers use mirrored curls and progressively soften toward a natural hand", () => {
