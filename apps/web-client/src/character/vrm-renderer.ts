@@ -11,6 +11,8 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
 import type { CharacterRenderer } from "./renderer.js";
+import { VRM_CAMERA_FRAMING } from "./vrm-framing.js";
+import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";
 import type {
   CharacterEmotion,
   CharacterGesture,
@@ -67,13 +69,19 @@ const EMOTION_EXPRESSION_TARGETS: Readonly<Record<CharacterEmotion, Readonly<Rec
 
 export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(30, 1, 0.1, 20);
+  private readonly camera = new PerspectiveCamera(
+    VRM_CAMERA_FRAMING.verticalFieldOfViewDegrees,
+    1,
+    0.1,
+    20,
+  );
   private readonly clock = new Clock();
   private readonly lookAtTarget = new Object3D();
   private readonly expressionValues = new Map<string, number>();
   private readonly expressionNames = new Map<string, string>();
   private readonly drivenBones = new Map<DrivenBoneName, BoneRestPose>();
   private readonly gestureQueue: CharacterGesture[] = [];
+  private readonly viewManipulation = new VrmViewManipulation();
   private renderer: WebGLRenderer | null = null;
   private vrm: VRM | null = null;
   private frame: number | null = null;
@@ -99,19 +107,28 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   };
 
   constructor(private readonly assetUrl: string | null = null) {
-    this.camera.position.set(0, 1.42, 3);
-    this.camera.lookAt(0, 1.35, 0);
+    this.camera.position.set(
+      VRM_CAMERA_FRAMING.cameraX,
+      VRM_CAMERA_FRAMING.cameraY,
+      VRM_CAMERA_FRAMING.cameraZ,
+    );
+    this.camera.lookAt(0, VRM_CAMERA_FRAMING.targetY, 0);
     this.scene.add(new AmbientLight(0xffffff, 1.8));
     const keyLight = new DirectionalLight(0xffffff, 2.1);
     keyLight.position.set(1.2, 2.4, 2.6);
     this.scene.add(keyLight);
-    this.lookAtTarget.position.set(0, 1.48, 3);
+    this.lookAtTarget.position.set(
+      0,
+      VRM_CAMERA_FRAMING.lookAtTargetY,
+      VRM_CAMERA_FRAMING.lookAtTargetZ,
+    );
     this.scene.add(this.lookAtTarget);
   }
 
   async mount(viewport: HTMLElement): Promise<void> {
     this.renderer = new WebGLRenderer({ alpha: true, antialias: true });
     this.renderer.outputColorSpace = "srgb";
+    this.attachViewManipulation(this.renderer.domElement);
     if (this.assetUrl !== null) {
       await this.loadVrm(this.assetUrl);
     }
@@ -370,10 +387,11 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       rest.node.rotation.set(rest.x, rest.y, rest.z);
     }
     if (this.vrm !== null) {
+      const view = this.viewManipulation.snapshot();
       this.vrm.scene.rotation.y = this.rootRestYaw;
       this.vrm.scene.position.set(
-        this.rootRestX + this.stageX,
-        this.rootRestY,
+        this.rootRestX + view.offsetX + this.stageX,
+        this.rootRestY + view.offsetY,
         this.rootRestZ + this.stageZ,
       );
     }
@@ -394,9 +412,10 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     const blend = 1 - Math.exp(-0.75 * delta);
     this.stageX += (this.stageTargetX - this.stageX) * blend;
     this.stageZ += (this.stageTargetZ - this.stageZ) * blend;
+    const view = this.viewManipulation.snapshot();
     this.vrm.scene.position.set(
-      this.rootRestX + this.stageX,
-      this.rootRestY,
+      this.rootRestX + view.offsetX + this.stageX,
+      this.rootRestY + view.offsetY,
       this.rootRestZ + this.stageZ,
     );
   }
@@ -524,7 +543,11 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     const amount = this.holdEnvelope(progress, 0.32, 0.26);
     const strideEnvelope = Math.sin(Math.PI * progress);
     const stride = Math.sin(progress * Math.PI * 6) * strideEnvelope;
-    const forward = direction === "forward" ? 0.34 : direction === "backward" ? -0.26 : 0;
+    const forward = direction === "forward"
+      ? VRM_CAMERA_FRAMING.forwardGestureOffset
+      : direction === "backward"
+        ? VRM_CAMERA_FRAMING.backwardGestureOffset
+        : 0;
     const lateral = direction === "left" ? -0.28 : direction === "right" ? 0.28 : 0;
 
     this.vrm.scene.position.x += lateral * amount;
@@ -608,7 +631,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       : state === "thinking"
         ? 1.62
         : 1.48 + this.saccadeY;
-    const targetZ = 3;
+    const targetZ = this.camera.position.z;
     const blend = 1 - Math.exp(-4.5 * delta);
     this.lookAtTarget.position.x += (targetX - this.lookAtTarget.position.x) * blend;
     this.lookAtTarget.position.y += (targetY - this.lookAtTarget.position.y) * blend;
@@ -672,6 +695,82 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       return;
     }
     manager.setValue(actualName, Math.max(0, Math.min(1, value)));
+  }
+
+  private attachViewManipulation(surface: HTMLCanvasElement): void {
+    surface.tabIndex = 0;
+    surface.setAttribute(
+      "aria-label",
+      "3D character. Drag to reposition, use the mouse wheel or two-finger pinch to zoom, and double click to reset the view.",
+    );
+    surface.title = "Drag to reposition · wheel or pinch to zoom · double-click to reset";
+
+    surface.addEventListener("pointerdown", (event) => {
+      surface.setPointerCapture(event.pointerId);
+      this.viewManipulation.beginPointer(event.pointerId, event.clientX, event.clientY);
+    });
+    surface.addEventListener("pointermove", (event) => {
+      if (!surface.hasPointerCapture(event.pointerId)) {
+        return;
+      }
+      const bounds = surface.getBoundingClientRect();
+      this.applyViewState(this.viewManipulation.movePointer(
+        event.pointerId,
+        event.clientX,
+        event.clientY,
+        bounds.width,
+        bounds.height,
+      ));
+      event.preventDefault();
+    });
+    const endPointer = (event: PointerEvent): void => {
+      this.viewManipulation.endPointer(event.pointerId);
+      if (surface.hasPointerCapture(event.pointerId)) {
+        surface.releasePointerCapture(event.pointerId);
+      }
+    };
+    surface.addEventListener("pointerup", endPointer);
+    surface.addEventListener("pointercancel", endPointer);
+    surface.addEventListener("wheel", (event) => {
+      const bounds = surface.getBoundingClientRect();
+      const deltaPixels = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? event.deltaY * 16
+        : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+          ? event.deltaY * bounds.height
+          : event.deltaY;
+      this.applyViewState(this.viewManipulation.zoomByWheel(deltaPixels));
+      event.preventDefault();
+    }, { passive: false });
+    surface.addEventListener("dblclick", () => {
+      this.applyViewState(this.viewManipulation.reset());
+    });
+    surface.addEventListener("keydown", (event) => {
+      const state = event.key === "ArrowLeft"
+        ? this.viewManipulation.nudge(-0.04, 0, 0)
+        : event.key === "ArrowRight"
+          ? this.viewManipulation.nudge(0.04, 0, 0)
+          : event.key === "ArrowUp"
+            ? this.viewManipulation.nudge(0, 0.04, 0)
+            : event.key === "ArrowDown"
+              ? this.viewManipulation.nudge(0, -0.04, 0)
+              : event.key === "+" || event.key === "="
+                ? this.viewManipulation.nudge(0, 0, -0.10)
+                : event.key === "-"
+                  ? this.viewManipulation.nudge(0, 0, 0.10)
+                  : event.key === "Home"
+                    ? this.viewManipulation.reset()
+                    : null;
+      if (state !== null) {
+        this.applyViewState(state);
+        event.preventDefault();
+      }
+    });
+  }
+
+  private applyViewState(state: VrmViewState): void {
+    this.camera.position.z = state.cameraZ;
+    this.camera.lookAt(0, VRM_CAMERA_FRAMING.targetY, 0);
+    this.lookAtTarget.position.z = state.cameraZ;
   }
 }
 

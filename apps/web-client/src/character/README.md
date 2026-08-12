@@ -9,6 +9,10 @@ must not escape this boundary.
 
 `DomCharacterRenderer` is the dependency-free 2D/test fallback.
 `VrmCharacterRenderer` contains all Three.js and `@pixiv/three-vrm` knowledge.
+Its close conversation camera and bounded movement extents live together in
+`vrm-framing.ts`; these values remain renderer-local rather than semantic event
+fields. Direct drag, wheel, pinch, and keyboard framing adjustments are also
+bounded renderer-local state and never become Node or Core commands.
 The app can lazy-load that module when an approved VRM asset is configured; no
 model or generated character asset is committed by HG-008. PixiJS remains
 deferred until a real 2D asset pipeline demonstrates a need.

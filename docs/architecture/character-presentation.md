@@ -89,6 +89,24 @@ renderer may combine that movement with local stepping and posture animation;
 other renderers may reduce it to a simple translation while preserving the same
 semantic boundary.
 
+The VRM prototype uses a closer conversation framing than its original
+full-body camera. Camera distance and the maximum forward/backward offsets are
+one renderer-local configuration so an invited `forward` gesture cannot cross
+an unreviewed near-camera bound.
+
+Future direct character touch reactions should remain local presentation
+events. The viewport may translate a bounded hit region such as `head` or
+`body` into an allowlisted reaction such as noticing, smiling, or waving. Raw
+ray-cast coordinates, bones, arbitrary animation names, device authority, and
+tool execution must not cross the renderer boundary. Touching the character
+must not implicitly enable microphone, camera, or Node capabilities.
+
+Direct view manipulation is renderer-local: pointer drag changes a bounded
+screen composition offset, mouse wheel or two-pointer pinch changes a bounded
+camera distance, and reset restores the reviewed conversation framing.
+Keyboard arrows, plus/minus, and Home provide equivalent local controls. These
+inputs are not semantic character commands and are never sent to Core.
+
 ## State and emotion are separate
 
 Conversation state and emotion must not be collapsed into one animation enum.

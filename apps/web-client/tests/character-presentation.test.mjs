@@ -8,6 +8,11 @@ import {
   reduceCharacterPresentation,
 } from "../.test-dist/character/semantic.js";
 import { CharacterViewport } from "../.test-dist/character/viewport.js";
+import {
+  VRM_CAMERA_FRAMING,
+  cameraClearanceAtForwardExtent,
+} from "../.test-dist/character/vrm-framing.js";
+import { VrmViewManipulation } from "../.test-dist/character/vrm-view-manipulation.js";
 
 class RecordingRenderer {
   presentations = [];
@@ -62,6 +67,40 @@ test("state and emotion remain separate semantic dimensions", () => {
   );
 
   assert.deepEqual(amused, { state: "speaking", emotion: "amused" });
+});
+
+test("VRM conversation framing is close while preserving forward gesture clearance", () => {
+  assert.ok(VRM_CAMERA_FRAMING.cameraZ < 3);
+  assert.ok(VRM_CAMERA_FRAMING.cameraZ > 2.4);
+  assert.ok(cameraClearanceAtForwardExtent() >= 2.2);
+  assert.equal(VRM_CAMERA_FRAMING.lookAtTargetZ, VRM_CAMERA_FRAMING.cameraZ);
+});
+
+test("VRM view drag, wheel, pinch and reset stay local and bounded", () => {
+  const view = new VrmViewManipulation();
+
+  view.beginPointer(1, 100, 100);
+  const dragged = view.movePointer(1, 180, 140, 400, 500);
+  assert.ok(dragged.offsetX > 0);
+  assert.ok(dragged.offsetY < 0);
+  view.endPointer(1);
+
+  const zoomedIn = view.zoomByWheel(-10_000);
+  assert.ok(zoomedIn.cameraZ >= 2.1);
+  const zoomedOut = view.zoomByWheel(10_000);
+  assert.ok(zoomedOut.cameraZ <= 3.4);
+
+  view.reset();
+  view.beginPointer(1, 100, 100);
+  view.beginPointer(2, 200, 100);
+  const pinched = view.movePointer(2, 300, 100, 400, 500);
+  assert.ok(pinched.cameraZ < VRM_CAMERA_FRAMING.cameraZ);
+
+  assert.deepEqual(view.reset(), {
+    offsetX: 0,
+    offsetY: 0,
+    cameraZ: VRM_CAMERA_FRAMING.cameraZ,
+  });
 });
 
 test("noticing is a first-class semantic state", () => {
