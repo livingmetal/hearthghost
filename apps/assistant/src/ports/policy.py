@@ -11,5 +11,9 @@ if TYPE_CHECKING:
 class PolicyBoundary(Protocol):
     """Evaluates a proposal without executing it or mutating Hard Policy."""
 
-    def evaluate(self, proposal: object) -> PolicyEvaluationResult:
-        """Return an explicit allow/deny result; missing results are never allow."""
+    def evaluate(
+        self,
+        proposal: object,
+        context: object | None = None,
+    ) -> PolicyEvaluationResult:
+        """Return an explicit result; absent/untrusted context never implies allow."""
