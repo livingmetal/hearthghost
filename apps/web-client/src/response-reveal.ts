@@ -1,7 +1,9 @@
 import {
   RESPONSE_REVEAL_DONE_EVENT,
+  RESPONSE_REVEAL_PROGRESS_EVENT,
   RESPONSE_REVEAL_START_EVENT,
   type ResponseRevealDetail,
+  type ResponseRevealProgressDetail,
 } from "./character/performance-events.js";
 import {
   SPEECH_DONE_EVENT,
@@ -12,8 +14,12 @@ import {
   type SpeechRangePresentationDetail,
 } from "./voice/speech-presentation.js";
 
-export { RESPONSE_REVEAL_DONE_EVENT, RESPONSE_REVEAL_START_EVENT };
-export type { ResponseRevealDetail };
+export {
+  RESPONSE_REVEAL_DONE_EVENT,
+  RESPONSE_REVEAL_PROGRESS_EVENT,
+  RESPONSE_REVEAL_START_EVENT,
+};
+export type { ResponseRevealDetail, ResponseRevealProgressDetail };
 
 const FALLBACK_STEP_MILLIS = 90;
 const FALLBACK_START_DELAY_MILLIS = 120;
@@ -42,6 +48,7 @@ export class ResponseRevealController {
   private fallbackTimer: number | null = null;
   private activeUtteranceId: string | null = null;
   private hasSpeechRange = false;
+  private lastProgressEnd = 0;
 
   install(): void {
     this.tryAttach();
@@ -96,6 +103,7 @@ export class ResponseRevealController {
       this.fallbackIndex = 0;
       this.activeUtteranceId = null;
       this.hasSpeechRange = false;
+      this.lastProgressEnd = 0;
       this.host?.setAttribute("aria-busy", "false");
       return;
     }
@@ -109,6 +117,7 @@ export class ResponseRevealController {
     this.fullText = text.trim();
     this.offsets = graphemeOffsets(this.fullText);
     this.fallbackIndex = 0;
+    this.lastProgressEnd = 0;
     this.host?.setAttribute("aria-busy", "true");
     window.dispatchEvent(new CustomEvent<ResponseRevealDetail>(RESPONSE_REVEAL_START_EVENT, {
       detail: { text: this.fullText },
@@ -211,6 +220,13 @@ export class ResponseRevealController {
     this.hostObserver.disconnect();
     this.host.textContent = text;
     this.observeHost();
+    if (this.fullText !== "" && text.length > this.lastProgressEnd) {
+      this.lastProgressEnd = text.length;
+      window.dispatchEvent(new CustomEvent<ResponseRevealProgressDetail>(
+        RESPONSE_REVEAL_PROGRESS_EVENT,
+        { detail: { text: this.fullText, end: text.length } },
+      ));
+    }
   }
 }
 

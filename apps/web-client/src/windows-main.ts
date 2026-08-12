@@ -7,6 +7,7 @@ import {
   characterById,
   type HearthGhostCharacterDefinition,
 } from "./character/catalog.js";
+import { DialoguePerformanceController } from "./character/dialogue-performance.js";
 import { CharacterExperienceController } from "./character/experience.js";
 import {
   browserCharacterPreferenceStorage,
@@ -48,10 +49,7 @@ import {
   SERVER_PERSONA_QUERY,
   type PersonaProfilePreset,
 } from "./options/persona-profiles.js";
-import {
-  RESPONSE_REVEAL_DONE_EVENT,
-  type ResponseRevealDetail,
-} from "./response-reveal.js";
+import "./response-reveal.js";
 import { WindowsWebViewBridge, windowsWebViewHost } from "./windows/webview-bridge.js";
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -135,6 +133,8 @@ try {
 }
 viewport.setExpressionStyle(activePersona.expressionStyle);
 const character = new CharacterExperienceController(viewport);
+const dialoguePerformance = new DialoguePerformanceController(character);
+dialoguePerformance.install();
 const conversation = new TextConversationController(
   node,
   platform,
@@ -270,7 +270,6 @@ async function submitText(text: string): Promise<void> {
   if (reply !== "") {
     historyView.render(history.append("user", normalized));
     historyView.render(history.append("assistant", reply));
-    character.beginSpeaking();
     response.textContent = reply;
   } else {
     character.engage();
@@ -278,15 +277,6 @@ async function submitText(text: string): Promise<void> {
   notice.textContent = "Conversation active over Windows native mTLS.";
 }
 
-const onResponseRevealDone = (event: CustomEvent<ResponseRevealDetail>): void => {
-  if (
-    viewport.snapshot().state === "speaking"
-    && response.textContent?.trim() === event.detail.text.trim()
-  ) {
-    character.engage();
-  }
-};
-window.addEventListener(RESPONSE_REVEAL_DONE_EVENT, onResponseRevealDone as EventListener);
 
 connectButton.addEventListener("click", () => {
   void (async () => {
@@ -470,7 +460,7 @@ form.addEventListener("submit", (event) => {
 });
 
 window.addEventListener("pagehide", () => {
-  window.removeEventListener(RESPONSE_REVEAL_DONE_EVENT, onResponseRevealDone as EventListener);
+  dialoguePerformance.dispose();
   history.clear();
   historyView.clear();
   nativeBridge.dispose();

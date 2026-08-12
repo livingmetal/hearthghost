@@ -42,6 +42,10 @@ export class CharacterExperienceController {
     }
   }
 
+  express(emotion: CharacterEmotion): void {
+    this.setEmotion(emotion);
+  }
+
   wakeByTouch(): void {
     this.enterStage();
     this.setEmotion("curious");

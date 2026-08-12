@@ -8,6 +8,7 @@ import {
   characterById,
   type HearthGhostCharacterDefinition,
 } from "./character/catalog.js";
+import { DialoguePerformanceController } from "./character/dialogue-performance.js";
 import { CharacterExperienceController } from "./character/experience.js";
 import {
   browserCharacterPreferenceStorage,
@@ -211,6 +212,8 @@ try {
 viewport.setExpressionStyle(activePersona.expressionStyle);
 
 const character = new CharacterExperienceController(viewport);
+const dialoguePerformance = new DialoguePerformanceController(character);
+dialoguePerformance.install();
 const conversation = androidPlatform === null
   ? null
   : new TextConversationController(
@@ -415,9 +418,7 @@ async function speakReplyLocally(text: string): Promise<boolean> {
       showSnapshot();
       return false;
     }
-    character.beginSpeaking();
     await voiceOutput.speak(text, VOICE_LOCALE, voiceProfile);
-    character.engage();
     showSnapshot();
     return true;
   } catch {
@@ -711,7 +712,9 @@ form?.addEventListener("submit", (event) => {
       if (response !== null) {
         response.textContent = reply;
       }
-      character.engage();
+      if (reply === "") {
+        character.engage();
+      }
       if (notice !== null) {
         notice.textContent = "Conversation active. Attention timeout extended.";
       }
@@ -745,7 +748,7 @@ if (voiceInput !== null && voiceConversation !== null) {
           response.textContent = reply;
         }
         const spoken = reply !== "" && await speakReplyLocally(reply);
-        if (!spoken) {
+        if (!spoken && reply === "") {
           character.engage();
         }
         if (notice !== null) {
@@ -856,6 +859,7 @@ const attentionTimer = window.setInterval(() => {
 
 window.addEventListener("pagehide", () => {
   window.clearInterval(attentionTimer);
+  dialoguePerformance.dispose();
   clearSessionHistory();
 }, {
   once: true,
