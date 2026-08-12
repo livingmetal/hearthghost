@@ -75,12 +75,17 @@ export class CharacterViewport {
       await renderer.mount(this.element);
       renderer.present(this.presentation);
       this.applyPresenceToSurface();
+      if (this.presentation.presence === "offstage") {
+        renderer.suspend();
+      }
       this.renderer = renderer;
       this.resize();
       prior.dispose();
     } catch (error) {
       renderer.dispose();
-      prior.resume();
+      if (this.presentation.presence !== "offstage") {
+        prior.resume();
+      }
       throw error;
     }
   }
@@ -106,7 +111,9 @@ export class CharacterViewport {
 
   resume(): void {
     this.resize();
-    this.renderer.resume();
+    if (this.presentation.presence !== "offstage") {
+      this.renderer.resume();
+    }
   }
 
   dispose(): void {
@@ -121,6 +128,11 @@ export class CharacterViewport {
     this.renderer.present(this.presentation);
     this.applyPresenceMetadata();
     this.applyPresenceToSurface();
+    if (this.presentation.presence === "offstage") {
+      this.renderer.suspend();
+    } else {
+      this.renderer.resume();
+    }
   }
 
   private applyPresenceMetadata(): void {
