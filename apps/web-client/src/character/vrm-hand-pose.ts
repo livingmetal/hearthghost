@@ -42,7 +42,7 @@ export const FINGER_BONE_NAMES = [
 ] as const;
 
 export type FingerBoneName = (typeof FINGER_BONE_NAMES)[number];
-export type HandPoseName = "relaxed" | "open";
+export type HandPoseName = "relaxed" | "open" | "point";
 export type FingerRotation = readonly [number, number, number];
 
 const FINGER_BONE_SET: ReadonlySet<string> = new Set(FINGER_BONE_NAMES);
@@ -65,6 +65,24 @@ const RELAXED_CURL_BY_SUFFIX = Object.freeze({
   LittleDistal: 0.135,
 });
 
+const POINT_CURL_BY_SUFFIX = Object.freeze({
+  ThumbMetacarpal: 0.070,
+  ThumbProximal: 0.115,
+  ThumbDistal: 0.075,
+  IndexProximal: 0.018,
+  IndexIntermediate: 0.014,
+  IndexDistal: 0.008,
+  MiddleProximal: 0.340,
+  MiddleIntermediate: 0.440,
+  MiddleDistal: 0.220,
+  RingProximal: 0.390,
+  RingIntermediate: 0.500,
+  RingDistal: 0.250,
+  LittleProximal: 0.440,
+  LittleIntermediate: 0.550,
+  LittleDistal: 0.285,
+});
+
 type FingerSuffix = keyof typeof RELAXED_CURL_BY_SUFFIX;
 
 function sideForBone(name: FingerBoneName): CharacterSide {
@@ -77,7 +95,7 @@ function suffixForBone(name: FingerBoneName): FingerSuffix {
 
 function sideSign(side: CharacterSide): number {
   // Normalized humanoid fingers extend in opposite X directions. Mirroring the
-  // Z-axis curl keeps the relaxed pose symmetric across left and right hands.
+  // Z-axis curl keeps all authored poses symmetric across left and right hands.
   return side === "left" ? -1 : 1;
 }
 
@@ -93,7 +111,10 @@ export function handPoseRotation(name: FingerBoneName, pose: HandPoseName): Fing
   if (pose === "open") {
     return [0, 0, 0];
   }
-  const curl = RELAXED_CURL_BY_SUFFIX[suffixForBone(name)];
+  const suffix = suffixForBone(name);
+  const curl = pose === "point"
+    ? POINT_CURL_BY_SUFFIX[suffix]
+    : RELAXED_CURL_BY_SUFFIX[suffix];
   return [0, 0, sideSign(sideForBone(name)) * curl];
 }
 
