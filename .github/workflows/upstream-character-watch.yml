@@ -1,0 +1,126 @@
+name: upstream character watch
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: upstream-character-watch
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    name: Scan AIRI and PNGAL character changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate upstream manifest
+        run: python tools/upstream_watch.py validate
+
+      - name: Scan reviewed baselines
+        run: python tools/upstream_watch.py scan --output upstream-report.json
+
+      - name: Create or refresh review issues
+        run: |
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+
+          reports = json.loads(Path("upstream-report.json").read_text(encoding="utf-8"))
+          if not reports:
+              print("No relevant upstream character changes.")
+              raise SystemExit(0)
+
+          open_issues = json.loads(
+              subprocess.check_output(
+                  ["gh", "issue", "list", "--state", "open", "--limit", "100", "--json", "number,body"],
+                  text=True,
+              )
+          )
+
+          for report in reports:
+              marker = (
+                  f"<!-- hearthghost-upstream-watch:{report['id']}:{report['baselineSha']} -->"
+              )
+              changed = report["changedFiles"]
+              changed_lines = "\n".join(f"- `{path}`" for path in changed)
+              if not changed_lines:
+                  changed_lines = "- Compare window reached the safety threshold; inspect the upstream compare manually."
+
+              focus_lines = "\n".join(f"- {item}" for item in report["focus"])
+              body = f"""{marker}
+          ## Upstream character review
+
+          HearthGhost detected changes in **{report['displayName']}** that intersect the character-rendering watch scope.
+
+          - Repository: `{report['repository']}`
+          - Reviewed baseline: `{report['baselineSha']}`
+          - Current upstream head: `{report['headSha']}`
+          - Upstream license: `{report['license']}`
+          - Integration policy: `{report['integrationPolicy']}`
+          - Compare: {report['compareUrl']}
+
+          ### Relevant changed files
+
+          {changed_lines}
+
+          ### HearthGhost review focus
+
+          {focus_lines}
+
+          ### Adoption rule
+
+          Do not automatically copy or merge upstream code. Review the diff, adapt useful behavior behind HearthGhost's renderer/semantic boundaries, preserve attribution when copied code requires it, run CI, and only then advance `upstream/character-sources.json` to the reviewed upstream SHA.
+          """
+
+              existing = next(
+                  (issue for issue in open_issues if marker in (issue.get("body") or """")),
+                  None,
+              )
+              if existing is None:
+                  subprocess.run(
+                      [
+                          "gh",
+                          "issue",
+                          "create",
+                          "--title",
+                          f"[upstream] {report['displayName']} character changes detected",
+                          "--body",
+                          body,
+                      ],
+                      check=True,
+                  )
+                  continue
+
+              issue_number = str(existing["number"])
+              current_body = existing.get("body") or ""
+              if report["headSha"] in current_body:
+                  print(f"Issue #{issue_number} already covers {report['displayName']} head {report['headSha']}.")
+                  continue
+
+              subprocess.run(
+                  [
+                      "gh",
+                      "issue",
+                      "comment",
+                      issue_number,
+                      "--body",
+                      f"Upstream advanced again to `{report['headSha']}`. Review the latest compare: {report['compareUrl']}",
+                  ],
+                  check=True,
+              )
+          PY
