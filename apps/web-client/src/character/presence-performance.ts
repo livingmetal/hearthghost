@@ -19,7 +19,7 @@ export interface PresenceMotionVariant {
 const YOUNGHEE_ENTRANCES: readonly PresenceMotionVariant[] = Object.freeze([
   Object.freeze({
     id: "younghee.enter.peek-left",
-    durationMillis: 980,
+    durationMillis: 830,
     easing: "cubic-bezier(0.18, 0.78, 0.22, 1)",
     keyframes: Object.freeze([
       Object.freeze({ opacity: 0, transform: "translate3d(-72%, 10%, 0) scale(0.94)", offset: 0 }),
@@ -30,7 +30,7 @@ const YOUNGHEE_ENTRANCES: readonly PresenceMotionVariant[] = Object.freeze([
   }),
   Object.freeze({
     id: "younghee.enter.soft-left",
-    durationMillis: 860,
+    durationMillis: 820,
     easing: "cubic-bezier(0.22, 0.72, 0.22, 1)",
     keyframes: Object.freeze([
       Object.freeze({ opacity: 0, transform: "translate3d(-52%, 8%, 0) scale(0.97)", offset: 0 }),
