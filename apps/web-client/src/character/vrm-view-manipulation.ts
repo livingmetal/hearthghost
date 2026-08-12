@@ -18,8 +18,11 @@ interface PinchState {
 
 const MAX_HORIZONTAL_OFFSET = 0.58;
 const MAX_VERTICAL_OFFSET = 0.42;
-const MIN_CAMERA_Z = 2.10;
-const MAX_CAMERA_Z = 3.40;
+// The previous 2.10 close limit was useful for chest-up framing. Halving that
+// distance gives roughly twice the maximum magnification at the same FOV and
+// allows a face-focused close-up after a small vertical drag.
+export const MIN_CAMERA_Z = 1.05;
+export const MAX_CAMERA_Z = 3.40;
 const DRAG_WORLD_SPAN = 0.92;
 const WHEEL_ZOOM_PER_PIXEL = 0.0022;
 
@@ -74,13 +77,18 @@ export class VrmViewManipulation {
     this.pointers.set(pointerId, { x, y });
 
     if (this.pointers.size === 1) {
+      // Keep drag sensitivity visually similar while zoomed in. A fixed world
+      // span becomes too twitchy once the camera is close enough for a face-only
+      // crop, especially with a finger on Android.
+      const dragWorldSpan = DRAG_WORLD_SPAN
+        * (this.cameraZ / VRM_CAMERA_FRAMING.cameraZ);
       this.offsetX = clamp(
-        this.offsetX + ((x - previous.x) / viewportWidth) * DRAG_WORLD_SPAN,
+        this.offsetX + ((x - previous.x) / viewportWidth) * dragWorldSpan,
         -MAX_HORIZONTAL_OFFSET,
         MAX_HORIZONTAL_OFFSET,
       );
       this.offsetY = clamp(
-        this.offsetY - ((y - previous.y) / viewportHeight) * DRAG_WORLD_SPAN,
+        this.offsetY - ((y - previous.y) / viewportHeight) * dragWorldSpan,
         -MAX_VERTICAL_OFFSET,
         MAX_VERTICAL_OFFSET,
       );
