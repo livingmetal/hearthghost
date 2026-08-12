@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "check": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test tests/client-node.test.mjs tests/character-presentation.test.mjs tests/character-profile.test.mjs tests/character-catalog.test.mjs tests/conversation-controller.test.mjs tests/conversation-protocol.test.mjs tests/attention-controller.test.mjs tests/voice-controller.test.mjs tests/windows-platform.test.mjs",
+    "test": "tsc -p tsconfig.test.json && node --test tests/client-node.test.mjs tests/character-presentation.test.mjs tests/character-profile.test.mjs tests/character-catalog.test.mjs tests/character-preferences.test.mjs tests/conversation-controller.test.mjs tests/conversation-protocol.test.mjs tests/attention-controller.test.mjs tests/voice-controller.test.mjs tests/windows-platform.test.mjs",
     "windows:assets": "node scripts/fetch-vrm-samples.mjs",
     "windows:dev": "npm run windows:assets && vite --host 127.0.0.1",
     "android:sync": "npm run build && cap sync android",
