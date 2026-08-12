@@ -13,6 +13,12 @@ import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import type { CharacterRenderer } from "./renderer.js";
 import { VrmBaseAnimationLayer } from "./vrm-base-animation.js";
 import { ProceduralIdleBaseMotion, type VrmBaseMotionFrame } from "./vrm-base-motion.js";
+import {
+  FINGER_BONE_NAMES,
+  fingerBonesForSide,
+  handPoseDelta,
+  handPoseRotation,
+} from "./vrm-hand-pose.js";
 import { VRM_CAMERA_FRAMING } from "./vrm-framing.js";
 import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";
 import type {
@@ -51,6 +57,7 @@ const DRIVEN_BONE_NAMES = [
   "rightHand",
   "rightUpperLeg",
   "rightLowerLeg",
+  ...FINGER_BONE_NAMES,
 ] as const;
 
 type DrivenBoneName = (typeof DRIVEN_BONE_NAMES)[number];
@@ -323,6 +330,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         this.applyBaseMotion(this.baseMotion.update(delta, this.presentation.state));
       }
       this.updateBodyMotion(this.presentation.state);
+      this.applyRelaxedHands();
       this.updateGesture();
       this.updateLookAt(this.presentation.state, delta);
       this.updateExpressions(delta);
@@ -389,6 +397,28 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.offsetBoneRotation("leftUpperArm", 0.04, -0.04, 0.08);
     this.offsetBoneRotation("leftLowerArm", -0.16, -0.04, 0.03);
     this.offsetBoneRotation("chest", 0, -0.035, 0.02);
+  }
+
+  private applyRelaxedHands(): void {
+    for (const side of ["left", "right"] as const) {
+      for (const name of fingerBonesForSide(side)) {
+        const rotation = handPoseRotation(name, "relaxed");
+        this.offsetBoneRotation(name, rotation[0], rotation[1], rotation[2]);
+      }
+    }
+  }
+
+  private openHand(side: CharacterSide, amount: number): void {
+    const blend = Math.max(0, Math.min(1, amount));
+    for (const name of fingerBonesForSide(side)) {
+      const delta = handPoseDelta(name, "relaxed", "open");
+      this.offsetBoneRotation(
+        name,
+        delta[0] * blend,
+        delta[1] * blend,
+        delta[2] * blend,
+      );
+    }
   }
 
   private offsetBoneTuple(name: DrivenBoneName, rotation: RotationTuple): void {
@@ -592,6 +622,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       -sign * 0.06 * amount,
       sign * 0.04 * amount,
     );
+    this.openHand(side, amount);
     this.offsetBoneRotation("chest", 0, 0, -sign * 0.025 * amount);
     this.offsetBoneRotation("head", 0, 0, sign * 0.012 * amount);
   }
