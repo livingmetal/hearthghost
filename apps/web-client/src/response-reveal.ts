@@ -12,6 +12,9 @@ import {
   type SpeechRangePresentationDetail,
 } from "./voice/speech-presentation.js";
 
+export { RESPONSE_REVEAL_DONE_EVENT, RESPONSE_REVEAL_START_EVENT };
+export type { ResponseRevealDetail };
+
 const FALLBACK_STEP_MILLIS = 90;
 const FALLBACK_START_DELAY_MILLIS = 120;
 
