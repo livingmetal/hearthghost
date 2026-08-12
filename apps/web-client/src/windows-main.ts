@@ -32,6 +32,10 @@ import {
   selectCharacterOption,
   setCharacterOptionsStatus,
 } from "./options/character-options.js";
+import {
+  RESPONSE_REVEAL_DONE_EVENT,
+  type ResponseRevealDetail,
+} from "./response-reveal.js";
 import { WindowsWebViewBridge, windowsWebViewHost } from "./windows/webview-bridge.js";
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -227,6 +231,7 @@ async function submitText(text: string): Promise<void> {
   if (normalized === "") {
     return;
   }
+  response.textContent = "";
   await ensureConversationOpen();
   character.beginThinking();
   const snapshot = await conversation.submit(normalized);
@@ -235,11 +240,23 @@ async function submitText(text: string): Promise<void> {
   if (reply !== "") {
     historyView.render(history.append("user", normalized));
     historyView.render(history.append("assistant", reply));
+    character.beginSpeaking();
     response.textContent = reply;
+  } else {
+    character.engage();
   }
-  character.engage();
   notice.textContent = "Conversation active over Windows native mTLS.";
 }
+
+const onResponseRevealDone = (event: CustomEvent<ResponseRevealDetail>): void => {
+  if (
+    viewport.snapshot().state === "speaking"
+    && response.textContent?.trim() === event.detail.text.trim()
+  ) {
+    character.engage();
+  }
+};
+window.addEventListener(RESPONSE_REVEAL_DONE_EVENT, onResponseRevealDone as EventListener);
 
 connectButton.addEventListener("click", () => {
   void (async () => {
@@ -335,6 +352,7 @@ form.addEventListener("submit", (event) => {
 });
 
 window.addEventListener("pagehide", () => {
+  window.removeEventListener(RESPONSE_REVEAL_DONE_EVENT, onResponseRevealDone as EventListener);
   history.clear();
   historyView.clear();
   nativeBridge.dispose();
