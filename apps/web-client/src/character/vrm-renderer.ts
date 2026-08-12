@@ -204,21 +204,36 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     const leftUpperArm = vrm.humanoid.getNormalizedBoneNode("leftUpperArm");
     const rightUpperArm = vrm.humanoid.getNormalizedBoneNode("rightUpperArm");
     if (leftUpperArm !== null) {
-      leftUpperArm.rotation.z += 1.10;
-      leftUpperArm.rotation.y -= 0.08;
+      leftUpperArm.rotation.x -= 0.03;
+      leftUpperArm.rotation.y -= 0.06;
+      leftUpperArm.rotation.z += 1.34;
     }
     if (rightUpperArm !== null) {
-      rightUpperArm.rotation.z -= 1.10;
-      rightUpperArm.rotation.y += 0.08;
+      rightUpperArm.rotation.x -= 0.03;
+      rightUpperArm.rotation.y += 0.06;
+      rightUpperArm.rotation.z -= 1.34;
     }
 
     const leftLowerArm = vrm.humanoid.getNormalizedBoneNode("leftLowerArm");
     const rightLowerArm = vrm.humanoid.getNormalizedBoneNode("rightLowerArm");
     if (leftLowerArm !== null) {
-      leftLowerArm.rotation.y -= 0.12;
+      leftLowerArm.rotation.x -= 0.10;
+      leftLowerArm.rotation.y -= 0.08;
+      leftLowerArm.rotation.z += 0.025;
     }
     if (rightLowerArm !== null) {
-      rightLowerArm.rotation.y += 0.12;
+      rightLowerArm.rotation.x -= 0.10;
+      rightLowerArm.rotation.y += 0.08;
+      rightLowerArm.rotation.z -= 0.025;
+    }
+
+    const leftHand = vrm.humanoid.getNormalizedBoneNode("leftHand");
+    const rightHand = vrm.humanoid.getNormalizedBoneNode("rightHand");
+    if (leftHand !== null) {
+      leftHand.rotation.z += 0.025;
+    }
+    if (rightHand !== null) {
+      rightHand.rotation.z -= 0.025;
     }
   }
 
@@ -348,27 +363,33 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private gestureDuration(gesture: CharacterGesture): number {
     switch (gesture.gesture) {
       case "wave":
-        return 1.8;
+        return 2.0;
       case "raise_hand":
-        return 1.6;
+        return 1.75;
       case "turn":
-        return 1.7;
+        return 2.2;
       case "nod":
-        return 0.9;
+        return 1.0;
       case "shake_head":
-        return 1.1;
+        return 1.2;
       case "bow":
-        return 1.35;
+        return 1.5;
     }
   }
 
   private applyGesture(gesture: CharacterGesture, progress: number): void {
     switch (gesture.gesture) {
       case "wave": {
-        const lift = this.holdEnvelope(progress, 0.20, 0.18);
-        this.applyHandLift(gesture.side, lift, 0.72);
+        const lift = this.holdEnvelope(progress, 0.22, 0.20);
+        this.applyRaisedHandPose(gesture.side, lift, 1.05, 0.92);
         const side = this.sideSign(gesture.side);
-        const oscillation = Math.sin(progress * Math.PI * 8) * 0.34 * lift;
+        const oscillation = Math.sin(progress * Math.PI * 6) * 0.20 * lift;
+        this.offsetBoneRotation(
+          gesture.side === "left" ? "leftLowerArm" : "rightLowerArm",
+          0,
+          0,
+          side * oscillation * 0.22,
+        );
         this.offsetBoneRotation(
           gesture.side === "left" ? "leftHand" : "rightHand",
           0,
@@ -378,48 +399,82 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         return;
       }
       case "raise_hand":
-        this.applyHandLift(gesture.side, this.holdEnvelope(progress, 0.25, 0.25), 0.22);
+        this.applyRaisedHandPose(
+          gesture.side,
+          this.holdEnvelope(progress, 0.26, 0.24),
+          1.18,
+          0.80,
+        );
         return;
       case "turn": {
         if (this.vrm === null) {
           return;
         }
         const direction = gesture.direction === "right" ? -1 : 1;
+        const bodyLead = Math.sin(Math.PI * progress);
+        this.offsetBoneRotation("chest", 0, direction * 0.08 * bodyLead, 0);
+        this.offsetBoneRotation("head", 0, -direction * 0.04 * bodyLead, 0);
         this.vrm.scene.rotation.y = this.rootRestYaw
           + direction * Math.PI * 2 * this.easeInOut(progress);
         return;
       }
       case "nod": {
         const envelope = Math.sin(Math.PI * progress);
-        const nod = Math.sin(progress * Math.PI * 4) * 0.17 * envelope;
-        this.offsetBoneRotation("head", nod, 0, 0);
+        const nod = Math.sin(progress * Math.PI * 4) * envelope;
+        this.offsetBoneRotation("neck", nod * 0.045, 0, 0);
+        this.offsetBoneRotation("head", nod * 0.12, 0, 0);
         return;
       }
       case "shake_head": {
         const envelope = Math.sin(Math.PI * progress);
-        const shake = Math.sin(progress * Math.PI * 4) * 0.25 * envelope;
-        this.offsetBoneRotation("head", 0, shake, 0);
+        const shake = Math.sin(progress * Math.PI * 4) * envelope;
+        this.offsetBoneRotation("neck", 0, shake * 0.055, 0);
+        this.offsetBoneRotation("head", 0, shake * 0.18, 0);
         return;
       }
       case "bow": {
-        const amount = this.holdEnvelope(progress, 0.28, 0.30);
-        this.offsetBoneRotation("spine", 0.10 * amount, 0, 0);
-        this.offsetBoneRotation("chest", 0.28 * amount, 0, 0);
-        this.offsetBoneRotation("neck", 0.08 * amount, 0, 0);
-        this.offsetBoneRotation("head", 0.13 * amount, 0, 0);
+        const amount = this.holdEnvelope(progress, 0.30, 0.30);
+        this.offsetBoneRotation("hips", 0.05 * amount, 0, 0);
+        this.offsetBoneRotation("spine", 0.12 * amount, 0, 0);
+        this.offsetBoneRotation("chest", 0.16 * amount, 0, 0);
+        this.offsetBoneRotation("neck", 0.04 * amount, 0, 0);
+        this.offsetBoneRotation("head", 0.06 * amount, 0, 0);
         return;
       }
     }
   }
 
-  private applyHandLift(side: CharacterSide, amount: number, elbowBend: number): void {
+  private applyRaisedHandPose(
+    side: CharacterSide,
+    amount: number,
+    elbowBend: number,
+    upperLift: number,
+  ): void {
     const sign = this.sideSign(side);
     const upper = side === "left" ? "leftUpperArm" : "rightUpperArm";
     const lower = side === "left" ? "leftLowerArm" : "rightLowerArm";
     const hand = side === "left" ? "leftHand" : "rightHand";
-    this.offsetBoneRotation(upper, -0.08 * amount, sign * 0.08 * amount, sign * 1.55 * amount);
-    this.offsetBoneRotation(lower, -elbowBend * amount, sign * 0.12 * amount, sign * 0.15 * amount);
-    this.offsetBoneRotation(hand, 0, 0, sign * 0.08 * amount);
+
+    this.offsetBoneRotation(
+      upper,
+      -0.12 * amount,
+      sign * 0.14 * amount,
+      sign * upperLift * amount,
+    );
+    this.offsetBoneRotation(
+      lower,
+      -elbowBend * amount,
+      sign * 0.16 * amount,
+      -sign * 0.08 * amount,
+    );
+    this.offsetBoneRotation(
+      hand,
+      0.08 * amount,
+      -sign * 0.06 * amount,
+      sign * 0.04 * amount,
+    );
+    this.offsetBoneRotation("chest", 0, 0, -sign * 0.025 * amount);
+    this.offsetBoneRotation("head", 0, 0, sign * 0.012 * amount);
   }
 
   private sideSign(side: CharacterSide): number {
