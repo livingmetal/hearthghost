@@ -161,6 +161,7 @@ connectButton.addEventListener("click", () => {
     history.clear();
     historyView.clear();
     response.textContent = "";
+    conversation.reset();
     try {
       character.wakeByTouch();
       const snapshot = await node.connect({

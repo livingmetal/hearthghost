@@ -21,6 +21,9 @@ node_modules/
 .test-dist/
 dist/
 build/
+**/bin/
+**/obj/
+apps/web-client/public/models/*.vrm
 *.apk
 *.aab
 coverage/

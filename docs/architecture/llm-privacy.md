@@ -29,8 +29,9 @@ client, embedded in an image, or accepted as a build argument.
 
 For container runtimes, `OPENAI_API_KEY_FILE` may instead name a regular,
 read-only server secret file. Configuring both key sources is rejected as
-ambiguous. The adapter reads at most 16 KiB of key material and requests at most
-1,024 output tokens. Neither setting changes the default Core composition or
+ambiguous. `OPENAI_MAX_OUTPUT_TOKENS` can lower the per-request response bound;
+the adapter reads at most 16 KiB of key material and enforces an absolute maximum
+of 1,024 output tokens. Neither setting changes the default Core composition or
 the network-isolated test suite.
 
 ## Opt-in provider smoke test
