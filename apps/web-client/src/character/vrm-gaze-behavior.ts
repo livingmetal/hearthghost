@@ -1,4 +1,9 @@
 import type { HearthGhostCharacterId } from "./catalog.js";
+import {
+  defaultExpressionStyleForCharacter,
+  type ExpressionStyleId,
+} from "./expression-style.js";
+import { personaPerformanceStyleProfile } from "./persona-performance-style.js";
 import type { CharacterEmotion, CharacterState } from "./semantic.js";
 
 export type GazeBehaviorName =
@@ -74,12 +79,23 @@ export class GazeBehaviorController {
   private lastState: CharacterState = "sleeping";
   private lastEmotion: CharacterEmotion = "neutral";
   private lastGlanceSide: "left" | "right" | null = null;
+  private style: ExpressionStyleId;
+  private styleDirty = true;
 
   constructor(
     characterId: HearthGhostCharacterId | null = null,
     private readonly random: () => number = Math.random,
+    style: ExpressionStyleId = defaultExpressionStyleForCharacter(characterId),
   ) {
     this.profile = characterId === null ? GENERIC_PROFILE : PROFILES[characterId];
+    this.style = style;
+  }
+
+  setStyle(style: ExpressionStyleId): void {
+    if (style !== this.style) {
+      this.style = style;
+      this.styleDirty = true;
+    }
   }
 
   reset(elapsed = 0): void {
@@ -94,6 +110,7 @@ export class GazeBehaviorController {
     this.lastState = "sleeping";
     this.lastEmotion = "neutral";
     this.lastGlanceSide = null;
+    this.styleDirty = true;
   }
 
   update(
@@ -102,10 +119,11 @@ export class GazeBehaviorController {
     state: CharacterState,
     emotion: CharacterEmotion,
   ): VrmGazeFrame {
-    if (state !== this.lastState || emotion !== this.lastEmotion) {
+    if (state !== this.lastState || emotion !== this.lastEmotion || this.styleDirty) {
       this.onPresentationChange(elapsed, state, emotion);
       this.lastState = state;
       this.lastEmotion = emotion;
+      this.styleDirty = false;
     }
 
     if (state === "sleeping") {
@@ -145,6 +163,23 @@ export class GazeBehaviorController {
       this.nextActionAt = elapsed + 0.9;
       return;
     }
+    if (this.style === "tsundere" && (emotion === "embarrassed" || emotion === "affectionate")) {
+      this.startSideGlance(elapsed, 0.26, 1.46, 0.9, 1.3, 5.0);
+      return;
+    }
+    if (this.style === "reserved" && (emotion === "embarrassed" || emotion === "concerned")) {
+      this.startGlance("glance-down", 0.035 * this.sideSign(), 1.36, elapsed, 0.8, 1.2, 4.2);
+      return;
+    }
+    if (this.style === "mesugaki" && (emotion === "smug" || emotion === "amused")) {
+      this.startSideGlance(elapsed, 0.24, 1.51, 0.45, 0.85, 5.4);
+      return;
+    }
+    if (this.style === "yandere" && emotion === "affectionate") {
+      this.setTarget("focus", 0, USER_FOCUS_Y + 0.012, 5.6);
+      this.nextActionAt = elapsed + 4.8;
+      return;
+    }
     if (state === "thinking") {
       this.chooseThinkingGlance(elapsed, emotion);
       return;
@@ -177,7 +212,8 @@ export class GazeBehaviorController {
           ? 0.05
           : 0;
 
-    if (this.random() < clamp(glanceChance + emotionBoost, 0, 0.64)) {
+    const styleProfile = personaPerformanceStyleProfile(this.style);
+    if (this.random() < clamp(glanceChance + emotionBoost + styleProfile.glanceChanceBias, 0, 0.68)) {
       this.chooseAmbientGlance(elapsed, state, emotion);
     } else {
       this.chooseMicroSaccade(elapsed, state);
@@ -187,7 +223,9 @@ export class GazeBehaviorController {
   private chooseThinkingGlance(elapsed: number, emotion: CharacterEmotion): void {
     const roll = this.random();
     const downBias = clamp(
-      this.profile.thinkingDownBias + (emotion === "concerned" ? 0.24 : 0),
+      this.profile.thinkingDownBias
+        + personaPerformanceStyleProfile(this.style).thinkingDownBias
+        + (emotion === "concerned" ? 0.24 : 0),
       0.12,
       0.72,
     );
@@ -221,11 +259,16 @@ export class GazeBehaviorController {
   }
 
   private chooseMicroSaccade(elapsed: number, state: CharacterState): void {
-    const x = (this.random() * 2 - 1) * 0.075 * this.profile.microAmplitude;
-    const y = USER_FOCUS_Y + (this.random() * 2 - 1) * 0.045 * this.profile.microAmplitude;
+    const amplitudeScale = personaPerformanceStyleProfile(this.style).gazeAmplitudeScale;
+    const x = (this.random() * 2 - 1) * 0.075 * this.profile.microAmplitude * amplitudeScale;
+    const y = USER_FOCUS_Y
+      + (this.random() * 2 - 1) * 0.045 * this.profile.microAmplitude * amplitudeScale;
     this.setTarget("micro", x, y, 5.4);
     const [minimum, spread] = state === "speaking" ? [0.75, 1.55] : [1.0, 2.2];
-    this.nextActionAt = elapsed + (minimum + this.random() * spread) * this.profile.intervalScale;
+    this.nextActionAt = elapsed
+      + (minimum + this.random() * spread)
+        * this.profile.intervalScale
+        * personaPerformanceStyleProfile(this.style).gazeIntervalScale;
   }
 
   private startSideGlance(
@@ -253,8 +296,11 @@ export class GazeBehaviorController {
   ): void {
     this.setTarget(
       behavior,
-      x * this.profile.amplitude,
-      USER_FOCUS_Y + (y - USER_FOCUS_Y) * this.profile.amplitude,
+      x * this.profile.amplitude * personaPerformanceStyleProfile(this.style).gazeAmplitudeScale,
+      USER_FOCUS_Y
+        + (y - USER_FOCUS_Y)
+          * this.profile.amplitude
+          * personaPerformanceStyleProfile(this.style).gazeAmplitudeScale,
       response,
     );
     this.glanceEndsAt = elapsed + minimumHold + this.random() * holdSpread;
@@ -276,7 +322,10 @@ export class GazeBehaviorController {
         : state === "speaking"
           ? [1.5, 2.6]
           : [1.7, 2.8];
-    this.nextActionAt = elapsed + (minimum + this.random() * spread) * this.profile.intervalScale;
+    this.nextActionAt = elapsed
+      + (minimum + this.random() * spread)
+        * this.profile.intervalScale
+        * personaPerformanceStyleProfile(this.style).gazeIntervalScale;
   }
 
   private setTarget(

@@ -1,4 +1,9 @@
 import type { HearthGhostCharacterId } from "./catalog.js";
+import {
+  defaultExpressionStyleForCharacter,
+  type ExpressionStyleId,
+} from "./expression-style.js";
+import { personaPerformanceStyleProfile } from "./persona-performance-style.js";
 import type { CharacterEmotion, CharacterState } from "./semantic.js";
 
 export type EmotionPostureRotation = readonly [number, number, number];
@@ -213,6 +218,95 @@ function emotionTarget(
   }
 }
 
+function styleEmotionBias(
+  emotion: CharacterEmotion,
+  style: ExpressionStyleId,
+  side: number,
+): Readonly<Partial<Record<EmotionPostureBoneName, EmotionPostureRotation>>> {
+  if (style === "playful") {
+    if (emotion === "happy" || emotion === "amused" || emotion === "curious") {
+      return Object.freeze({
+        chest: [-0.003, 0.004 * side, 0.006 * side],
+        head: [-0.004, -0.004 * side, 0.010 * side],
+        leftShoulder: [0, 0, -0.006],
+        rightShoulder: [0, 0, 0.006],
+      });
+    }
+    return Object.freeze({});
+  }
+
+  if (style === "reserved") {
+    if (emotion === "embarrassed" || emotion === "concerned" || emotion === "sad") {
+      return Object.freeze({
+        chest: [0.006, -0.003 * side, 0],
+        head: [0.010, 0.004 * side, -0.004 * side],
+        leftShoulder: [0.002, 0, 0.006],
+        rightShoulder: [0.002, 0, -0.006],
+        leftUpperArm: [0.003, -0.004, -0.006],
+        rightUpperArm: [-0.003, 0.004, 0.006],
+      });
+    }
+    return Object.freeze({});
+  }
+
+  if (style === "tsundere") {
+    if (emotion === "embarrassed" || emotion === "affectionate") {
+      return Object.freeze({
+        spine: [0.004, 0.010 * side, 0],
+        chest: [0.008, 0.026 * side, -0.006 * side],
+        neck: [0.006, 0.022 * side, -0.010 * side],
+        head: [0.010, 0.052 * side, -0.026 * side],
+        leftShoulder: [0.003, 0, 0.014],
+        rightShoulder: [0.003, 0, -0.014],
+        leftUpperArm: [0.004, -0.010, -0.012],
+        rightUpperArm: [-0.004, 0.010, 0.012],
+      });
+    }
+    if (emotion === "annoyed") {
+      return Object.freeze({
+        chest: [0.002, 0.018 * side, -0.004 * side],
+        head: [0.004, 0.030 * side, -0.014 * side],
+      });
+    }
+    return Object.freeze({});
+  }
+
+  if (style === "mesugaki") {
+    if (emotion === "smug" || emotion === "amused") {
+      return Object.freeze({
+        spine: [-0.003, 0.010 * side, -0.004 * side],
+        chest: [-0.006, 0.026 * side, 0.014 * side],
+        neck: [-0.004, -0.020 * side, 0.018 * side],
+        head: [-0.006, -0.036 * side, 0.040 * side],
+        leftShoulder: [0, 0, -0.006 - 0.004 * side],
+        rightShoulder: [0, 0, 0.006 - 0.004 * side],
+      });
+    }
+    return Object.freeze({});
+  }
+
+  if (style === "yandere") {
+    if (emotion === "affectionate") {
+      return Object.freeze({
+        spine: [-0.006, 0, -0.002 * side],
+        chest: [-0.014, 0.004 * side, 0.006 * side],
+        neck: [-0.006, -0.006 * side, 0.012 * side],
+        head: [-0.012, -0.010 * side, 0.030 * side],
+        leftShoulder: [0, 0, -0.008],
+        rightShoulder: [0, 0, 0.008],
+      });
+    }
+    if (emotion === "concerned") {
+      return Object.freeze({
+        chest: [-0.006, 0, 0],
+        head: [0.006, 0.004 * side, 0.008 * side],
+      });
+    }
+  }
+
+  return Object.freeze({});
+}
+
 /**
  * Low-amplitude body-language overlay for semantic emotion.
  *
@@ -225,16 +319,30 @@ export class EmotionPostureController {
   private readonly profile: EmotionPostureProfile;
   private readonly current = zeroFrame();
   private readonly target = zeroFrame();
+  private style: ExpressionStyleId;
+  private styleDirty = true;
   private lastEmotion: CharacterEmotion = "neutral";
   private lastState: CharacterState = "sleeping";
 
-  constructor(characterId: HearthGhostCharacterId | null = null) {
+  constructor(
+    characterId: HearthGhostCharacterId | null = null,
+    style: ExpressionStyleId = defaultExpressionStyleForCharacter(characterId),
+  ) {
     this.profile = characterId === null ? GENERIC_PROFILE : PROFILES[characterId];
+    this.style = style;
+  }
+
+  setStyle(style: ExpressionStyleId): void {
+    if (style !== this.style) {
+      this.style = style;
+      this.styleDirty = true;
+    }
   }
 
   reset(): void {
     this.lastEmotion = "neutral";
     this.lastState = "sleeping";
+    this.styleDirty = true;
     for (const bone of BONES) {
       this.current[bone] = [0, 0, 0];
       this.target[bone] = [0, 0, 0];
@@ -246,10 +354,11 @@ export class EmotionPostureController {
     state: CharacterState,
     emotion: CharacterEmotion,
   ): VrmEmotionPostureFrame {
-    if (emotion !== this.lastEmotion || state !== this.lastState) {
+    if (emotion !== this.lastEmotion || state !== this.lastState || this.styleDirty) {
       this.selectTarget(state, emotion);
       this.lastEmotion = emotion;
       this.lastState = state;
+      this.styleDirty = false;
     }
 
     const response = emotion === "surprised" && state === "noticing" ? 6.2 : 3.5;
@@ -267,19 +376,27 @@ export class EmotionPostureController {
     for (const bone of BONES) {
       this.target[bone] = [0, 0, 0];
     }
-    const influence = stateInfluence(state) * this.profile.scale;
+    const styleProfile = personaPerformanceStyleProfile(this.style);
+    const influence = stateInfluence(state) * this.profile.scale * styleProfile.bodyScale;
     if (influence === 0 || emotion === "neutral") {
       return;
     }
-    const target = emotionTarget(emotion, this.profile);
-    for (const [bone, rotation] of Object.entries(target) as [
-      EmotionPostureBoneName,
-      EmotionPostureRotation,
-    ][]) {
+    const base = emotionTarget(emotion, this.profile);
+    const bias = styleEmotionBias(
+      emotion,
+      this.style,
+      this.profile.lateralSign * this.profile.expressiveness,
+    );
+    for (const bone of BONES) {
+      const primary = base[bone];
+      const secondary = bias[bone];
+      if (primary === undefined && secondary === undefined) {
+        continue;
+      }
       this.target[bone] = [
-        rotation[0] * influence,
-        rotation[1] * influence,
-        rotation[2] * influence,
+        ((primary?.[0] ?? 0) + (secondary?.[0] ?? 0)) * influence,
+        ((primary?.[1] ?? 0) + (secondary?.[1] ?? 0)) * influence,
+        ((primary?.[2] ?? 0) + (secondary?.[2] ?? 0)) * influence,
       ];
     }
   }
