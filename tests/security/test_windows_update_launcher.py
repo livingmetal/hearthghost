@@ -35,6 +35,23 @@ class WindowsUpdateLauncherTests(unittest.TestCase):
         self.assertIn("Restore-PreviousInstall", self.source)
         self.assertIn('State "rolled_back"', self.source)
 
+    def test_swap_failure_only_removes_new_candidate_directories(self) -> None:
+        self.assertIn("$newWebInstalled = $false", self.source)
+        self.assertIn("$newNativeInstalled = $false", self.source)
+        self.assertIn(
+            "$newWebInstalled -and (Test-Path -LiteralPath $webRoot)",
+            self.source,
+        )
+        self.assertIn(
+            "$newNativeInstalled -and (Test-Path -LiteralPath $nativeRoot)",
+            self.source,
+        )
+
+    def test_owned_loopback_server_is_observed_stopped_before_swap(self) -> None:
+        self.assertIn("$listenerProcessId = [int]$listener.OwningProcess", self.source)
+        self.assertIn("Get-Process -Id $listenerProcessId", self.source)
+        self.assertIn("loopback server did not stop before update", self.source)
+
     def test_launcher_does_not_reference_provider_credentials(self) -> None:
         self.assertNotIn("OPENAI_API_KEY", self.source)
         self.assertNotIn("sk-proj", self.source)

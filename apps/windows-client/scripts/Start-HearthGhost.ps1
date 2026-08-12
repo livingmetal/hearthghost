@@ -109,7 +109,15 @@ function Stop-OwnedWebServer {
     if ($null -eq $process -or $process.CommandLine -notlike "*$webRoot*") {
         throw "HearthGhost loopback port $webPort is owned by another process"
     }
-    Stop-Process -Id $listener.OwningProcess -Force
+    $listenerProcessId = [int]$listener.OwningProcess
+    Stop-Process -Id $listenerProcessId -Force
+    for ($attempt = 0; $attempt -lt 50; $attempt++) {
+        if ($null -eq (Get-Process -Id $listenerProcessId -ErrorAction SilentlyContinue)) {
+            return
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    throw "HearthGhost loopback server did not stop before update"
 }
 
 function Restore-PreviousInstall {
@@ -334,6 +342,8 @@ function Install-ValidatedUpdate {
 
         $webMoved = $false
         $nativeMoved = $false
+        $newWebInstalled = $false
+        $newNativeInstalled = $false
         try {
             if (Test-Path -LiteralPath $webRoot) {
                 Move-Item -LiteralPath $webRoot -Destination $previousWeb
@@ -344,12 +354,14 @@ function Install-ValidatedUpdate {
                 $nativeMoved = $true
             }
             Move-Item -LiteralPath $stageWeb -Destination $webRoot
+            $newWebInstalled = $true
             Move-Item -LiteralPath $stageNative -Destination $nativeRoot
+            $newNativeInstalled = $true
         } catch {
-            if (Test-Path -LiteralPath $webRoot) {
+            if ($newWebInstalled -and (Test-Path -LiteralPath $webRoot)) {
                 Remove-Item -LiteralPath $webRoot -Recurse -Force
             }
-            if (Test-Path -LiteralPath $nativeRoot) {
+            if ($newNativeInstalled -and (Test-Path -LiteralPath $nativeRoot)) {
                 Remove-Item -LiteralPath $nativeRoot -Recurse -Force
             }
             if ($webMoved -and (Test-Path -LiteralPath $previousWeb)) {
