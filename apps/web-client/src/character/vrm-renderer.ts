@@ -119,6 +119,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private presentation: CharacterPresentation = {
     state: "sleeping",
     emotion: "neutral",
+    presence: "offstage",
   };
 
   constructor(
