@@ -1,18 +1,17 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MAX_ASSET_BYTES = 40 * 1024 * 1024;
+const PRIVATE_MODEL_A = Object.freeze({
+  name: "AvatarSample_Y.vrm",
+  environmentVariable: "HEARTHGHOST_MODEL_A_PATH",
+  outputPath: "models/AvatarSample_Y.vrm",
+  expectedBytes: 16_935_148,
+  sha256: "48af6bf879cadbc4e17431543f795010c9ca2bf31c3ca5e0b450c87b05545c11",
+});
 const ASSETS = Object.freeze([
-  Object.freeze({
-    name: "AvatarSample_A.vrm",
-    repository: "hirokazuniimoto/virtual-avatar-sdk",
-    commit: "114d4336e0ac36bf9c2297b0a93ad7604b13704b",
-    sourcePath: "assets/avatars/AvatarSample_A.vrm",
-    outputPath: "models/AvatarSample_A.vrm",
-    blobSha: "2ab43eef01826a3f93ab92e4174473efd473ae98",
-  }),
   Object.freeze({
     name: "AvatarSample_C.vrm",
     repository: "hirokazuniimoto/virtual-avatar-sdk",
@@ -37,6 +36,52 @@ const publicDir = resolve(scriptDir, "..", "public");
 function gitBlobSha(bytes) {
   const header = Buffer.from(`blob ${bytes.length}\0`, "utf8");
   return createHash("sha1").update(header).update(bytes).digest("hex");
+}
+
+function sha256(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function validatePrivateModelA(bytes) {
+  if (bytes.length !== PRIVATE_MODEL_A.expectedBytes || bytes.length > MAX_ASSET_BYTES) {
+    throw new Error(`${PRIVATE_MODEL_A.name}: unexpected asset size ${bytes.length}`);
+  }
+  if (bytes.subarray(0, 4).toString("ascii") !== "glTF" || bytes.readUInt32LE(4) !== 2) {
+    throw new Error(`${PRIVATE_MODEL_A.name}: expected a glTF 2.0/VRM container`);
+  }
+  const observed = sha256(bytes);
+  if (observed !== PRIVATE_MODEL_A.sha256) {
+    throw new Error(`${PRIVATE_MODEL_A.name}: SHA-256 mismatch (${observed})`);
+  }
+  return observed;
+}
+
+async function preparePrivateModelA() {
+  const output = resolve(publicDir, PRIVATE_MODEL_A.outputPath);
+  const configuredPath = process.env[PRIVATE_MODEL_A.environmentVariable]?.trim() ?? "";
+  let bytes;
+  let sourceLabel;
+
+  if (configuredPath !== "") {
+    const source = isAbsolute(configuredPath) ? configuredPath : resolve(process.cwd(), configuredPath);
+    bytes = await readFile(source);
+    sourceLabel = source;
+  } else {
+    try {
+      bytes = await readFile(output);
+      sourceLabel = output;
+    } catch {
+      throw new Error(
+        `${PRIVATE_MODEL_A.name}: set ${PRIVATE_MODEL_A.environmentVariable} to the private VRM path `
+        + `or place the reviewed file at ${output}`,
+      );
+    }
+  }
+
+  const observed = validatePrivateModelA(bytes);
+  await mkdir(dirname(output), { recursive: true });
+  await writeFile(output, bytes, { mode: 0o644 });
+  console.log(`${PRIVATE_MODEL_A.name}: ${bytes.length} bytes / sha256 ${observed} / source ${sourceLabel}`);
 }
 
 async function fetchAsset(asset) {
@@ -73,6 +118,7 @@ async function fetchAsset(asset) {
   }
 }
 
+await preparePrivateModelA();
 for (const asset of ASSETS) {
   await fetchAsset(asset);
 }
