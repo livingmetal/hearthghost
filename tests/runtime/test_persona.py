@@ -34,6 +34,26 @@ class PersonaTests(unittest.TestCase):
         self.assertIn("Never claim to execute devices", instructions)
         self.assertIn("every proposal remains pending Policy", instructions)
 
+    def test_character_name_is_never_implied_to_be_the_user_name(self):
+        for name in ("영희", "철수"):
+            with self.subTest(name=name):
+                instructions = PersonaProfile(name=name).conversation_instructions()
+
+                self.assertIn(
+                    f"You are {name}, the selected HearthGhost assistant character",
+                    instructions,
+                )
+                self.assertIn(
+                    f"The character name {name} identifies you, never the user",
+                    instructions,
+                )
+                self.assertIn(
+                    f"Do not call or address the user as {name}",
+                    instructions,
+                )
+                self.assertIn("No human user name is provided", instructions)
+                self.assertIn("Do not invent one", instructions)
+
     def test_schema_allowed_high_initiative_is_accepted(self):
         persona = PersonaProfile(initiative="high")
         self.assertEqual(persona.initiative, "high")

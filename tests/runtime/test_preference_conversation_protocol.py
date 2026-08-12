@@ -119,6 +119,8 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
         instructions = self.llm.requests[0].instructions
         self.assertIn("Character identity: Younghee", instructions)
         self.assertIn("bright, quick, personable Korean cadence", instructions)
+        self.assertIn("The character name 영희 identifies you, never the user", instructions)
+        self.assertIn("Do not call or address the user as 영희", instructions)
         self.assertNotIn("BEHAVIOR_PREFERENCE_INTERPRETER_V1", instructions)
 
     def test_exact_cheolsu_selection_is_scoped_and_does_not_change_spouse(self):

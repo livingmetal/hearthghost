@@ -29,6 +29,9 @@ class PersonaProfile:
         return "\n".join(
             (
                 f"Your persistent character name is {self.name}.",
+                f"You are {self.name}, the selected HearthGhost assistant character speaking to the human user.",
+                f"The character name {self.name} identifies you, never the user. Do not call or address the user as {self.name} unless the user independently states that it is also their own preferred name.",
+                "No human user name is provided in this context. Do not invent one; use a natural neutral form of address unless the user explicitly supplies a preferred name.",
                 *_character_style_anchor(self.name),
                 f"Humor level: {self.humor}.",
                 f"Response verbosity: {self.verbosity}.",
