@@ -1,0 +1,94 @@
+name: patch-hg047-actions
+
+on:
+  push:
+    branches:
+      - codex/hg-047-action-repertoire
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: codex/hg-047-action-repertoire
+      - name: Patch renderer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/web-client/src/character/vrm-renderer.ts")
+          text = path.read_text()
+
+          changes = [
+              (
+                  'import { GazeBehaviorController } from "./vrm-gaze-behavior.js";\n',
+                  'import { GazeBehaviorController } from "./vrm-gaze-behavior.js";\n'
+                  'import { actionMotionFrame, type VrmActionMotionFrame } from "./vrm-action-motion.js";\n',
+              ),
+              (
+                  '    private readonly assetUrl: string | null = null,\n    characterId: HearthGhostCharacterId | null = null,\n',
+                  '    private readonly assetUrl: string | null = null,\n'
+                  '    private readonly characterId: HearthGhostCharacterId | null = null,\n',
+              ),
+              (
+                  '      case "bow":\n        return 1.5;\n',
+                  '      case "bow":\n'
+                  '        return 1.5;\n'
+                  '      case "clap":\n'
+                  '        return this.characterId === "younghee" ? 2.2 : this.characterId === "cheolsu" ? 2.4 : 2.3;\n'
+                  '      case "shrug":\n'
+                  '        return 1.5;\n'
+                  '      case "stretch":\n'
+                  '        return 2.5;\n',
+              ),
+              (
+                  '      case "bow": {\n        const amount = this.holdEnvelope(progress, 0.30, 0.30);\n        this.offsetBoneRotation("hips", 0.05 * amount, 0, 0);\n        this.offsetBoneRotation("spine", 0.12 * amount, 0, 0);\n        this.offsetBoneRotation("chest", 0.16 * amount, 0, 0);\n        this.offsetBoneRotation("neck", 0.04 * amount, 0, 0);\n        this.offsetBoneRotation("head", 0.06 * amount, 0, 0);\n        return;\n      }\n',
+                  '      case "bow": {\n'
+                  '        const amount = this.holdEnvelope(progress, 0.30, 0.30);\n'
+                  '        this.offsetBoneRotation("hips", 0.05 * amount, 0, 0);\n'
+                  '        this.offsetBoneRotation("spine", 0.12 * amount, 0, 0);\n'
+                  '        this.offsetBoneRotation("chest", 0.16 * amount, 0, 0);\n'
+                  '        this.offsetBoneRotation("neck", 0.04 * amount, 0, 0);\n'
+                  '        this.offsetBoneRotation("head", 0.06 * amount, 0, 0);\n'
+                  '        return;\n'
+                  '      }\n'
+                  '      case "clap":\n'
+                  '      case "shrug":\n'
+                  '      case "stretch":\n'
+                  '        this.applyActionMotion(actionMotionFrame(gesture, progress, this.characterId));\n'
+                  '        return;\n',
+              ),
+          ]
+
+          for old, new in changes:
+              count = text.count(old)
+              if count == 0 and new in text:
+                  continue
+              if count != 1:
+                  raise SystemExit(f"expected one renderer match, got {count}: {old[:90]!r}")
+              text = text.replace(old, new)
+
+          marker = '  private applyMoveGesture(\n'
+          if '  private applyActionMotion(frame: VrmActionMotionFrame): void {' not in text:
+              idx = text.index(marker)
+              method = '''  private applyActionMotion(frame: VrmActionMotionFrame): void {\n    this.offsetBoneTuple("spine", frame.rotations.spine);\n    this.offsetBoneTuple("chest", frame.rotations.chest);\n    this.offsetBoneTuple("neck", frame.rotations.neck);\n    this.offsetBoneTuple("head", frame.rotations.head);\n    this.offsetBoneTuple("leftShoulder", frame.rotations.leftShoulder);\n    this.offsetBoneTuple("rightShoulder", frame.rotations.rightShoulder);\n    this.offsetBoneTuple("leftUpperArm", frame.rotations.leftUpperArm);\n    this.offsetBoneTuple("rightUpperArm", frame.rotations.rightUpperArm);\n    this.offsetBoneTuple("leftLowerArm", frame.rotations.leftLowerArm);\n    this.offsetBoneTuple("rightLowerArm", frame.rotations.rightLowerArm);\n    this.offsetBoneTuple("leftHand", frame.rotations.leftHand);\n    this.offsetBoneTuple("rightHand", frame.rotations.rightHand);\n    this.openHand("left", frame.leftHandOpen);\n    this.openHand("right", frame.rightHandOpen);\n  }\n\n'''
+              text = text[:idx] + method + text[idx:]
+
+          path.write_text(text)
+          PY
+      - name: Commit renderer wiring
+        run: |
+          if git diff --quiet -- apps/web-client/src/character/vrm-renderer.ts; then
+            echo "Renderer already patched"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web-client/src/character/vrm-renderer.ts
+          git commit -m "HG-047: wire action repertoire into renderer"
+          git push origin HEAD:codex/hg-047-action-repertoire
