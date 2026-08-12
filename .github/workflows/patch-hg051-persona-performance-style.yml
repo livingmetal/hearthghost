@@ -1,0 +1,29 @@
+name: HG-051 one-shot persona performance patch
+
+on:
+  push:
+    branches:
+      - codex/hg-051-persona-performance-style
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/hg-051-persona-performance-style
+      - name: Apply HG-051 patch
+        run: python .github/scripts/hg051_patch.py
+      - name: Validate patch shape
+        run: git diff --check
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web-client/src/character apps/web-client/tests
+          git commit -m "HG-051: choreograph persona body and gaze style"
+          git push origin HEAD:codex/hg-051-persona-performance-style
