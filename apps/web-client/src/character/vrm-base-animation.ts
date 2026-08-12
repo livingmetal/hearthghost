@@ -14,6 +14,7 @@ import {
   type VRMAnimation,
 } from "@pixiv/three-vrm-animation";
 
+import { isFingerBoneName } from "./vrm-hand-pose.js";
 import type { CharacterState } from "./semantic.js";
 
 export const BUNDLED_IDLE_VRMA_URL = "/animations/airi-idle-loop.vrma";
@@ -90,11 +91,15 @@ function baseOnlyClip(animation: VRMAnimation, vrm: VRM): AnimationClip {
     ? [0, 0, 0]
     : [hips.position.x, hips.position.y, hips.position.z];
   const translation = humanoid.translation.get("hips");
+  const rotations = Array.from(
+    humanoid.rotation.entries(),
+    ([boneName, track]) => isFingerBoneName(boneName) ? null : track.clone(),
+  ).filter((track) => track !== null);
   const tracks = [
     ...(translation === undefined
       ? []
       : [reanchorHipsPositionTrack(translation, hipsRest)]),
-    ...Array.from(humanoid.rotation.values(), (track) => track.clone()),
+    ...rotations,
   ];
   return new AnimationClip("hearthghost-idle-base", animation.duration, tracks);
 }
