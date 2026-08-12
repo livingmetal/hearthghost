@@ -2,6 +2,11 @@
 
 Status: software implementation complete pending final Android CI and physical model/voice validation.
 
+> Later client options separate appearance from persona. The A/C selector now
+> controls only the local VRM and voice; a distinct persona selector applies
+> the principal-scoped name and behavior fields. The original exact
+> `캐릭터: 영희/철수` protocol remains supported for older clients.
+
 ## Character mapping
 
 - `영희` → local character id `younghee` → official asset slot `/models/AvatarSample_A.vrm`

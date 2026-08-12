@@ -8,6 +8,15 @@ import {
   reduceCharacterPresentation,
 } from "../.test-dist/character/semantic.js";
 import { CharacterViewport } from "../.test-dist/character/viewport.js";
+import {
+  VRM_CAMERA_FRAMING,
+  cameraClearanceAtForwardExtent,
+} from "../.test-dist/character/vrm-framing.js";
+import {
+  MAX_CAMERA_Z,
+  MIN_CAMERA_Z,
+  VrmViewManipulation,
+} from "../.test-dist/character/vrm-view-manipulation.js";
 
 class RecordingRenderer {
   presentations = [];
@@ -64,6 +73,49 @@ test("state and emotion remain separate semantic dimensions", () => {
   assert.deepEqual(amused, { state: "speaking", emotion: "amused" });
 });
 
+test("VRM conversation framing is close while preserving forward gesture clearance", () => {
+  assert.ok(VRM_CAMERA_FRAMING.cameraZ < 3);
+  assert.ok(VRM_CAMERA_FRAMING.cameraZ > 2.4);
+  assert.ok(cameraClearanceAtForwardExtent() >= 2.2);
+  assert.equal(VRM_CAMERA_FRAMING.lookAtTargetZ, VRM_CAMERA_FRAMING.cameraZ);
+});
+
+test("VRM view drag, wheel, pinch and reset stay local and bounded", () => {
+  const view = new VrmViewManipulation();
+
+  view.beginPointer(1, 100, 100);
+  const dragged = view.movePointer(1, 180, 140, 400, 500);
+  assert.ok(dragged.offsetX > 0);
+  assert.ok(dragged.offsetY < 0);
+  view.endPointer(1);
+
+  const zoomedIn = view.zoomByWheel(-10_000);
+  assert.equal(MIN_CAMERA_Z, 1.05);
+  assert.equal(zoomedIn.cameraZ, MIN_CAMERA_Z);
+  const zoomedOut = view.zoomByWheel(10_000);
+  assert.equal(zoomedOut.cameraZ, MAX_CAMERA_Z);
+
+  view.reset();
+  view.zoomByWheel(-10_000);
+  view.beginPointer(3, 100, 100);
+  const closeDragged = view.movePointer(3, 180, 140, 400, 500);
+  assert.ok(closeDragged.offsetX > 0);
+  assert.ok(closeDragged.offsetX < dragged.offsetX);
+  view.endPointer(3);
+
+  view.reset();
+  view.beginPointer(1, 100, 100);
+  view.beginPointer(2, 200, 100);
+  const pinched = view.movePointer(2, 1_000, 100, 400, 500);
+  assert.equal(pinched.cameraZ, MIN_CAMERA_Z);
+
+  assert.deepEqual(view.reset(), {
+    offsetX: 0,
+    offsetY: 0,
+    cameraZ: VRM_CAMERA_FRAMING.cameraZ,
+  });
+});
+
 test("noticing is a first-class semantic state", () => {
   const noticing = reduceCharacterPresentation(
     INITIAL_PRESENTATION,
@@ -98,10 +150,12 @@ test("safe semantic gestures reach the renderer without changing presentation", 
 
   experience.performGesture({ gesture: "wave", side: "right" });
   experience.performGesture({ gesture: "turn", direction: "left" });
+  experience.performGesture({ gesture: "move", direction: "forward" });
 
   assert.deepEqual(renderer.gestures, [
     { gesture: "wave", side: "right" },
     { gesture: "turn", direction: "left" },
+    { gesture: "move", direction: "forward" },
   ]);
   assert.deepEqual(viewport.snapshot(), before);
 });
@@ -115,6 +169,14 @@ test("gesture payloads reject arbitrary renderer or bone parameters", () => {
     {
       type: "character.gesture",
       payload: { gesture: "turn", direction: "clockwise" },
+    },
+    {
+      type: "character.gesture",
+      payload: { gesture: "move", direction: "forward", distance: 100 },
+    },
+    {
+      type: "character.gesture",
+      payload: { gesture: "move", direction: "up" },
     },
     {
       type: "character.gesture",

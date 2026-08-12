@@ -12,7 +12,8 @@ export function parseCharacterDisplayProfile(value: unknown): CharacterDisplayPr
   ) {
     throw new Error("Character display profile must contain exactly name");
   }
-  const name = value.name;
+  const document = value as Record<string, unknown>;
+  const name = document.name;
   if (
     typeof name !== "string"
     || name.length === 0

@@ -3,7 +3,6 @@ import test from "node:test";
 
 import { parseCharacterDisplayProfile } from "../.test-dist/character/profile.js";
 
-
 test("character profile accepts a bounded display-only Unicode name", () => {
   assert.deepEqual(parseCharacterDisplayProfile({ name: "루나" }), { name: "루나" });
   assert.deepEqual(parseCharacterDisplayProfile({ name: "Luna 2" }), { name: "Luna 2" });
