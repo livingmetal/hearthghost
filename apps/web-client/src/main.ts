@@ -661,6 +661,8 @@ speakButton?.addEventListener("click", () => {
         return;
       }
       await voiceOutput?.stop();
+      dialoguePerformance.cancel();
+      if (response !== null) response.textContent = "";
       character.beginListening();
       await voiceInput.start(VOICE_LOCALE);
       voiceStatus = { ...voiceStatus, listening: true };
@@ -699,7 +701,8 @@ form?.addEventListener("submit", (event) => {
     const submittedText = messageInput.value.trim();
     try {
       await ensureConversationCharacter();
-      character.beginThinking();
+      if (response !== null) response.textContent = "";
+      dialoguePerformance.beginUserTurn(submittedText);
       const snapshot = await conversation.submit(submittedText);
       await applyCharacterProfile(snapshot.characterProfile);
       attention.recordAddressedActivity();
@@ -734,9 +737,10 @@ if (voiceInput !== null && voiceConversation !== null) {
   void voiceInput.onTranscript((event) => {
     void (async () => {
       voiceStatus = voiceStatus === null ? null : { ...voiceStatus, listening: false };
-      character.beginThinking();
       try {
         await ensureConversationCharacter();
+        if (response !== null) response.textContent = "";
+        dialoguePerformance.beginUserTurn(event.text);
         const snapshot = await voiceConversation.acceptTranscript(event);
         await applyCharacterProfile(snapshot.characterProfile);
         const reply = snapshot.responseText ?? "";
@@ -846,6 +850,7 @@ const attentionTimer = window.setInterval(() => {
     showSnapshot();
     return;
   }
+  dialoguePerformance.cancel();
   character.sleep();
   clearSessionHistory();
   showSnapshot();
@@ -868,6 +873,7 @@ window.addEventListener("pagehide", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     attention.sleep();
+    dialoguePerformance.cancel();
     character.sleep();
     clearSessionHistory();
     void (async () => {

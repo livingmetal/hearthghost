@@ -261,9 +261,10 @@ async function submitText(text: string): Promise<void> {
   if (normalized === "") {
     return;
   }
+  dialoguePerformance.cancel();
   response.textContent = "";
   await ensureConversationOpen();
-  character.beginThinking();
+  dialoguePerformance.beginUserTurn(normalized);
   const snapshot = await conversation.submit(normalized);
   await applyCharacterProfile(snapshot.characterProfile);
   const reply = snapshot.responseText ?? "";
