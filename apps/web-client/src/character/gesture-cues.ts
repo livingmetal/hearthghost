@@ -12,7 +12,7 @@ function gestureKey(gesture: CharacterGesture): string {
   if (gesture.gesture === "wave" || gesture.gesture === "raise_hand") {
     return `${gesture.gesture}:${gesture.side}`;
   }
-  if (gesture.gesture === "turn" || gesture.gesture === "move") {
+  if (gesture.gesture === "turn" || gesture.gesture === "move" || gesture.gesture === "point") {
     return `${gesture.gesture}:${gesture.direction}`;
   }
   return gesture.gesture;
@@ -67,16 +67,29 @@ export function inferCharacterGestures(text: string): readonly CharacterGesture[
     appendUnique(gestures, { gesture: "turn", direction: "left" });
   }
 
+  if (/(?:왼쪽|좌측|left).{0,18}(?:가리켜|가리키|지목|point)|(?:point|가리켜|가리키).{0,12}(?:왼쪽|좌측|left)/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "point", direction: "left" });
+  }
+  if (/(?:오른쪽|우측|right).{0,18}(?:가리켜|가리키|지목|point)|(?:point|가리켜|가리키).{0,12}(?:오른쪽|우측|right)/iu.test(normalized)) {
+    appendUnique(gestures, { gesture: "point", direction: "right" });
+  }
+
   if (/(?:앞으로|앞에|가까이|내\s*쪽으로).{0,18}(?:와|오|다가|전진|이동|approach|come\s+closer|step\s+forward|move\s+forward)/iu.test(normalized)) {
     appendUnique(gestures, { gesture: "move", direction: "forward" });
   }
   if (/(?:뒤로|뒤쪽|멀리).{0,18}(?:가|물러|후진|이동|retreat|step\s+back|move\s+back)/iu.test(normalized)) {
     appendUnique(gestures, { gesture: "move", direction: "backward" });
   }
-  if (/(?:왼쪽|좌측|left).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}left/iu.test(normalized)) {
+  if (
+    !gestures.some((gesture) => gesture.gesture === "point" && gesture.direction === "left")
+    && /(?:왼쪽|좌측|left).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}left/iu.test(normalized)
+  ) {
     appendUnique(gestures, { gesture: "move", direction: "left" });
   }
-  if (/(?:오른쪽|우측|right).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}right/iu.test(normalized)) {
+  if (
+    !gestures.some((gesture) => gesture.gesture === "point" && gesture.direction === "right")
+    && /(?:오른쪽|우측|right).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}right/iu.test(normalized)
+  ) {
     appendUnique(gestures, { gesture: "move", direction: "right" });
   }
 

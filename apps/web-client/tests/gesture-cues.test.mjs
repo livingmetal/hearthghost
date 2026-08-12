@@ -46,6 +46,16 @@ test("bounded screen-space movement is inferred without coordinates", () => {
   ]);
 });
 
+test("directional pointing is semantic and bounded to left or right", () => {
+  assert.deepEqual(inferCharacterGestures("왼쪽을 가리켜봐"), [
+    { gesture: "point", direction: "left" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("point right"), [
+    { gesture: "point", direction: "right" },
+  ]);
+  assert.deepEqual(inferCharacterGestures("가리켜봐"), []);
+});
+
 test("clap shrug and stretch are inferred as parameter-free semantic actions", () => {
   assert.deepEqual(inferCharacterGestures("박수 쳐봐"), [
     { gesture: "clap" },
@@ -66,6 +76,7 @@ test("negated motion requests do not animate", () => {
   assert.deepEqual(inferCharacterGestures("손 흔들지 마"), []);
   assert.deepEqual(inferCharacterGestures("오른쪽으로 돌지 말고 가만히 있어"), []);
   assert.deepEqual(inferCharacterGestures("앞으로 다가오지 마"), []);
+  assert.deepEqual(inferCharacterGestures("왼쪽을 가리키지 마"), []);
   assert.deepEqual(inferCharacterGestures("박수치지 마"), []);
   assert.deepEqual(inferCharacterGestures("don't shrug"), []);
 });

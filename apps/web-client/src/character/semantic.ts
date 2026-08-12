@@ -34,6 +34,7 @@ export const CHARACTER_GESTURES = [
   "clap",
   "shrug",
   "stretch",
+  "point",
 ] as const;
 
 export const CHARACTER_SIDES = ["left", "right"] as const;
@@ -55,6 +56,7 @@ export type CharacterGesture =
   | Readonly<{ gesture: "wave"; side: CharacterSide }>
   | Readonly<{ gesture: "raise_hand"; side: CharacterSide }>
   | Readonly<{ gesture: "turn"; direction: CharacterSide }>
+  | Readonly<{ gesture: "point"; direction: CharacterSide }>
   | Readonly<{ gesture: "move"; direction: CharacterMoveDirection }>
   | Readonly<{ gesture: "nod" }>
   | Readonly<{ gesture: "shake_head" }>
@@ -111,12 +113,12 @@ function parseGesturePayload(value: unknown): CharacterGesture {
     return payload as CharacterGesture;
   }
 
-  if (gesture === "turn") {
+  if (gesture === "turn" || gesture === "point") {
     if (
       Object.keys(payload).length !== 2
       || !CHARACTER_SIDES.includes(payload.direction as CharacterSide)
     ) {
-      throw new Error("Turn gesture requires exactly a left or right direction");
+      throw new Error("Directional gesture requires exactly a left or right direction");
     }
     return payload as CharacterGesture;
   }
