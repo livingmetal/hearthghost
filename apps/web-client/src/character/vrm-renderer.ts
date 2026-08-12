@@ -517,6 +517,8 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         return 1.5;
       case "stretch":
         return 2.5;
+      case "point":
+        return 1.8;
     }
   }
 
@@ -564,6 +566,9 @@ export class VrmCharacterRenderer implements CharacterRenderer {
       case "move":
         this.applyMoveGesture(gesture.direction, progress);
         return;
+      case "point":
+        this.applyPointGesture(gesture.direction, progress);
+        return;
       case "nod": {
         const envelope = Math.sin(Math.PI * progress);
         const nod = Math.sin(progress * Math.PI * 4) * envelope;
@@ -610,6 +615,34 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.offsetBoneTuple("rightHand", frame.rotations.rightHand);
     this.openHand("left", frame.leftHandOpen);
     this.openHand("right", frame.rightHandOpen);
+  }
+
+  private applyPointGesture(direction: CharacterSide, progress: number): void {
+    const amount = this.holdEnvelope(progress, 0.24, 0.24);
+    const sign = this.sideSign(direction);
+    const upper = direction === "left" ? "leftUpperArm" : "rightUpperArm";
+    const lower = direction === "left" ? "leftLowerArm" : "rightLowerArm";
+    const hand = direction === "left" ? "leftHand" : "rightHand";
+
+    this.offsetBoneRotation(upper, -0.10 * amount, sign * 0.10 * amount, sign * 0.62 * amount);
+    this.offsetBoneRotation(lower, -0.16 * amount, sign * 0.10 * amount, -sign * 0.035 * amount);
+    this.offsetBoneRotation(hand, 0.025 * amount, -sign * 0.055 * amount, sign * 0.018 * amount);
+    this.offsetBoneRotation("chest", 0, -sign * 0.035 * amount, -sign * 0.012 * amount);
+    this.offsetBoneRotation("head", 0, -sign * 0.025 * amount, sign * 0.008 * amount);
+    this.pointHand(direction, amount);
+  }
+
+  private pointHand(side: CharacterSide, amount: number): void {
+    const blend = Math.max(0, Math.min(1, amount));
+    for (const name of fingerBonesForSide(side)) {
+      const delta = handPoseDelta(name, "relaxed", "point");
+      this.offsetBoneRotation(
+        name,
+        delta[0] * blend,
+        delta[1] * blend,
+        delta[2] * blend,
+      );
+    }
   }
 
   private applyMoveGesture(
