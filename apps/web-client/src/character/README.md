@@ -27,6 +27,15 @@ lip-sync remain authoritative HearthGhost overlays. The hips translation track
 is re-anchored to the current VRM and clamped to a small idle envelope, so an
 idle animation cannot walk or pan the whole avatar across the stage.
 
+`vrm-hand-pose.ts` adds a renderer-local hand-pose overlay because the reviewed
+AIRI idle does not provide animated finger chains. The default `relaxed` pose
+uses small mirrored curls across all available VRM thumb/index/middle/ring/little
+bones, with ring and little fingers slightly more flexed than the index finger.
+`wave` and `raise_hand` blend that curl back toward the neutral `open` pose while
+the arm gesture rises, so a resting hand does not look rigid and a raised hand
+does not remain clenched. Missing optional finger bones are skipped without
+preventing the VRM from rendering.
+
 `vrm-base-motion.ts` remains the fail-safe fallback. Its foot-planted procedural
 idle shifts weight through pelvis, legs, spine, shoulders, neck, and head with
 no root-position output. If the bundled VRMA is unavailable or malformed, the
