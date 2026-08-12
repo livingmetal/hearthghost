@@ -12,7 +12,11 @@ import {
   VRM_CAMERA_FRAMING,
   cameraClearanceAtForwardExtent,
 } from "../.test-dist/character/vrm-framing.js";
-import { VrmViewManipulation } from "../.test-dist/character/vrm-view-manipulation.js";
+import {
+  MAX_CAMERA_Z,
+  MIN_CAMERA_Z,
+  VrmViewManipulation,
+} from "../.test-dist/character/vrm-view-manipulation.js";
 
 class RecordingRenderer {
   presentations = [];
@@ -86,15 +90,24 @@ test("VRM view drag, wheel, pinch and reset stay local and bounded", () => {
   view.endPointer(1);
 
   const zoomedIn = view.zoomByWheel(-10_000);
-  assert.ok(zoomedIn.cameraZ >= 2.1);
+  assert.equal(MIN_CAMERA_Z, 1.05);
+  assert.equal(zoomedIn.cameraZ, MIN_CAMERA_Z);
   const zoomedOut = view.zoomByWheel(10_000);
-  assert.ok(zoomedOut.cameraZ <= 3.4);
+  assert.equal(zoomedOut.cameraZ, MAX_CAMERA_Z);
+
+  view.reset();
+  view.zoomByWheel(-10_000);
+  view.beginPointer(3, 100, 100);
+  const closeDragged = view.movePointer(3, 180, 140, 400, 500);
+  assert.ok(closeDragged.offsetX > 0);
+  assert.ok(closeDragged.offsetX < dragged.offsetX);
+  view.endPointer(3);
 
   view.reset();
   view.beginPointer(1, 100, 100);
   view.beginPointer(2, 200, 100);
-  const pinched = view.movePointer(2, 300, 100, 400, 500);
-  assert.ok(pinched.cameraZ < VRM_CAMERA_FRAMING.cameraZ);
+  const pinched = view.movePointer(2, 1_000, 100, 400, 500);
+  assert.equal(pinched.cameraZ, MIN_CAMERA_Z);
 
   assert.deepEqual(view.reset(), {
     offsetX: 0,
