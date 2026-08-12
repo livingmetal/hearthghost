@@ -16,11 +16,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: codex/hg-050-persona-expression-style
-          fetch-depth: 2
+          fetch-depth: 3
       - name: Extract and run staged patch
         shell: bash
         run: |
-          git show HEAD^:.github/workflows/patch-hg050-persona-expression-style.yml > /tmp/hg050-staged.yml
+          git show a0fb7b6357503e669aea9d8cbe4f5fc52a4bea8e:.github/workflows/patch-hg050-persona-expression-style.yml > /tmp/hg050-staged.yml
           python - <<'PY'
           from pathlib import Path
           source = Path('/tmp/hg050-staged.yml').read_text(encoding='utf-8')
@@ -30,6 +30,39 @@ jobs:
           end = source.index(end_marker, start)
           block = source[start:end]
           code = '\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines())
+          marker = '# Renderer-neutral style ID contract.'
+          flexible = r'''
+          import textwrap
+
+          def replace_once(path, old, new):
+              text = read(path)
+              if old in text:
+                  write(path, text.replace(old, new, 1))
+                  return
+              old_lines = old.strip('\n').splitlines()
+              wanted = [line.strip() for line in old_lines]
+              lines = text.splitlines()
+              for index in range(0, len(lines) - len(old_lines) + 1):
+                  window = lines[index:index + len(old_lines)]
+                  if [line.strip() for line in window] != wanted:
+                      continue
+                  first = next((line for line in window if line.strip()), '')
+                  indent = first[:len(first) - len(first.lstrip())]
+                  replacement = textwrap.dedent(new).strip('\n').splitlines()
+                  rendered = '\n'.join(
+                      (indent + line if line.strip() else '')
+                      for line in replacement
+                  )
+                  before = '\n'.join(lines[:index])
+                  after = '\n'.join(lines[index + len(old_lines):])
+                  prefix = (before + '\n') if before else ''
+                  suffix = ('\n' + after) if after else ''
+                  write(path, prefix + rendered + suffix + ('\n' if text.endswith('\n') else ''))
+                  return
+              raise RuntimeError(f'expected patch anchor missing: {path}: {old[:80]!r}')
+
+          '''
+          code = code.replace(marker, flexible + marker, 1)
           exec(compile(code, '<hg050-staged-patch>', 'exec'))
           PY
       - name: Commit implementation
