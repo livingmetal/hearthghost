@@ -1,4 +1,9 @@
 import {
+  RESPONSE_REVEAL_DONE_EVENT,
+  RESPONSE_REVEAL_START_EVENT,
+  type ResponseRevealDetail,
+} from "./character/performance-events.js";
+import {
   SPEECH_DONE_EVENT,
   SPEECH_ERROR_EVENT,
   SPEECH_RANGE_EVENT,
@@ -6,6 +11,9 @@ import {
   type SpeechPresentationDetail,
   type SpeechRangePresentationDetail,
 } from "./voice/speech-presentation.js";
+
+export { RESPONSE_REVEAL_DONE_EVENT, RESPONSE_REVEAL_START_EVENT };
+export type { ResponseRevealDetail };
 
 const FALLBACK_STEP_MILLIS = 90;
 const FALLBACK_START_DELAY_MILLIS = 120;
@@ -102,6 +110,9 @@ export class ResponseRevealController {
     this.offsets = graphemeOffsets(this.fullText);
     this.fallbackIndex = 0;
     this.host?.setAttribute("aria-busy", "true");
+    window.dispatchEvent(new CustomEvent<ResponseRevealDetail>(RESPONSE_REVEAL_START_EVENT, {
+      detail: { text: this.fullText },
+    }));
     this.write("");
     this.fallbackTimer = window.setTimeout(() => this.fallbackStep(), FALLBACK_START_DELAY_MILLIS);
   }
@@ -173,11 +184,17 @@ export class ResponseRevealController {
   };
 
   private finishReveal(): void {
+    const completedText = this.fullText;
     this.activeUtteranceId = null;
     this.hasSpeechRange = false;
     this.stopFallback();
-    this.write(this.fullText);
+    this.write(completedText);
     this.host?.setAttribute("aria-busy", "false");
+    if (completedText !== "") {
+      window.dispatchEvent(new CustomEvent<ResponseRevealDetail>(RESPONSE_REVEAL_DONE_EVENT, {
+        detail: { text: completedText },
+      }));
+    }
   }
 
   private stopFallback(): void {

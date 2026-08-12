@@ -3,8 +3,19 @@ import "./persona.css";
 import "./history.css";
 import "./windows.css";
 
-import { CHARACTER_CATALOG, characterByName, selectionCommand } from "./character/catalog.js";
+import {
+  characterById,
+  characterByName,
+  selectionCommand,
+  type HearthGhostCharacterDefinition,
+} from "./character/catalog.js";
 import { CharacterExperienceController } from "./character/experience.js";
+import {
+  browserCharacterPreferenceStorage,
+  DEFAULT_CHARACTER_ID,
+  loadPreferredCharacterId,
+  savePreferredCharacterId,
+} from "./character/preferences.js";
 import type { CharacterDisplayProfile } from "./character/profile.js";
 import { loadCharacterRenderer } from "./character/renderer-loader.js";
 import { CharacterViewport } from "./character/viewport.js";
@@ -15,6 +26,16 @@ import {
   WINDOWS_CREDENTIAL_REFERENCE,
   WindowsNodePlatform,
 } from "./node/windows-platform.js";
+import {
+  characterOptionsMarkup,
+  requireCharacterOptions,
+  selectCharacterOption,
+  setCharacterOptionsStatus,
+} from "./options/character-options.js";
+import {
+  RESPONSE_REVEAL_DONE_EVENT,
+  type ResponseRevealDetail,
+} from "./response-reveal.js";
 import { WindowsWebViewBridge, windowsWebViewHost } from "./windows/webview-bridge.js";
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -28,6 +49,14 @@ if (host === null) {
   throw new Error("Windows WebView2 native host is unavailable");
 }
 
+const preferenceStorage = browserCharacterPreferenceStorage();
+let preferredCharacterId = loadPreferredCharacterId(preferenceStorage);
+const startupCharacter = characterById(preferredCharacterId)
+  ?? characterById(DEFAULT_CHARACTER_ID);
+if (startupCharacter === null) {
+  throw new Error("HearthGhost has no bundled default character");
+}
+
 root.innerHTML = `
   <main class="app-shell windows-shell">
     <header class="top-bar">
@@ -35,15 +64,18 @@ root.innerHTML = `
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-name">HearthGhost · Windows</span>
       </div>
-      <button class="quiet-button" type="button" data-connect>Connect</button>
+      <div class="top-actions">
+        <button class="quiet-button" type="button" data-connect>Connect</button>
+        ${characterOptionsMarkup(startupCharacter.id)}
+      </div>
     </header>
 
     <section class="character-stage windows-character-stage" aria-label="HearthGhost character and response">
       <div class="character-identity" aria-live="polite">
         <span class="character-identity-label">Character</span>
-        <strong data-character-name>HearthGhost</strong>
+        <strong data-character-name>${startupCharacter.name}</strong>
       </div>
-      <section class="character-viewport" aria-label="HearthGhost character viewport"></section>
+      <section class="character-viewport" aria-label="${startupCharacter.name} character viewport"></section>
       <div class="response-layer">
         <output class="response" data-response aria-live="polite"></output>
       </div>
@@ -52,13 +84,6 @@ root.innerHTML = `
     <section class="interaction-panel windows-interaction-panel">
       <p class="notice" data-notice>Windows native mTLS transport is disconnected.</p>
       <div class="windows-node-status" data-node-status>Node: disconnected</div>
-      <div class="character-selector" aria-label="Character selection">
-        ${CHARACTER_CATALOG.map((entry) => `
-          <button type="button" class="chip" data-character-id="${entry.id}">
-            ${entry.name} · ${entry.sample.replace("AvatarSample_", "Avatar ")}
-          </button>
-        `).join("")}
-      </div>
       <section class="session-history" data-session-history aria-label="Ephemeral conversation history"></section>
       <form class="text-row windows-text-row" data-conversation>
         <label class="sr-only" for="message">Conversation</label>
@@ -73,8 +98,21 @@ const nativeBridge = new WindowsWebViewBridge(host);
 const platform = new WindowsNodePlatform(nativeBridge);
 const node = new ClientNode(platform);
 const viewportElement = requireElement<HTMLElement>(".character-viewport");
-const viewport = new CharacterViewport(viewportElement, await loadCharacterRenderer("dom"));
-await viewport.mount();
+let viewport = new CharacterViewport(
+  viewportElement,
+  await loadCharacterRenderer("vrm", startupCharacter.assetUrl),
+);
+let renderedCharacterId: string | null = startupCharacter.id;
+let initialVrmFallback = false;
+try {
+  await viewport.mount();
+} catch {
+  viewport.dispose();
+  viewport = new CharacterViewport(viewportElement, await loadCharacterRenderer("dom"));
+  await viewport.mount();
+  renderedCharacterId = null;
+  initialVrmFallback = true;
+}
 const character = new CharacterExperienceController(viewport);
 const conversation = new TextConversationController(
   node,
@@ -92,8 +130,12 @@ const notice = requireElement<HTMLElement>("[data-notice]");
 const response = requireElement<HTMLOutputElement>("[data-response]");
 const nodeStatus = requireElement<HTMLElement>("[data-node-status]");
 const characterName = requireElement<HTMLElement>("[data-character-name]");
-let renderedCharacterId: string | null = null;
+const characterOptions = requireCharacterOptions(root);
 let profileApplySequence = 0;
+
+if (initialVrmFallback) {
+  notice.textContent = `${startupCharacter.sample} VRM could not be loaded. The fallback character is active.`;
+}
 
 function showNodeSnapshot(): void {
   const snapshot = node.snapshot();
@@ -107,17 +149,27 @@ async function ensureConversationOpen(): Promise<void> {
     return;
   }
   const opened = await conversation.open();
-  await applyCharacterProfile(opened.characterProfile);
+  await synchronizePreferredCharacterToCore(opened.characterProfile);
 }
 
-async function applyCharacterProfile(profile: CharacterDisplayProfile | null): Promise<void> {
-  if (profile === null) {
-    return;
-  }
-  characterName.textContent = profile.name;
-  viewportElement.setAttribute("aria-label", `${profile.name} character viewport`);
-  const selected = characterByName(profile.name);
-  if (selected === null || selected.id === renderedCharacterId) {
+function rememberCharacter(selected: HearthGhostCharacterDefinition): boolean {
+  preferredCharacterId = selected.id;
+  selectCharacterOption(characterOptions, selected.id);
+  const saved = savePreferredCharacterId(preferenceStorage, selected.id);
+  setCharacterOptionsStatus(
+    characterOptions,
+    saved
+      ? "Saved on this device. Core persona syncs when a trusted conversation is available."
+      : "Character changed for this run, but persistent browser storage is unavailable.",
+  );
+  return saved;
+}
+
+async function displayCharacter(selected: HearthGhostCharacterDefinition): Promise<void> {
+  characterName.textContent = selected.name;
+  selectCharacterOption(characterOptions, selected.id);
+  viewportElement.setAttribute("aria-label", `${selected.name} character viewport`);
+  if (selected.id === renderedCharacterId) {
     return;
   }
   const sequence = ++profileApplySequence;
@@ -137,11 +189,49 @@ async function applyCharacterProfile(profile: CharacterDisplayProfile | null): P
   }
 }
 
+async function applyCharacterProfile(
+  profile: CharacterDisplayProfile | null,
+  persistPreference = true,
+): Promise<void> {
+  if (profile === null) {
+    return;
+  }
+  const selected = characterByName(profile.name);
+  if (selected === null) {
+    characterName.textContent = profile.name;
+    return;
+  }
+  if (persistPreference) {
+    rememberCharacter(selected);
+  }
+  await displayCharacter(selected);
+}
+
+async function synchronizePreferredCharacterToCore(
+  openedProfile: CharacterDisplayProfile | null,
+): Promise<void> {
+  const preferred = characterById(preferredCharacterId)
+    ?? characterById(DEFAULT_CHARACTER_ID);
+  if (preferred === null) {
+    return;
+  }
+  const openedCharacter = openedProfile === null
+    ? null
+    : characterByName(openedProfile.name);
+  if (openedCharacter?.id === preferred.id) {
+    await displayCharacter(preferred);
+    return;
+  }
+  const synchronized = await conversation.submit(selectionCommand(preferred));
+  await applyCharacterProfile(synchronized.characterProfile, false);
+}
+
 async function submitText(text: string): Promise<void> {
   const normalized = text.trim();
   if (normalized === "") {
     return;
   }
+  response.textContent = "";
   await ensureConversationOpen();
   character.beginThinking();
   const snapshot = await conversation.submit(normalized);
@@ -150,11 +240,23 @@ async function submitText(text: string): Promise<void> {
   if (reply !== "") {
     historyView.render(history.append("user", normalized));
     historyView.render(history.append("assistant", reply));
+    character.beginSpeaking();
     response.textContent = reply;
+  } else {
+    character.engage();
   }
-  character.engage();
   notice.textContent = "Conversation active over Windows native mTLS.";
 }
+
+const onResponseRevealDone = (event: CustomEvent<ResponseRevealDetail>): void => {
+  if (
+    viewport.snapshot().state === "speaking"
+    && response.textContent?.trim() === event.detail.text.trim()
+  ) {
+    character.engage();
+  }
+};
+window.addEventListener(RESPONSE_REVEAL_DONE_EVENT, onResponseRevealDone as EventListener);
 
 connectButton.addEventListener("click", () => {
   void (async () => {
@@ -179,8 +281,9 @@ connectButton.addEventListener("click", () => {
         notice.textContent = "Authenticated Windows Node needs explicit trust and conversation.text grant.";
         return;
       }
+      await ensureConversationOpen();
       character.acknowledgeSuccess();
-      notice.textContent = "Windows Node connected with mTLS. Character and conversation testing are ready.";
+      notice.textContent = `${characterName.textContent} is active over Windows native mTLS.`;
       input.focus();
     } catch (error) {
       character.showConcern();
@@ -190,27 +293,49 @@ connectButton.addEventListener("click", () => {
   })();
 });
 
-for (const button of root.querySelectorAll<HTMLButtonElement>("[data-character-id]")) {
-  button.addEventListener("click", () => {
-    void (async () => {
-      const selected = CHARACTER_CATALOG.find((entry) => entry.id === button.dataset.characterId);
-      if (selected === undefined) {
-        return;
-      }
+characterOptions.select.addEventListener("change", () => {
+  void (async () => {
+    const selected = characterById(characterOptions.select.value);
+    if (selected === null) {
+      selectCharacterOption(characterOptions, preferredCharacterId);
+      return;
+    }
+    const saved = rememberCharacter(selected);
+    try {
+      await displayCharacter(selected);
+      characterOptions.details.removeAttribute("open");
       if (!node.canUseCapability("conversation.text")) {
-        character.showConcern();
-        notice.textContent = "Connect a trusted Windows Node before changing the character.";
+        setCharacterOptionsStatus(
+          characterOptions,
+          saved
+            ? "Saved on this device. Core persona will sync after a trusted connection."
+            : "Character changed for this run, but persistent browser storage is unavailable.",
+        );
+        notice.textContent = `${selected.name} will be used at the next launch and conversation.`;
         return;
       }
-      try {
-        await submitText(selectionCommand(selected));
-      } catch (error) {
-        character.showConcern();
-        notice.textContent = error instanceof Error ? error.message : "Character selection failed";
+      if (conversation.snapshot().conversationSessionId === null) {
+        const opened = await conversation.open();
+        await synchronizePreferredCharacterToCore(opened.characterProfile);
+      } else {
+        const synchronized = await conversation.submit(selectionCommand(selected));
+        await applyCharacterProfile(synchronized.characterProfile, false);
       }
-    })();
-  });
-}
+      character.acknowledgeSuccess();
+      setCharacterOptionsStatus(characterOptions, "Saved on this device and synchronized with Core.");
+      notice.textContent = `${selected.name} is saved locally and synchronized with Core.`;
+    } catch (error) {
+      character.showConcern();
+      setCharacterOptionsStatus(
+        characterOptions,
+        "Saved on this device. Core synchronization is pending until a trusted connection is available.",
+      );
+      notice.textContent = error instanceof Error
+        ? `Character saved locally; Core sync pending: ${error.message}`
+        : "Character saved locally; Core sync pending.";
+    }
+  })();
+});
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -227,6 +352,7 @@ form.addEventListener("submit", (event) => {
 });
 
 window.addEventListener("pagehide", () => {
+  window.removeEventListener(RESPONSE_REVEAL_DONE_EVENT, onResponseRevealDone as EventListener);
   history.clear();
   historyView.clear();
   nativeBridge.dispose();

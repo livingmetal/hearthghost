@@ -11,11 +11,15 @@ import { CharacterViewport } from "../.test-dist/character/viewport.js";
 
 class RecordingRenderer {
   presentations = [];
+  gestures = [];
 
   async mount() {}
   resize() {}
   present(presentation) {
     this.presentations.push(presentation);
+  }
+  performGesture(gesture) {
+    this.gestures.push(gesture);
   }
   suspend() {}
   resume() {}
@@ -88,6 +92,39 @@ test("renderer receives semantic presentation only", async () => {
   ]);
 });
 
+test("safe semantic gestures reach the renderer without changing presentation", async () => {
+  const { renderer, viewport, experience } = await experienceFixture();
+  const before = viewport.snapshot();
+
+  experience.performGesture({ gesture: "wave", side: "right" });
+  experience.performGesture({ gesture: "turn", direction: "left" });
+
+  assert.deepEqual(renderer.gestures, [
+    { gesture: "wave", side: "right" },
+    { gesture: "turn", direction: "left" },
+  ]);
+  assert.deepEqual(viewport.snapshot(), before);
+});
+
+test("gesture payloads reject arbitrary renderer or bone parameters", () => {
+  for (const event of [
+    {
+      type: "character.gesture",
+      payload: { gesture: "wave", side: "right", bone: "rightUpperArm" },
+    },
+    {
+      type: "character.gesture",
+      payload: { gesture: "turn", direction: "clockwise" },
+    },
+    {
+      type: "character.gesture",
+      payload: { gesture: "run_shell_command" },
+    },
+  ]) {
+    assert.throws(() => parseCharacterSemanticEvent(event));
+  }
+});
+
 test("touch wake and local voice phases produce visible character states", async () => {
   const { viewport, experience } = await experienceFixture();
 
@@ -121,12 +158,18 @@ test("success and error cues change emotion without inventing device authority",
 });
 
 test("server semantic events still pass through the same strict viewport boundary", async () => {
-  const { viewport, experience } = await experienceFixture();
+  const { renderer, viewport, experience } = await experienceFixture();
   experience.presentServerEvent({
     type: "character.state",
     payload: { state: "thinking" },
   });
   assert.equal(viewport.snapshot().state, "thinking");
+
+  experience.presentServerEvent({
+    type: "character.gesture",
+    payload: { gesture: "nod" },
+  });
+  assert.deepEqual(renderer.gestures.at(-1), { gesture: "nod" });
 
   assert.throws(() => experience.presentServerEvent({
     type: "character.animation",
