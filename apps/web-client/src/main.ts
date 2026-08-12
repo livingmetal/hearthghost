@@ -8,6 +8,7 @@ import {
   characterById,
   type HearthGhostCharacterDefinition,
 } from "./character/catalog.js";
+import { DialoguePerformanceController } from "./character/dialogue-performance.js";
 import { CharacterExperienceController } from "./character/experience.js";
 import {
   browserCharacterPreferenceStorage,
@@ -211,6 +212,8 @@ try {
 viewport.setExpressionStyle(activePersona.expressionStyle);
 
 const character = new CharacterExperienceController(viewport);
+const dialoguePerformance = new DialoguePerformanceController(character);
+dialoguePerformance.install();
 const conversation = androidPlatform === null
   ? null
   : new TextConversationController(
@@ -415,9 +418,7 @@ async function speakReplyLocally(text: string): Promise<boolean> {
       showSnapshot();
       return false;
     }
-    character.beginSpeaking();
     await voiceOutput.speak(text, VOICE_LOCALE, voiceProfile);
-    character.engage();
     showSnapshot();
     return true;
   } catch {
@@ -660,6 +661,8 @@ speakButton?.addEventListener("click", () => {
         return;
       }
       await voiceOutput?.stop();
+      dialoguePerformance.cancel();
+      if (response !== null) response.textContent = "";
       character.beginListening();
       await voiceInput.start(VOICE_LOCALE);
       voiceStatus = { ...voiceStatus, listening: true };
@@ -698,7 +701,8 @@ form?.addEventListener("submit", (event) => {
     const submittedText = messageInput.value.trim();
     try {
       await ensureConversationCharacter();
-      character.beginThinking();
+      if (response !== null) response.textContent = "";
+      dialoguePerformance.beginUserTurn(submittedText);
       const snapshot = await conversation.submit(submittedText);
       await applyCharacterProfile(snapshot.characterProfile);
       attention.recordAddressedActivity();
@@ -711,7 +715,9 @@ form?.addEventListener("submit", (event) => {
       if (response !== null) {
         response.textContent = reply;
       }
-      character.engage();
+      if (reply === "") {
+        character.engage();
+      }
       if (notice !== null) {
         notice.textContent = "Conversation active. Attention timeout extended.";
       }
@@ -731,9 +737,10 @@ if (voiceInput !== null && voiceConversation !== null) {
   void voiceInput.onTranscript((event) => {
     void (async () => {
       voiceStatus = voiceStatus === null ? null : { ...voiceStatus, listening: false };
-      character.beginThinking();
       try {
         await ensureConversationCharacter();
+        if (response !== null) response.textContent = "";
+        dialoguePerformance.beginUserTurn(event.text);
         const snapshot = await voiceConversation.acceptTranscript(event);
         await applyCharacterProfile(snapshot.characterProfile);
         const reply = snapshot.responseText ?? "";
@@ -745,7 +752,7 @@ if (voiceInput !== null && voiceConversation !== null) {
           response.textContent = reply;
         }
         const spoken = reply !== "" && await speakReplyLocally(reply);
-        if (!spoken) {
+        if (!spoken && reply === "") {
           character.engage();
         }
         if (notice !== null) {
@@ -843,6 +850,7 @@ const attentionTimer = window.setInterval(() => {
     showSnapshot();
     return;
   }
+  dialoguePerformance.cancel();
   character.sleep();
   clearSessionHistory();
   showSnapshot();
@@ -856,6 +864,7 @@ const attentionTimer = window.setInterval(() => {
 
 window.addEventListener("pagehide", () => {
   window.clearInterval(attentionTimer);
+  dialoguePerformance.dispose();
   clearSessionHistory();
 }, {
   once: true,
@@ -864,6 +873,7 @@ window.addEventListener("pagehide", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     attention.sleep();
+    dialoguePerformance.cancel();
     character.sleep();
     clearSessionHistory();
     void (async () => {
