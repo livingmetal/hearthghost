@@ -151,11 +151,11 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     const leftUpperArm = vrm.humanoid.getNormalizedBoneNode("leftUpperArm");
     const rightUpperArm = vrm.humanoid.getNormalizedBoneNode("rightUpperArm");
     if (leftUpperArm !== null) {
-      leftUpperArm.rotation.z -= 1.10;
+      leftUpperArm.rotation.z += 1.10;
       leftUpperArm.rotation.y -= 0.08;
     }
     if (rightUpperArm !== null) {
-      rightUpperArm.rotation.z += 1.10;
+      rightUpperArm.rotation.z -= 1.10;
       rightUpperArm.rotation.y += 0.08;
     }
 
