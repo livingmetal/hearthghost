@@ -2,7 +2,6 @@ import {
   AnimationClip,
   AnimationMixer,
   LoopRepeat,
-  QuaternionKeyframeTrack,
   VectorKeyframeTrack,
   type AnimationAction,
   type Object3D,
@@ -10,7 +9,7 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { VRM } from "@pixiv/three-vrm";
 import {
-  createVRMAnimationClip,
+  createVRMAnimationHumanoidTracks,
   VRMAnimationLoaderPlugin,
   type VRMAnimation,
 } from "@pixiv/three-vrm-animation";
@@ -70,38 +69,34 @@ export function reanchorHipsPositionTrack(
     const deltaX = (anchored.values[index] ?? firstX) - firstX;
     const deltaY = (anchored.values[index + 1] ?? firstY) - firstY;
     const deltaZ = (anchored.values[index + 2] ?? firstZ) - firstZ;
-    anchored.values[index] = restPosition[0] + clamp(deltaX, -MAX_HIPS_DELTA_X, MAX_HIPS_DELTA_X);
+    anchored.values[index] = restPosition[0]
+      + clamp(deltaX, -MAX_HIPS_DELTA_X, MAX_HIPS_DELTA_X);
     anchored.values[index + 1] = restPosition[1]
       + clamp(deltaY, -MAX_HIPS_DELTA_DOWN, MAX_HIPS_DELTA_UP);
-    anchored.values[index + 2] = restPosition[2] + clamp(deltaZ, -MAX_HIPS_DELTA_Z, MAX_HIPS_DELTA_Z);
+    anchored.values[index + 2] = restPosition[2]
+      + clamp(deltaZ, -MAX_HIPS_DELTA_Z, MAX_HIPS_DELTA_Z);
   }
   return anchored;
 }
 
-function baseOnlyClip(source: AnimationClip, vrm: VRM): AnimationClip {
+function baseOnlyClip(animation: VRMAnimation, vrm: VRM): AnimationClip {
+  const humanoid = createVRMAnimationHumanoidTracks(
+    animation,
+    vrm.humanoid,
+    vrm.meta.metaVersion,
+  );
   const hips = vrm.humanoid.getNormalizedBoneNode("hips");
   const hipsRest: readonly [number, number, number] = hips === null
     ? [0, 0, 0]
     : [hips.position.x, hips.position.y, hips.position.z];
-
-  const tracks = source.tracks.flatMap((track) => {
-    if (track instanceof VectorKeyframeTrack) {
-      return [reanchorHipsPositionTrack(track, hipsRest)];
-    }
-    if (track instanceof QuaternionKeyframeTrack) {
-      // LookAt remains a HearthGhost overlay. VRM humanoid bone quaternion
-      // tracks do not use this proxy name.
-      if (track.name.includes("VRMLookAtQuaternionProxy")) {
-        return [];
-      }
-      return [track.clone()];
-    }
-    // Expressions are NumberKeyframeTracks and remain controlled by the
-    // semantic emotion/lip-sync layers.
-    return [];
-  });
-
-  return new AnimationClip("hearthghost-idle-base", source.duration, tracks);
+  const translation = humanoid.translation.get("hips");
+  const tracks = [
+    ...(translation === undefined
+      ? []
+      : [reanchorHipsPositionTrack(translation, hipsRest)]),
+    ...Array.from(humanoid.rotation.values(), (track) => track.clone()),
+  ];
+  return new AnimationClip("hearthghost-idle-base", animation.duration, tracks);
 }
 
 export class VrmBaseAnimationLayer {
@@ -126,7 +121,7 @@ export class VrmBaseAnimationLayer {
       throw new Error("VRMA asset does not contain a VRM animation");
     }
 
-    const clip = baseOnlyClip(createVRMAnimationClip(animation, vrm), vrm);
+    const clip = baseOnlyClip(animation, vrm);
     if (clip.tracks.length === 0) {
       throw new Error("VRMA base animation has no usable humanoid tracks");
     }
