@@ -63,7 +63,7 @@ installation root and configure these per-user, non-secret variables:
     "HEARTHGHOST_WINDOWS_UPDATE_SOURCE", "C:\path\to\hearthghost", "User"
 )
 [Environment]::SetEnvironmentVariable(
-    "HEARTHGHOST_WINDOWS_UPDATE_BRANCH", "codex/hg-039-natural-idle-motion", "User"
+    "HEARTHGHOST_WINDOWS_UPDATE_BRANCH", "<approved-development-branch>", "User"
 )
 [Environment]::SetEnvironmentVariable(
     "HEARTHGHOST_WINDOWS_CODE_SIGNING_THUMBPRINT", "<PUBLIC SHA-1 THUMBPRINT>", "User"
