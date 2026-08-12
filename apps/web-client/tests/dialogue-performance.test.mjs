@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { planDialoguePerformance } from "../.test-dist/character/dialogue-performance.js";
+import {
+  inferUserTurnReaction,
+  planDialoguePerformance,
+} from "../.test-dist/character/dialogue-performance.js";
 
 test("dialogue performance follows emotional sentence changes", () => {
   const plan = planDialoguePerformance("잘했어! 그런데 이 부분은 조금 조심해야 해. 왜 그런지 볼까?");
@@ -37,6 +40,16 @@ test("uncertainty can use a bounded shrug and only once", () => {
   const plan = planDialoguePerformance("확실하지 않지만 한 가지 가능성은 있어. 모르겠으면 확인해보자.");
   const gestures = plan.beats.flatMap((beat) => beat.gesture === null ? [] : [beat.gesture]);
   assert.deepEqual(gestures, [{ gesture: "shrug" }]);
+});
+
+test("user questions react with curiosity during thinking", () => {
+  assert.equal(inferUserTurnReaction("이건 왜 이렇게 동작해?"), "curious");
+});
+
+test("user concern reacts before the model reply arrives", () => {
+  assert.equal(inferUserTurnReaction("서버에 문제가 생겨서 걱정돼"), "concerned");
+  assert.equal(inferUserTurnReaction("헉, 이게 갑자기 왜 이래"), "surprised");
+  assert.equal(inferUserTurnReaction("잘했어, 고마워"), "happy");
 });
 
 test("empty replies produce no performance beats", () => {
