@@ -1,4 +1,8 @@
 import { subscribeCharacterGestures } from "./gesture-bus.js";
+import {
+  characterIdFromViewportLabel,
+  presenceMotionFor,
+} from "./presence-performance.js";
 import type { CharacterRenderer } from "./renderer.js";
 import {
   INITIAL_PRESENTATION,
@@ -8,46 +12,14 @@ import {
   type CharacterPresence,
 } from "./semantic.js";
 
-interface PresenceMotionProfile {
-  readonly entryX: string;
-  readonly entryY: string;
-  readonly exitX: string;
-  readonly exitY: string;
-  readonly scale: number;
-  readonly durationMillis: number;
-}
-
-const YOUNGHEE_PRESENCE: PresenceMotionProfile = Object.freeze({
-  entryX: "-44%",
-  entryY: "7%",
-  exitX: "-50%",
-  exitY: "8%",
-  scale: 0.975,
-  durationMillis: 900,
-});
-
-const CHEOLSU_PRESENCE: PresenceMotionProfile = Object.freeze({
-  entryX: "38%",
-  entryY: "3%",
-  exitX: "44%",
-  exitY: "4%",
-  scale: 0.99,
-  durationMillis: 760,
-});
-
-const GENERIC_PRESENCE: PresenceMotionProfile = Object.freeze({
-  entryX: "-42%",
-  entryY: "5%",
-  exitX: "-46%",
-  exitY: "7%",
-  scale: 0.985,
-  durationMillis: 850,
-});
-
 export class CharacterViewport {
   private presentation: CharacterPresentation = INITIAL_PRESENTATION;
   private resizeObserver: ResizeObserver | null = null;
   private unsubscribeGestures: (() => void) | null = null;
+  private renderedPresence: CharacterPresence | null = null;
+  private presenceAnimation: Animation | null = null;
+  private entranceCycle = 0;
+  private exitCycle = 0;
 
   constructor(
     private readonly element: HTMLElement,
@@ -74,6 +46,9 @@ export class CharacterViewport {
     try {
       await renderer.mount(this.element);
       renderer.present(this.presentation);
+      this.presenceAnimation?.cancel();
+      this.presenceAnimation = null;
+      this.renderedPresence = null;
       this.applyPresenceToSurface();
       if (this.presentation.presence === "offstage") {
         renderer.suspend();
@@ -105,6 +80,10 @@ export class CharacterViewport {
     return this.presentation;
   }
 
+  characterId(): "younghee" | "cheolsu" | null {
+    return characterIdFromViewportLabel(this.element.getAttribute("aria-label") ?? "");
+  }
+
   suspend(): void {
     this.renderer.suspend();
   }
@@ -121,6 +100,8 @@ export class CharacterViewport {
     this.unsubscribeGestures = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.presenceAnimation?.cancel();
+    this.presenceAnimation = null;
     this.renderer.dispose();
   }
 
@@ -151,52 +132,75 @@ export class CharacterViewport {
     if (typeof HTMLElement === "undefined" || !(surface instanceof HTMLElement)) {
       return;
     }
-    const profile = this.presenceProfile();
+
+    const presence = this.presentation.presence;
+    if (presence === this.renderedPresence) {
+      return;
+    }
+    this.renderedPresence = presence;
+    this.presenceAnimation?.cancel();
+    this.presenceAnimation = null;
+
+    const characterId = this.characterId();
     const reducedMotion = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-    const duration = reducedMotion ? 1 : profile.durationMillis;
     surface.style.transformOrigin = "50% 70%";
     surface.style.willChange = "transform, opacity";
+    surface.style.pointerEvents = presence === "entering" || presence === "present" ? "auto" : "none";
+
+    if ((presence === "entering" || presence === "exiting") && !reducedMotion && typeof surface.animate === "function") {
+      const phase = presence === "entering" ? "enter" : "exit";
+      const cycle = phase === "enter" ? this.entranceCycle++ : this.exitCycle++;
+      const motion = presenceMotionFor(characterId, phase, cycle);
+      const finalFrame = motion.keyframes.at(-1);
+      if (finalFrame !== undefined) {
+        surface.style.opacity = String(finalFrame.opacity);
+        surface.style.transform = finalFrame.transform;
+      }
+      surface.style.transition = "none";
+      const animation = surface.animate(
+        motion.keyframes.map((frame) => ({
+          opacity: frame.opacity,
+          transform: frame.transform,
+          offset: frame.offset,
+        })),
+        {
+          duration: motion.durationMillis,
+          easing: motion.easing,
+          fill: "both",
+        },
+      );
+      this.presenceAnimation = animation;
+      animation.onfinish = () => {
+        if (this.presenceAnimation === animation) {
+          this.presenceAnimation = null;
+          animation.cancel();
+        }
+      };
+      return;
+    }
+
+    const fallback = presenceMotionFor(
+      characterId,
+      presence === "exiting" ? "exit" : "enter",
+      0,
+    );
+    const duration = reducedMotion ? 1 : fallback.durationMillis;
     surface.style.transition = [
       `transform ${duration}ms cubic-bezier(0.22, 0.72, 0.22, 1)`,
       `opacity ${Math.max(1, Math.round(duration * 0.72))}ms ease`,
     ].join(", ");
 
-    const style = this.presenceStyle(this.presentation.presence, profile);
-    surface.style.opacity = style.opacity;
-    surface.style.pointerEvents = style.pointerEvents;
-    surface.style.transform = style.transform;
-  }
-
-  private presenceProfile(): PresenceMotionProfile {
-    const label = this.element.getAttribute("aria-label") ?? "";
-    if (label.startsWith("영희")) {
-      return YOUNGHEE_PRESENCE;
-    }
-    if (label.startsWith("철수")) {
-      return CHEOLSU_PRESENCE;
-    }
-    return GENERIC_PRESENCE;
-  }
-
-  private presenceStyle(
-    presence: CharacterPresence,
-    profile: PresenceMotionProfile,
-  ): Readonly<{ opacity: string; pointerEvents: string; transform: string }> {
     if (presence === "entering" || presence === "present") {
-      return Object.freeze({
-        opacity: "1",
-        pointerEvents: "auto",
-        transform: "translate3d(0, 0, 0) scale(1)",
-      });
+      surface.style.opacity = "1";
+      surface.style.transform = "translate3d(0, 0, 0) scale(1)";
+      return;
     }
-    const exiting = presence === "exiting";
-    const x = exiting ? profile.exitX : profile.entryX;
-    const y = exiting ? profile.exitY : profile.entryY;
-    return Object.freeze({
-      opacity: "0",
-      pointerEvents: "none",
-      transform: `translate3d(${x}, ${y}, 0) scale(${profile.scale})`,
-    });
+
+    const frame = presence === "exiting"
+      ? fallback.keyframes.at(-1)
+      : presenceMotionFor(characterId, "enter", 0).keyframes[0];
+    surface.style.opacity = String(frame?.opacity ?? 0);
+    surface.style.transform = frame?.transform ?? "translate3d(-42%, 5%, 0) scale(0.985)";
   }
 
   private resize(): void {

@@ -1,3 +1,4 @@
+import { exitPreludeGestureFor } from "./presence-performance.js";
 import type {
   CharacterEmotion,
   CharacterGesture,
@@ -20,6 +21,7 @@ const scheduleWithPlatformTimer: CharacterPresenceScheduler = (callback, delayMi
 
 export class CharacterExperienceController {
   private presenceSequence = 0;
+  private exitPreludeCycle = 0;
 
   constructor(
     private readonly viewport: CharacterViewport,
@@ -83,6 +85,10 @@ export class CharacterExperienceController {
   sleep(): void {
     this.setEmotion("neutral");
     this.setState("sleeping");
+    const prelude = exitPreludeGestureFor(this.viewport.characterId(), this.exitPreludeCycle++);
+    if (prelude !== null) {
+      this.performGesture(prelude);
+    }
     this.exitStage();
   }
 
@@ -94,10 +100,10 @@ export class CharacterExperienceController {
 
   private enterStage(): void {
     const presence = this.viewport.snapshot().presence;
+    const sequence = ++this.presenceSequence;
     if (presence === "present" || presence === "entering") {
       return;
     }
-    const sequence = ++this.presenceSequence;
     this.setPresence("entering");
     this.schedule(() => {
       if (sequence === this.presenceSequence) {
