@@ -34,6 +34,10 @@ const SMUG = /(?:역시|내가\s*(?:말했|그랬)|그럴\s*줄|알고\s*있었|
 const HAPPY = /(?:축하|잘했|해냈|성공|다행|기쁘|좋네|멋지|congrat|well\s+done|great\b|nice\b)/iu;
 const CURIOUS = /(?:궁금|왜|어떻게|뭘까|무엇일까|wonder|how\b|why\b)/iu;
 
+const USER_CONCERN = /(?:큰일|사고|아프|힘들|걱정|문제|위험|불안|슬프|죽었|돌아가셨|hurt|sick|problem|worried)/iu;
+const USER_SURPRISE = /(?:대박|헉|세상에|놀랐|놀라워|wow\b|what[?!])/iu;
+const USER_POSITIVE = /(?:고마워|잘했어|멋져|좋네|최고|thank\s*you|nice\b|great\b)/iu;
+
 const CLAP_CUE = /(?:축하|잘했|해냈|성공했|congrat|well\s+done)/iu;
 const NOD_CUE = /^(?:맞아|그래|그렇지|맞습니다|그렇습니다)(?=\s|$|[,，.!！?？])/iu;
 const NOD_CUE_EN = /^(?:exactly|right)(?=\s|$|[,!.?])/iu;
@@ -54,6 +58,16 @@ function inferEmotion(segment: string): CharacterEmotion {
   if (HAPPY.test(segment)) return "happy";
   if (CURIOUS.test(segment) || /[?？]\s*$/u.test(segment)) return "curious";
   if (/[!！]\s*$/u.test(segment)) return "happy";
+  return "neutral";
+}
+
+export function inferUserTurnReaction(text: string): CharacterEmotion {
+  const normalized = text.trim();
+  if (normalized === "") return "neutral";
+  if (USER_CONCERN.test(normalized)) return "concerned";
+  if (USER_SURPRISE.test(normalized)) return "surprised";
+  if (USER_POSITIVE.test(normalized)) return "happy";
+  if (/[?？]\s*$/u.test(normalized) || CURIOUS.test(normalized)) return "curious";
   return "neutral";
 }
 
@@ -159,14 +173,24 @@ export class DialoguePerformanceController {
     window.addEventListener(RESPONSE_REVEAL_DONE_EVENT, this.onDone as EventListener);
   }
 
+  cancel(): void {
+    this.plan = null;
+    this.nextBeat = 0;
+  }
+
+  beginUserTurn(text: string): void {
+    this.cancel();
+    this.character.beginThinking();
+    this.character.express(inferUserTurnReaction(text));
+  }
+
   dispose(): void {
     if (!this.installed) return;
     this.installed = false;
     window.removeEventListener(RESPONSE_REVEAL_START_EVENT, this.onStart as EventListener);
     window.removeEventListener(RESPONSE_REVEAL_PROGRESS_EVENT, this.onProgress as EventListener);
     window.removeEventListener(RESPONSE_REVEAL_DONE_EVENT, this.onDone as EventListener);
-    this.plan = null;
-    this.nextBeat = 0;
+    this.cancel();
   }
 
   private readonly onStart = (event: CustomEvent<ResponseRevealDetail>): void => {
@@ -189,8 +213,7 @@ export class DialoguePerformanceController {
       this.character.express(last.emotion);
     }
     this.character.engage();
-    this.plan = null;
-    this.nextBeat = 0;
+    this.cancel();
   };
 
   private applyThrough(end: number): void {
