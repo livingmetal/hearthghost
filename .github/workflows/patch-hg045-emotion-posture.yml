@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message != 'HG-045: wire emotion posture into renderer'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,8 +17,8 @@ jobs:
         with:
           ref: codex/hg-045-emotion-posture
       - name: Patch renderer
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path("apps/web-client/src/character/vrm-renderer.ts")
@@ -62,12 +61,19 @@ jobs:
 
           for old, new in replacements:
               count = text.count(old)
+              if count == 0 and new in text:
+                  continue
               if count != 1:
                   raise SystemExit(f"expected one renderer match, got {count}: {old[:80]!r}")
               text = text.replace(old, new)
           path.write_text(text)
+          PY
       - name: Commit renderer wiring
         run: |
+          if git diff --quiet -- apps/web-client/src/character/vrm-renderer.ts; then
+            echo "Renderer already patched"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/web-client/src/character/vrm-renderer.ts
