@@ -4,7 +4,7 @@ import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MAX_ASSET_BYTES = 40 * 1024 * 1024;
-const PRIVATE_MODEL_A = Object.freeze({
+const MODEL_A = Object.freeze({
   name: "AvatarSample_Y.vrm",
   environmentVariable: "HEARTHGHOST_MODEL_A_PATH",
   outputPath: "models/AvatarSample_Y.vrm",
@@ -42,23 +42,23 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function validatePrivateModelA(bytes) {
-  if (bytes.length !== PRIVATE_MODEL_A.expectedBytes || bytes.length > MAX_ASSET_BYTES) {
-    throw new Error(`${PRIVATE_MODEL_A.name}: unexpected asset size ${bytes.length}`);
+function validateModelA(bytes) {
+  if (bytes.length !== MODEL_A.expectedBytes || bytes.length > MAX_ASSET_BYTES) {
+    throw new Error(`${MODEL_A.name}: unexpected asset size ${bytes.length}`);
   }
   if (bytes.subarray(0, 4).toString("ascii") !== "glTF" || bytes.readUInt32LE(4) !== 2) {
-    throw new Error(`${PRIVATE_MODEL_A.name}: expected a glTF 2.0/VRM container`);
+    throw new Error(`${MODEL_A.name}: expected a glTF 2.0/VRM container`);
   }
   const observed = sha256(bytes);
-  if (observed !== PRIVATE_MODEL_A.sha256) {
-    throw new Error(`${PRIVATE_MODEL_A.name}: SHA-256 mismatch (${observed})`);
+  if (observed !== MODEL_A.sha256) {
+    throw new Error(`${MODEL_A.name}: SHA-256 mismatch (${observed})`);
   }
   return observed;
 }
 
-async function preparePrivateModelA() {
-  const output = resolve(publicDir, PRIVATE_MODEL_A.outputPath);
-  const configuredPath = process.env[PRIVATE_MODEL_A.environmentVariable]?.trim() ?? "";
+async function prepareModelA() {
+  const output = resolve(publicDir, MODEL_A.outputPath);
+  const configuredPath = process.env[MODEL_A.environmentVariable]?.trim() ?? "";
   let bytes;
   let sourceLabel;
 
@@ -72,16 +72,16 @@ async function preparePrivateModelA() {
       sourceLabel = output;
     } catch {
       throw new Error(
-        `${PRIVATE_MODEL_A.name}: set ${PRIVATE_MODEL_A.environmentVariable} to the private VRM path `
-        + `or place the reviewed file at ${output}`,
+        `${MODEL_A.name}: place the tracked model at ${output} `
+        + `or set ${MODEL_A.environmentVariable} to a local override path`,
       );
     }
   }
 
-  const observed = validatePrivateModelA(bytes);
+  const observed = validateModelA(bytes);
   await mkdir(dirname(output), { recursive: true });
   await writeFile(output, bytes, { mode: 0o644 });
-  console.log(`${PRIVATE_MODEL_A.name}: ${bytes.length} bytes / sha256 ${observed} / source ${sourceLabel}`);
+  console.log(`${MODEL_A.name}: ${bytes.length} bytes / sha256 ${observed} / source ${sourceLabel}`);
 }
 
 async function fetchAsset(asset) {
@@ -118,7 +118,7 @@ async function fetchAsset(asset) {
   }
 }
 
-await preparePrivateModelA();
+await prepareModelA();
 for (const asset of ASSETS) {
   await fetchAsset(asset);
 }
