@@ -1,0 +1,166 @@
+name: patch-hg039-posture
+
+on:
+  push:
+    branches:
+      - codex/hg-039-natural-idle-motion
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'apply natural posture layer') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e450dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Patch renderer
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("apps/web-client/src/character/vrm-renderer.ts")
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  'import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";\n',
+                  'import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";\n'
+                  'import { NaturalPostureController, type VrmPostureFrame } from "./vrm-posture.js";\n',
+              ),
+              (
+                  '  private readonly baseMotion = new ProceduralIdleBaseMotion();\n',
+                  '  private readonly baseMotion = new ProceduralIdleBaseMotion();\n'
+                  '  private readonly posture = new NaturalPostureController();\n',
+              ),
+              (
+                  '    this.baseMotion.reset(this.elapsed);\n    this.gestureQueue.length = 0;\n',
+                  '    this.baseMotion.reset(this.elapsed);\n'
+                  '    this.posture.reset(this.elapsed);\n'
+                  '    this.gestureQueue.length = 0;\n',
+              ),
+              (
+                  '      this.updateBodyMotion(this.presentation.state);\n      this.applyRelaxedHands();\n',
+                  '      this.updateBodyMotion(this.presentation.state);\n'
+                  '      this.applyPosture(this.posture.update(delta, this.elapsed, this.presentation.state));\n'
+                  '      this.applyRelaxedHands();\n',
+              ),
+          ]
+
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f"expected anchor not found: {old[:100]!r}")
+              text = text.replace(old, new, 1)
+
+          old_body = '''  private updateBodyMotion(state: CharacterState): void {
+    const activity = state === "speaking"
+      ? 1.25
+      : state === "noticing"
+        ? 1.05
+        : state === "sleeping"
+          ? 0.24
+          : 0.72;
+    const breath = Math.sin(this.elapsed * 1.8) * 0.011 * activity;
+    const upperBodySway = Math.sin(this.elapsed * 0.70) * 0.0045 * activity;
+    const speakingNod = state === "speaking" ? Math.sin(this.elapsed * 3.4) * 0.012 : 0;
+    const thinkingTilt = state === "thinking" ? 0.050 : 0;
+    const sleepingDrop = state === "sleeping" ? 0.065 : 0;
+    const armDrift = Math.sin(this.elapsed * 0.46 + 0.8) * activity;
+
+    this.offsetBoneRotation("hips", 0, upperBodySway * 0.20, 0);
+    this.offsetBoneRotation("spine", breath * 0.50, upperBodySway * 0.28, -upperBodySway * 0.20);
+    this.offsetBoneRotation("chest", breath, upperBodySway * 0.42, upperBodySway * 0.30);
+    this.offsetBoneRotation("neck", sleepingDrop * 0.35, -upperBodySway * 0.26, thinkingTilt * 0.35);
+    this.offsetBoneRotation("head", sleepingDrop + speakingNod, -upperBodySway * 0.46, thinkingTilt);
+
+    if (state === "thinking") {
+      this.applyThinkingPose();
+      return;
+    }
+    const speakingLift = state === "speaking" ? 0.035 : 0;
+    this.offsetBoneRotation("leftShoulder", 0, 0, -armDrift * 0.004);
+    this.offsetBoneRotation("rightShoulder", 0, 0, armDrift * 0.004);
+    this.offsetBoneRotation("leftUpperArm", speakingLift + armDrift * 0.012, 0, armDrift * 0.009);
+    this.offsetBoneRotation("rightUpperArm", -speakingLift - armDrift * 0.012, 0, armDrift * 0.009);
+    this.offsetBoneRotation("leftLowerArm", -speakingLift * 1.8, 0, 0);
+    this.offsetBoneRotation("rightLowerArm", -speakingLift * 1.8, 0, 0);
+  }
+'''
+          new_body = '''  private updateBodyMotion(state: CharacterState): void {
+    const activity = state === "speaking"
+      ? 1.18
+      : state === "noticing"
+        ? 1.02
+        : state === "sleeping"
+          ? 0.22
+          : 0.68;
+    const breath = Math.sin(this.elapsed * 1.8) * 0.010 * activity;
+    const upperBodySway = Math.sin(this.elapsed * 0.70) * 0.0035 * activity;
+    const speakingNod = state === "speaking" ? Math.sin(this.elapsed * 3.2) * 0.009 : 0;
+    const sleepingDrop = state === "sleeping" ? 0.045 : 0;
+
+    this.offsetBoneRotation("hips", 0, upperBodySway * 0.16, 0);
+    this.offsetBoneRotation("spine", breath * 0.45, upperBodySway * 0.22, -upperBodySway * 0.16);
+    this.offsetBoneRotation("chest", breath, upperBodySway * 0.34, upperBodySway * 0.24);
+    this.offsetBoneRotation("neck", sleepingDrop * 0.28, -upperBodySway * 0.20, 0);
+    this.offsetBoneRotation("head", sleepingDrop + speakingNod, -upperBodySway * 0.34, 0);
+
+    if (state === "speaking") {
+      const conversationalLift = Math.sin(this.elapsed * 1.15 + 0.4) * 0.012;
+      this.offsetBoneRotation("leftUpperArm", 0.018 + conversationalLift, 0, 0);
+      this.offsetBoneRotation("rightUpperArm", -0.014 - conversationalLift * 0.75, 0, 0);
+      this.offsetBoneRotation("leftLowerArm", -0.030, 0, 0);
+      this.offsetBoneRotation("rightLowerArm", -0.022, 0, 0);
+    }
+  }
+'''
+          if old_body not in text:
+              raise SystemExit("updateBodyMotion block not found")
+          text = text.replace(old_body, new_body, 1)
+
+          old_thinking = '''  private applyThinkingPose(): void {
+    this.offsetBoneRotation("rightUpperArm", -0.20, 0.12, -0.20);
+    this.offsetBoneRotation("rightLowerArm", -0.88, 0.10, 0.06);
+    this.offsetBoneRotation("rightHand", 0.12, -0.06, -0.04);
+    this.offsetBoneRotation("leftUpperArm", 0.04, -0.04, 0.08);
+    this.offsetBoneRotation("leftLowerArm", -0.16, -0.04, 0.03);
+    this.offsetBoneRotation("chest", 0, -0.035, 0.02);
+  }
+
+'''
+          if old_thinking not in text:
+              raise SystemExit("legacy thinking pose block not found")
+          text = text.replace(old_thinking, "", 1)
+
+          anchor = '  private applyRelaxedHands(): void {\n'
+          posture_method = '''  private applyPosture(frame: VrmPostureFrame): void {
+    this.offsetBoneTuple("spine", frame.spine);
+    this.offsetBoneTuple("chest", frame.chest);
+    this.offsetBoneTuple("neck", frame.neck);
+    this.offsetBoneTuple("head", frame.head);
+    this.offsetBoneTuple("leftShoulder", frame.leftShoulder);
+    this.offsetBoneTuple("rightShoulder", frame.rightShoulder);
+    this.offsetBoneTuple("leftUpperArm", frame.leftUpperArm);
+    this.offsetBoneTuple("rightUpperArm", frame.rightUpperArm);
+    this.offsetBoneTuple("leftLowerArm", frame.leftLowerArm);
+    this.offsetBoneTuple("rightLowerArm", frame.rightLowerArm);
+    this.offsetBoneTuple("leftHand", frame.leftHand);
+    this.offsetBoneTuple("rightHand", frame.rightHand);
+  }
+
+'''
+          if anchor not in text:
+              raise SystemExit("applyRelaxedHands anchor not found")
+          text = text.replace(anchor, posture_method + anchor, 1)
+
+          path.write_text(text, encoding="utf-8")
+      - name: Commit renderer patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web-client/src/character/vrm-renderer.ts
+          git commit -m "HG-039: apply natural posture layer"
+          git push origin HEAD:codex/hg-039-natural-idle-motion
