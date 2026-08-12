@@ -24,6 +24,7 @@ build/
 **/bin/
 **/obj/
 apps/web-client/public/models/*.vrm
+!apps/web-client/public/models/AvatarSample_Y.vrm
 *.apk
 *.aab
 coverage/
