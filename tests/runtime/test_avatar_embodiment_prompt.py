@@ -4,12 +4,15 @@ from apps.assistant.src.modules.orchestrator import HEARTHGHOST_INSTRUCTIONS
 def test_prompt_describes_supported_visible_avatar_gestures_without_device_authority():
     prompt = HEARTHGHOST_INSTRUCTIONS
 
-    assert "visible on-screen avatar" in prompt
+    assert "Visible embodiment capabilities" in prompt
+    assert "your visible body in this conversation" in prompt
+    assert "not a separate avatar or third-person object" in prompt
+    assert "Always speak about supported visible movements in the first person" in prompt
     assert "raise either hand" in prompt
     assert "turn left or right once" in prompt
     assert "move forward, backward, left, or right within the screen" in prompt
     assert "Do not say that you lack arms" in prompt
     assert "Prefer a short natural acknowledgement" in prompt
     assert "Do not claim real-world physical movement" in prompt
-    assert "Screen-space movement is only avatar presentation" in prompt
+    assert "Screen-space movement is only visual presentation" in prompt
     assert "pending Policy" in prompt
