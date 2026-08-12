@@ -3,6 +3,8 @@ FROM docker.io/library/node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3
 ARG VROID_SAMPLE_SOURCE_COMMIT=114d4336e0ac36bf9c2297b0a93ad7604b13704b
 ARG VROID_SAMPLE_A_BLOB_SHA=2ab43eef01826a3f93ab92e4174473efd473ae98
 ARG VROID_SAMPLE_C_BLOB_SHA=4513c2989150c6bd5040f8a3e1b89631efef9a87
+ARG AIRI_IDLE_SOURCE_COMMIT=b6011381bc34a6b85ad669363513cb1a2eea6438
+ARG AIRI_IDLE_BLOB_SHA=26b28f4e4227c48eecdd29d25e3dc6f4c6ac3844
 
 WORKDIR /workspace
 
@@ -11,37 +13,43 @@ RUN npm ci --ignore-scripts --no-audit --no-fund
 
 COPY apps/web-client ./
 
-# The official VRoid sample terms allow redistribution. The public source below
-# redistributes AvatarSample_A/C from VRoid Studio. Pin both the source commit
-# and Git blob identities so an upstream replacement cannot silently enter an
-# APK. These are presentation assets only and are copied into Vite's local
-# public tree before the network-independent client build.
+# Presentation assets are fetched only while building. Pin both source commits
+# and Git blob identities so upstream replacements cannot silently enter an
+# APK. The AIRI idle_loop.vrma asset is MIT-licensed and its notice is retained
+# in apps/web-client/THIRD_PARTY_PRESENTATION_ASSETS.md.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         git \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p public/models \
+    && mkdir -p public/models public/animations \
     && curl --fail --location --show-error \
         "https://raw.githubusercontent.com/hirokazuniimoto/virtual-avatar-sdk/${VROID_SAMPLE_SOURCE_COMMIT}/assets/avatars/AvatarSample_A.vrm" \
         --output public/models/AvatarSample_A.vrm \
     && curl --fail --location --show-error \
         "https://raw.githubusercontent.com/hirokazuniimoto/virtual-avatar-sdk/${VROID_SAMPLE_SOURCE_COMMIT}/assets/avatars/AvatarSample_C.vrm" \
         --output public/models/AvatarSample_C.vrm \
+    && curl --fail --location --show-error \
+        "https://raw.githubusercontent.com/moeru-ai/airi/${AIRI_IDLE_SOURCE_COMMIT}/packages/stage-ui-three/src/assets/vrm/animations/idle_loop.vrma" \
+        --output public/animations/airi-idle-loop.vrma \
     && test "$(git hash-object public/models/AvatarSample_A.vrm)" = "${VROID_SAMPLE_A_BLOB_SHA}" \
     && test "$(git hash-object public/models/AvatarSample_C.vrm)" = "${VROID_SAMPLE_C_BLOB_SHA}" \
+    && test "$(git hash-object public/animations/airi-idle-loop.vrma)" = "${AIRI_IDLE_BLOB_SHA}" \
     && test -s public/models/AvatarSample_A.vrm \
-    && test -s public/models/AvatarSample_C.vrm
+    && test -s public/models/AvatarSample_C.vrm \
+    && test -s public/animations/airi-idle-loop.vrma
 
 RUN npm run check \
     && npm test \
     && npm run build \
     && test -s dist/models/AvatarSample_A.vrm \
     && test -s dist/models/AvatarSample_C.vrm \
+    && test -s dist/animations/airi-idle-loop.vrma \
     && npx cap sync android \
     && test -s android/app/src/main/assets/public/models/AvatarSample_A.vrm \
-    && test -s android/app/src/main/assets/public/models/AvatarSample_C.vrm
+    && test -s android/app/src/main/assets/public/models/AvatarSample_C.vrm \
+    && test -s android/app/src/main/assets/public/animations/airi-idle-loop.vrma
 
 FROM docker.io/library/eclipse-temurin:21-jdk-jammy@sha256:d9dcea0a0dfd3e0b654e5f610c7b840ff8f8ea1300fe7948f2b910bef1aa78dd AS android-sdk
 
