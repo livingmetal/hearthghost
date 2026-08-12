@@ -127,6 +127,7 @@ class PostgresBehaviorPreferenceRepositoryTests(unittest.TestCase):
             "concise",
             "neutral",
             "moderate",
+            "yandere",
             30,
             "moderate",
             7,
@@ -162,7 +163,6 @@ class PostgresBehaviorPreferenceRepositoryTests(unittest.TestCase):
                 "user", "owner", "Luna", "invalid", "concise", "neutral", "moderate", "balanced",
                 30, "moderate", 1, datetime(2026, 8, 11, 13, tzinfo=timezone.utc), "android-personal-01",
             ),
-        ,
             (
                 "user", "owner", "Luna", "high", "concise", "neutral", "moderate", "raw-morph",
                 30, "moderate", 1, datetime(2026, 8, 11, 13, tzinfo=timezone.utc), "android-personal-01",

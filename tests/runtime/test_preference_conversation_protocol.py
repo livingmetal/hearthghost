@@ -248,88 +248,88 @@ class PreferenceConversationProtocolTests(unittest.TestCase):
         self.assertEqual(len(self.llm.requests), 0)
 
     def test_persona_v2_expression_style_is_scoped_presentation_data(self):
-    command = "페르소나:v2:" + json.dumps(
-        {
-            "name": "루나",
-            "humor": "high",
-            "verbosity": "concise",
-            "formality": "neutral",
-            "initiative": "moderate",
-            "expressionStyle": "yandere",
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    selected = self.protocol._dispatch(
-        self.node,
-        ConversationCommand(
-            "conversation.text",
-            str(uuid4()),
-            "node-session-1",
-            2,
-            self.conversation_id,
-            command,
-        ),
-    )
-    self.assertTrue(selected.accepted)
-    self.assertEqual(selected.reason_code, "persona_profile_applied")
-    persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona
-    self.assertEqual(persona.expression_style, "yandere")
-    self.assertEqual(
-        self.core.behavior_preferences.snapshot(scope="user", scope_id="spouse").persona.expression_style,
-        "balanced",
-    )
-    self.assertEqual(len(self.llm.requests), 0)
-
-    queried = self.protocol._dispatch(
-        self.node,
-        ConversationCommand(
-            "conversation.text",
-            str(uuid4()),
-            "node-session-1",
-            3,
-            self.conversation_id,
-            "페르소나조회:v2",
-        ),
-    )
-    prefix = "페르소나상태:v2:"
-    self.assertTrue(queried.response_text.startswith(prefix))
-    payload = json.loads(queried.response_text[len(prefix) :])
-    self.assertEqual(payload["expressionStyle"], "yandere")
-    self.assertNotIn("morph", payload)
-    self.assertNotIn("blendshape", payload)
-
-    ordinary = self.protocol._dispatch(
-        self.node,
-        ConversationCommand(
-            "conversation.text",
-            str(uuid4()),
-            "node-session-1",
-            4,
-            self.conversation_id,
-            "평범하게 이야기해줘",
-        ),
-    )
-    self.assertTrue(ordinary.accepted)
-    self.assertEqual(len(self.llm.requests), 1)
-    self.assertNotIn("yandere", self.llm.requests[0].instructions)
-
-  def test_exact_character_selection_also_selects_reviewed_expression_style(self):
-    for sequence, name, style in ((2, "영희", "playful"), (3, "철수", "reserved")):
+        command = "페르소나:v2:" + json.dumps(
+            {
+                "name": "루나",
+                "humor": "high",
+                "verbosity": "concise",
+                "formality": "neutral",
+                "initiative": "moderate",
+                "expressionStyle": "yandere",
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
         selected = self.protocol._dispatch(
             self.node,
             ConversationCommand(
                 "conversation.text",
                 str(uuid4()),
                 "node-session-1",
-                sequence,
+                2,
                 self.conversation_id,
-                f"캐릭터: {name}",
+                command,
             ),
         )
         self.assertTrue(selected.accepted)
+        self.assertEqual(selected.reason_code, "persona_profile_applied")
         persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona
-        self.assertEqual((persona.name, persona.expression_style), (name, style))
+        self.assertEqual(persona.expression_style, "yandere")
+        self.assertEqual(
+            self.core.behavior_preferences.snapshot(scope="user", scope_id="spouse").persona.expression_style,
+            "balanced",
+        )
+        self.assertEqual(len(self.llm.requests), 0)
+
+        queried = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                3,
+                self.conversation_id,
+                "페르소나조회:v2",
+            ),
+        )
+        prefix = "페르소나상태:v2:"
+        self.assertTrue(queried.response_text.startswith(prefix))
+        payload = json.loads(queried.response_text[len(prefix) :])
+        self.assertEqual(payload["expressionStyle"], "yandere")
+        self.assertNotIn("morph", payload)
+        self.assertNotIn("blendshape", payload)
+
+        ordinary = self.protocol._dispatch(
+            self.node,
+            ConversationCommand(
+                "conversation.text",
+                str(uuid4()),
+                "node-session-1",
+                4,
+                self.conversation_id,
+                "평범하게 이야기해줘",
+            ),
+        )
+        self.assertTrue(ordinary.accepted)
+        self.assertEqual(len(self.llm.requests), 1)
+        self.assertNotIn("yandere", self.llm.requests[0].instructions)
+
+    def test_exact_character_selection_also_selects_reviewed_expression_style(self):
+        for sequence, name, style in ((2, "영희", "playful"), (3, "철수", "reserved")):
+            selected = self.protocol._dispatch(
+                self.node,
+                ConversationCommand(
+                    "conversation.text",
+                    str(uuid4()),
+                    "node-session-1",
+                    sequence,
+                    self.conversation_id,
+                    f"캐릭터: {name}",
+                ),
+            )
+            self.assertTrue(selected.accepted)
+            persona = self.core.behavior_preferences.snapshot(scope="user", scope_id="owner").persona
+            self.assertEqual((persona.name, persona.expression_style), (name, style))
 
     def test_followup_preference_updates_only_current_principal_session(self):
         result = self.protocol._dispatch(
