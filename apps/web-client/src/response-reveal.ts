@@ -1,4 +1,9 @@
 import {
+  RESPONSE_REVEAL_DONE_EVENT,
+  RESPONSE_REVEAL_START_EVENT,
+  type ResponseRevealDetail,
+} from "./character/performance-events.js";
+import {
   SPEECH_DONE_EVENT,
   SPEECH_ERROR_EVENT,
   SPEECH_RANGE_EVENT,
@@ -9,13 +14,6 @@ import {
 
 const FALLBACK_STEP_MILLIS = 90;
 const FALLBACK_START_DELAY_MILLIS = 120;
-
-export const RESPONSE_REVEAL_START_EVENT = "hearthghost:response-reveal-start";
-export const RESPONSE_REVEAL_DONE_EVENT = "hearthghost:response-reveal-done";
-
-export interface ResponseRevealDetail {
-  readonly text: string;
-}
 
 function sameSpeechText(left: string, right: string): boolean {
   return left.trim() === right.trim();
