@@ -12,7 +12,7 @@ export type CharacterPresenceScheduler = (
   delayMillis: number,
 ) => void;
 
-const ENTER_DURATION_MILLIS = 1_000;
+const ENTER_DURATION_MILLIS = 850;
 const EXIT_DURATION_MILLIS = 650;
 
 const scheduleWithPlatformTimer: CharacterPresenceScheduler = (callback, delayMillis) => {
