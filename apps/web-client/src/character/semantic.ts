@@ -14,6 +14,12 @@ export const CHARACTER_EMOTIONS = [
   "curious",
   "concerned",
   "surprised",
+  "angry",
+  "sad",
+  "annoyed",
+  "embarrassed",
+  "smug",
+  "affectionate",
 ] as const;
 
 export const CHARACTER_PRESENCES = [
