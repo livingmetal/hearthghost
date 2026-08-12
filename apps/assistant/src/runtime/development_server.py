@@ -40,7 +40,7 @@ DEFAULT_GATEWAY_PORT = 8443
 DEFAULT_STATUS_BIND = "127.0.0.1"
 DEFAULT_STATUS_PORT = 8080
 DEFAULT_ADMIN_DASHBOARD_BIND = "127.0.0.1"
-DEFAULT_SOCKET_TIMEOUT_SECONDS = 60.0
+DEFAULT_SOCKET_TIMEOUT_SECONDS = 3_600.0
 DEFAULT_HANDSHAKE_TIMEOUT_SECONDS = 5.0
 MAX_CONNECTIONS = 8
 
@@ -56,14 +56,19 @@ class DevelopmentGatewayServer:
         conversation_protocol: ConversationProtocol,
         reminder_sync_protocol: ReminderSyncProtocol | None = None,
         socket_timeout_seconds: float = DEFAULT_SOCKET_TIMEOUT_SECONDS,
+        allow_unspecified_bind: bool = False,
     ) -> None:
         parsed = ipaddress.ip_address(bind_address)
-        if parsed.is_unspecified or parsed.is_loopback or parsed.is_multicast:
+        if (
+            (parsed.is_unspecified and not allow_unspecified_bind)
+            or parsed.is_loopback
+            or parsed.is_multicast
+        ):
             raise ValueError("Gateway requires one explicit non-loopback address")
         if not 1 <= port <= 65535:
             raise ValueError("Gateway port must be between 1 and 65535")
-        if not 1 <= socket_timeout_seconds <= 300:
-            raise ValueError("Gateway socket timeout must be between 1 and 300 seconds")
+        if not 1 <= socket_timeout_seconds <= 86_400:
+            raise ValueError("Gateway socket timeout must be between 1 and 86400 seconds")
         self._address = (str(parsed), port)
         self._tls = tls
         self._node_protocol = node_protocol
@@ -152,6 +157,11 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--private-key", required=True)
     parser.add_argument("--client-ca", required=True)
     parser.add_argument("--bind", default=DEFAULT_GATEWAY_BIND)
+    parser.add_argument(
+        "--allow-multi-network-bind",
+        action="store_true",
+        help="allow 0.0.0.0 only for an explicitly isolated multi-network container",
+    )
     parser.add_argument("--port", type=int, default=DEFAULT_GATEWAY_PORT)
     parser.add_argument("--status-bind", default=DEFAULT_STATUS_BIND)
     parser.add_argument("--status-port", type=int, default=DEFAULT_STATUS_PORT)
@@ -251,6 +261,7 @@ def main(arguments: list[str] | None = None) -> int:
         node_protocol=node_protocol,
         conversation_protocol=conversation_protocol,
         reminder_sync_protocol=reminder_sync_protocol,
+        allow_unspecified_bind=options.allow_multi_network_bind,
     )
     status_server = CoreStatusServer((options.status_bind, options.status_port), components)
     dashboard_server: AdminDashboardServer | None = None

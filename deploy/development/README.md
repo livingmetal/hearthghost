@@ -42,6 +42,17 @@ conversation Send can make one API request. The default live deployment cap is
 of 1,024. Actual billing depends on input and generated tokens, so this bound is
 not a daily spending limit.
 
+Because the primary development network is deliberately internal, OpenAI mode
+starts the Core on a dedicated DNS-enabled `hearthghost-development-egress`
+network and the PostgreSQL-only internal network at the same time. This lets
+Podman's isolated resolver forward public provider lookups without changing the
+database network or attaching any other service to egress. Fake mode uses only
+the internal network. OpenAI mode explicitly enables multi-network binding so
+the mTLS listener receives the published port on either isolated container
+interface, while Podman uses the non-internal network for public DNS. This
+wildcard bind is rejected unless that deployment-only flag is present. Client
+certificates and the host source-address firewall remain mandatory.
+
 Fake remains the default. A provider secret is never mounted in fake mode, and
 selecting OpenAI without a valid existing secret fails instead of silently
 falling back. Provider values remain server-side only and are never logged.

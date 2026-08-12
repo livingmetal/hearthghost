@@ -107,6 +107,14 @@ export class TextConversationController {
     return this.snapshot();
   }
 
+  reset(): ConversationSnapshot {
+    this.conversationSessionId = null;
+    this.nodeSessionId = null;
+    this.responseText = null;
+    this.characterProfile = null;
+    return this.snapshot();
+  }
+
   private publish(events: readonly unknown[]): void {
     for (const event of events) {
       this.publishSemanticEvent(event);

@@ -119,6 +119,29 @@ test("Node reconnect invalidates the old conversation binding", async () => {
   );
 });
 
+test("local reset discards stale conversation identity before reconnect", async () => {
+  const platform = new NodePlatform();
+  const node = new ClientNode(platform);
+  await node.connect(credential);
+  const controller = new TextConversationController(
+    node,
+    new ConversationTransport(),
+    () => {},
+  );
+  await controller.open();
+
+  const reset = controller.reset();
+  platform.sessionId = "node-session-2";
+  await node.connect(credential);
+  const reopened = await controller.open();
+
+  assert.equal(reset.conversationSessionId, null);
+  assert.equal(reset.nodeSessionId, null);
+  assert.equal(reset.characterProfile, null);
+  assert.equal(reopened.nodeSessionId, "node-session-2");
+  assert.equal(reopened.conversationSessionId, "conversation-1");
+});
+
 test("conversation end does not disconnect the Node session", async () => {
   const node = new ClientNode(new NodePlatform());
   await node.connect(credential);

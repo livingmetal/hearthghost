@@ -28,8 +28,18 @@ class DevelopmentOpenAIDeploymentTests(unittest.TestCase):
         self.assertIn('--llm-adapter "${LLM_ADAPTER}"', self.script)
 
     def test_provider_network_and_cost_cap_are_openai_only(self):
-        self.assertIn('if [[ "${LLM_ADAPTER}" == "openai" ]]', self.script)
-        self.assertIn('podman network connect podman "${CONTAINER}"', self.script)
+        self.assertIn('EGRESS_NETWORK="hearthghost-development-egress"', self.script)
+        self.assertIn('--network "${EGRESS_NETWORK}:ip=${EGRESS_CONTAINER_IP}"', self.script)
+        self.assertIn('--network "${NETWORK}:ip=${CONTAINER_IP}"', self.script)
+        self.assertIn('GATEWAY_BIND_IP="${CONTAINER_IP}"', self.script)
+        self.assertIn('GATEWAY_BIND_IP="0.0.0.0"', self.script)
+        self.assertIn('GATEWAY_RUNTIME_ARGS=(--allow-multi-network-bind)', self.script)
+        self.assertIn('--bind "${GATEWAY_BIND_IP}"', self.script)
+        self.assertLess(
+            self.script.index('--network "${NETWORK}:ip=${CONTAINER_IP}"'),
+            self.script.index('--network "${EGRESS_NETWORK}:ip=${EGRESS_CONTAINER_IP}"'),
+        )
+        self.assertIn('if [[ "${LLM_ADAPTER}" != "openai" ]]', self.script)
         self.assertIn('OPENAI_MAX_OUTPUT_TOKENS="${HEARTHGHOST_OPENAI_MAX_OUTPUT_TOKENS:-256}"', self.script)
         self.assertIn("one API request", self.documentation)
 

@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from apps.assistant.src.adapters.development_state import (
@@ -191,6 +192,56 @@ class DevelopmentGatewayConfigurationTests(unittest.TestCase):
                     node_protocol=object(),
                     conversation_protocol=object(),
                 )
+
+    def test_gateway_allows_wildcard_only_for_explicit_multi_network_mode(self):
+        server = DevelopmentGatewayServer(
+            bind_address="0.0.0.0",
+            port=8443,
+            tls=object(),
+            node_protocol=object(),
+            conversation_protocol=object(),
+            allow_unspecified_bind=True,
+        )
+
+        self.assertEqual(server._address, ("0.0.0.0", 8443))
+
+    def test_authenticated_channel_uses_the_long_bounded_idle_timeout(self):
+        class FakeSocket:
+            def __init__(self):
+                self.timeout = "unchanged"
+                self.closed = False
+
+            def settimeout(self, value):
+                self.timeout = value
+
+            def close(self):
+                self.closed = True
+
+        class FakeTls:
+            def __init__(self, channel):
+                self.channel = channel
+
+            def wrap_connected_socket(self, connected):
+                return self.channel
+
+        connected = FakeSocket()
+        channel = FakeSocket()
+        server = DevelopmentGatewayServer(
+            bind_address="192.0.2.10",
+            port=8443,
+            tls=FakeTls(channel),
+            node_protocol=object(),
+            conversation_protocol=object(),
+        )
+
+        with patch(
+            "apps.assistant.src.runtime.development_server.read_frame",
+            side_effect=OSError("simulated shutdown"),
+        ):
+            server._handle_connection(connected)
+
+        self.assertEqual(channel.timeout, 3_600.0)
+        self.assertTrue(channel.closed)
 
 
 @unittest.skipUnless(OPENSSL, "OpenSSL CLI is required for development PKI tests")

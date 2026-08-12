@@ -5,6 +5,9 @@ IMAGE="localhost/hearthghost-development-core:local"
 CONTAINER="hearthghost-development-core"
 NETWORK="hearthghost-development-internal"
 NETWORK_SUBNET="10.89.0.0/24"
+EGRESS_NETWORK="hearthghost-development-egress"
+EGRESS_NETWORK_SUBNET="10.90.0.0/24"
+EGRESS_CONTAINER_IP="10.90.0.10"
 CONTAINER_IP="10.89.0.10"
 HOST_IP="192.168.55.100"
 HOST_PORT="38443"
@@ -70,6 +73,17 @@ create_network() {
     fi
 }
 
+create_egress_network() {
+    if [[ "${LLM_ADAPTER}" != "openai" ]]; then
+        return
+    fi
+    if ! podman network exists "${EGRESS_NETWORK}"; then
+        podman network create \
+            --subnet "${EGRESS_NETWORK_SUBNET}" \
+            "${EGRESS_NETWORK}" >/dev/null
+    fi
+}
+
 configure_postgres_secret() {
     POSTGRES_SECRET_ARGS=()
     POSTGRES_RUNTIME_ARGS=()
@@ -109,6 +123,9 @@ configure_memory_principal() {
 configure_llm() {
     OPENAI_SECRET_ARGS=()
     OPENAI_ENV_ARGS=()
+    OPENAI_NETWORK_ARGS=()
+    GATEWAY_RUNTIME_ARGS=()
+    GATEWAY_BIND_IP="${CONTAINER_IP}"
     if [[ "${LLM_ADAPTER}" != "fake" && "${LLM_ADAPTER}" != "openai" ]]; then
         printf 'HEARTHGHOST_LLM_ADAPTER must be fake or openai\n' >&2
         exit 2
@@ -118,6 +135,10 @@ configure_llm() {
             printf 'OpenAI secret must not be selected while using the fake adapter\n' >&2
             exit 2
         fi
+        OPENAI_NETWORK_ARGS=(
+            --network "${NETWORK}"
+            --ip "${CONTAINER_IP}"
+        )
         return
     fi
     if [[ -z "${OPENAI_SECRET_NAME}" || ! "${OPENAI_SECRET_NAME}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
@@ -145,6 +166,12 @@ configure_llm() {
         --env "OPENAI_MODEL=${OPENAI_MODEL}"
         --env "OPENAI_MAX_OUTPUT_TOKENS=${OPENAI_MAX_OUTPUT_TOKENS}"
     )
+    OPENAI_NETWORK_ARGS=(
+        --network "${NETWORK}:ip=${CONTAINER_IP}"
+        --network "${EGRESS_NETWORK}:ip=${EGRESS_CONTAINER_IP}"
+    )
+    GATEWAY_BIND_IP="0.0.0.0"
+    GATEWAY_RUNTIME_ARGS=(--allow-multi-network-bind)
 }
 
 deploy() {
@@ -156,6 +183,7 @@ deploy() {
     build_image
     initialize
     create_network
+    create_egress_network
     if podman container exists "${CONTAINER}"; then
         podman rm --force "${CONTAINER}" >/dev/null
     fi
@@ -163,8 +191,7 @@ deploy() {
         --name "${CONTAINER}" \
         --restart=unless-stopped \
         --userns=keep-id:uid=10001,gid=10001 \
-        --network "${NETWORK}" \
-        --ip "${CONTAINER_IP}" \
+        "${OPENAI_NETWORK_ARGS[@]}" \
         --publish "${HOST_IP}:${HOST_PORT}:${CONTAINER_PORT}" \
         --read-only \
         --tmpfs /tmp:rw,noexec,nosuid,size=16m \
@@ -188,16 +215,11 @@ deploy() {
         --certificate /run/hearthghost-tls/server.crt \
         --private-key /run/hearthghost-tls/server.key \
         --client-ca /run/hearthghost-tls/client-ca.crt \
+        --bind "${GATEWAY_BIND_IP}" \
+        "${GATEWAY_RUNTIME_ARGS[@]}" \
         --llm-adapter "${LLM_ADAPTER}" \
         "${POSTGRES_RUNTIME_ARGS[@]}" \
         "${MEMORY_PRINCIPAL_ARGS[@]}"
-    if [[ "${LLM_ADAPTER}" == "openai" ]]; then
-        if ! podman network connect podman "${CONTAINER}"; then
-            podman rm --force "${CONTAINER}" >/dev/null
-            printf 'failed to attach the OpenAI-selected Core to its outbound network\n' >&2
-            exit 1
-        fi
-    fi
 }
 
 admin() {
