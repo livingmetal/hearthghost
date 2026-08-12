@@ -10,6 +10,7 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
+import type { HearthGhostCharacterId } from "./catalog.js";
 import type { CharacterRenderer } from "./renderer.js";
 import { VrmBaseAnimationLayer } from "./vrm-base-animation.js";
 import { ProceduralIdleBaseMotion, type VrmBaseMotionFrame } from "./vrm-base-motion.js";
@@ -21,6 +22,7 @@ import {
 } from "./vrm-hand-pose.js";
 import { VRM_CAMERA_FRAMING } from "./vrm-framing.js";
 import { VrmViewManipulation, type VrmViewState } from "./vrm-view-manipulation.js";
+import { NaturalPostureController, type VrmPostureFrame } from "./vrm-posture.js";
 import type {
   CharacterEmotion,
   CharacterGesture,
@@ -99,6 +101,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private readonly viewManipulation = new VrmViewManipulation();
   private readonly baseAnimation = new VrmBaseAnimationLayer();
   private readonly baseMotion = new ProceduralIdleBaseMotion();
+  private readonly posture: NaturalPostureController;
   private renderer: WebGLRenderer | null = null;
   private vrm: VRM | null = null;
   private frame: number | null = null;
@@ -118,7 +121,11 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     emotion: "neutral",
   };
 
-  constructor(private readonly assetUrl: string | null = null) {
+  constructor(
+    private readonly assetUrl: string | null = null,
+    characterId: HearthGhostCharacterId | null = null,
+  ) {
+    this.posture = new NaturalPostureController(characterId);
     this.camera.position.set(
       VRM_CAMERA_FRAMING.cameraX,
       VRM_CAMERA_FRAMING.cameraY,
@@ -231,6 +238,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.rootRestY = vrm.scene.position.y;
     this.rootRestZ = vrm.scene.position.z;
     this.baseMotion.reset(this.elapsed);
+    this.posture.reset(this.elapsed);
     this.gestureQueue.length = 0;
     this.activeGesture = null;
     this.indexExpressions(vrm);
@@ -330,6 +338,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
         this.applyBaseMotion(this.baseMotion.update(delta, this.presentation.state));
       }
       this.updateBodyMotion(this.presentation.state);
+      this.applyPosture(this.posture.update(delta, this.elapsed, this.presentation.state));
       this.applyRelaxedHands();
       this.updateGesture();
       this.updateLookAt(this.presentation.state, delta);
@@ -343,38 +352,32 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   }
 
   private updateBodyMotion(state: CharacterState): void {
-    const activity = state === "speaking"
-      ? 1.25
-      : state === "noticing"
-        ? 1.05
-        : state === "sleeping"
-          ? 0.24
-          : 0.72;
-    const breath = Math.sin(this.elapsed * 1.8) * 0.011 * activity;
-    const upperBodySway = Math.sin(this.elapsed * 0.70) * 0.0045 * activity;
-    const speakingNod = state === "speaking" ? Math.sin(this.elapsed * 3.4) * 0.012 : 0;
-    const thinkingTilt = state === "thinking" ? 0.050 : 0;
-    const sleepingDrop = state === "sleeping" ? 0.065 : 0;
-    const armDrift = Math.sin(this.elapsed * 0.46 + 0.8) * activity;
+  const activity = state === "speaking"
+    ? 1.18
+    : state === "noticing"
+      ? 1.02
+      : state === "sleeping"
+        ? 0.22
+        : 0.68;
+  const breath = Math.sin(this.elapsed * 1.8) * 0.010 * activity;
+  const upperBodySway = Math.sin(this.elapsed * 0.70) * 0.0035 * activity;
+  const speakingNod = state === "speaking" ? Math.sin(this.elapsed * 3.2) * 0.009 : 0;
+  const sleepingDrop = state === "sleeping" ? 0.045 : 0;
 
-    this.offsetBoneRotation("hips", 0, upperBodySway * 0.20, 0);
-    this.offsetBoneRotation("spine", breath * 0.50, upperBodySway * 0.28, -upperBodySway * 0.20);
-    this.offsetBoneRotation("chest", breath, upperBodySway * 0.42, upperBodySway * 0.30);
-    this.offsetBoneRotation("neck", sleepingDrop * 0.35, -upperBodySway * 0.26, thinkingTilt * 0.35);
-    this.offsetBoneRotation("head", sleepingDrop + speakingNod, -upperBodySway * 0.46, thinkingTilt);
+  this.offsetBoneRotation("hips", 0, upperBodySway * 0.16, 0);
+  this.offsetBoneRotation("spine", breath * 0.45, upperBodySway * 0.22, -upperBodySway * 0.16);
+  this.offsetBoneRotation("chest", breath, upperBodySway * 0.34, upperBodySway * 0.24);
+  this.offsetBoneRotation("neck", sleepingDrop * 0.28, -upperBodySway * 0.20, 0);
+  this.offsetBoneRotation("head", sleepingDrop + speakingNod, -upperBodySway * 0.34, 0);
 
-    if (state === "thinking") {
-      this.applyThinkingPose();
-      return;
-    }
-    const speakingLift = state === "speaking" ? 0.035 : 0;
-    this.offsetBoneRotation("leftShoulder", 0, 0, -armDrift * 0.004);
-    this.offsetBoneRotation("rightShoulder", 0, 0, armDrift * 0.004);
-    this.offsetBoneRotation("leftUpperArm", speakingLift + armDrift * 0.012, 0, armDrift * 0.009);
-    this.offsetBoneRotation("rightUpperArm", -speakingLift - armDrift * 0.012, 0, armDrift * 0.009);
-    this.offsetBoneRotation("leftLowerArm", -speakingLift * 1.8, 0, 0);
-    this.offsetBoneRotation("rightLowerArm", -speakingLift * 1.8, 0, 0);
+  if (state === "speaking") {
+    const conversationalLift = Math.sin(this.elapsed * 1.15 + 0.4) * 0.012;
+    this.offsetBoneRotation("leftUpperArm", 0.018 + conversationalLift, 0, 0);
+    this.offsetBoneRotation("rightUpperArm", -0.014 - conversationalLift * 0.75, 0, 0);
+    this.offsetBoneRotation("leftLowerArm", -0.030, 0, 0);
+    this.offsetBoneRotation("rightLowerArm", -0.022, 0, 0);
   }
+}
 
   private applyBaseMotion(frame: VrmBaseMotionFrame): void {
     this.offsetBoneTuple("hips", frame.hips);
@@ -390,14 +393,20 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.offsetBoneTuple("rightLowerLeg", frame.rightLowerLeg);
   }
 
-  private applyThinkingPose(): void {
-    this.offsetBoneRotation("rightUpperArm", -0.20, 0.12, -0.20);
-    this.offsetBoneRotation("rightLowerArm", -0.88, 0.10, 0.06);
-    this.offsetBoneRotation("rightHand", 0.12, -0.06, -0.04);
-    this.offsetBoneRotation("leftUpperArm", 0.04, -0.04, 0.08);
-    this.offsetBoneRotation("leftLowerArm", -0.16, -0.04, 0.03);
-    this.offsetBoneRotation("chest", 0, -0.035, 0.02);
-  }
+  private applyPosture(frame: VrmPostureFrame): void {
+  this.offsetBoneTuple("spine", frame.spine);
+  this.offsetBoneTuple("chest", frame.chest);
+  this.offsetBoneTuple("neck", frame.neck);
+  this.offsetBoneTuple("head", frame.head);
+  this.offsetBoneTuple("leftShoulder", frame.leftShoulder);
+  this.offsetBoneTuple("rightShoulder", frame.rightShoulder);
+  this.offsetBoneTuple("leftUpperArm", frame.leftUpperArm);
+  this.offsetBoneTuple("rightUpperArm", frame.rightUpperArm);
+  this.offsetBoneTuple("leftLowerArm", frame.leftLowerArm);
+  this.offsetBoneTuple("rightLowerArm", frame.rightLowerArm);
+  this.offsetBoneTuple("leftHand", frame.leftHand);
+  this.offsetBoneTuple("rightHand", frame.rightHand);
+}
 
   private applyRelaxedHands(): void {
     for (const side of ["left", "right"] as const) {
@@ -808,6 +817,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
 
 export async function createVrmCharacterRenderer(
   assetUrl: string | null = null,
+  characterId: HearthGhostCharacterId | null = null,
 ): Promise<CharacterRenderer> {
-  return new VrmCharacterRenderer(assetUrl);
+  return new VrmCharacterRenderer(assetUrl, characterId);
 }
