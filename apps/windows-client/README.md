@@ -50,6 +50,49 @@ From the repository root:
 dotnet run --project apps/windows-client/HearthGhost.WindowsClient.csproj
 ```
 
+## Optional validated startup updates
+
+The development installer may place `scripts/Start-HearthGhost.ps1` at its
+installation root and configure these per-user, non-secret variables:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+    "HEARTHGHOST_WINDOWS_AUTO_UPDATE", "1", "User"
+)
+[Environment]::SetEnvironmentVariable(
+    "HEARTHGHOST_WINDOWS_UPDATE_SOURCE", "C:\path\to\hearthghost", "User"
+)
+[Environment]::SetEnvironmentVariable(
+    "HEARTHGHOST_WINDOWS_UPDATE_BRANCH", "codex/hg-039-natural-idle-motion", "User"
+)
+[Environment]::SetEnvironmentVariable(
+    "HEARTHGHOST_WINDOWS_CODE_SIGNING_THUMBPRINT", "<PUBLIC SHA-1 THUMBPRINT>", "User"
+)
+```
+
+On launch, the script fetches only that allowlisted branch from `origin`,
+checks out the exact remote commit into a temporary detached Git worktree,
+recreates dependencies, runs the complete client tests, fetches and verifies
+the pinned presentation assets, builds the web client, and publishes the native
+Windows shell. Only a fully validated result replaces the installed `web` and
+`native` directories. The prior installation is retained as
+`web.previous`/`native.previous`; any pre-install validation failure keeps and
+starts the prior build. `UPDATE_STATUS.json` and `UPDATE_LOG.txt` contain public
+build diagnostics. Common provider keys, access tokens, private keys, secrets,
+and passwords are removed from the child build environment before any remote
+source is built, and embedded credentials in the origin URL are rejected.
+If the validated build cannot start its loopback UI or native process, the
+launcher restores and starts the retained prior installation automatically.
+When the current native executable is signed, the replacement must be signed
+and verified with the same CurrentUser certificate. A different explicit
+development signer may be selected by its public thumbprint; private key
+material is never exported or copied.
+
+The launcher never discovers or follows an arbitrary newest branch. Advancing
+the development channel requires an explicit update to
+`HEARTHGHOST_WINDOWS_UPDATE_BRANCH`. Use `-SkipUpdate` for recovery and
+`-UpdateOnly` to validate/install without opening the client.
+
 The WebView2 shell accepts bridge messages only from the configured loopback origin. WebView permission requests are denied in this first foundation; Windows microphone/TTS/notifications will be added as separate native capabilities instead of silently using browser/cloud services.
 
 ## Expected first-run behavior

@@ -75,3 +75,15 @@ jobs:
         run: dotnet restore apps/windows-client/HearthGhost.WindowsClient.csproj
       - name: Build Windows client
         run: dotnet build apps/windows-client/HearthGhost.WindowsClient.csproj --configuration Release --no-restore -warnaserror
+      - name: Validate Windows development launcher syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "apps/windows-client/scripts/Start-HearthGhost.ps1",
+            [ref]$null,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -ne 0) {
+            $errors | Format-List | Out-String | Write-Error
+          }
