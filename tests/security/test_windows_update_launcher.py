@@ -16,6 +16,11 @@ class WindowsUpdateLauncherTests(unittest.TestCase):
         self.assertIn('"refs/heads/${UpdateBranch}:$remoteRef"', self.source)
         self.assertNotIn("git pull", self.source.lower())
 
+    def test_install_root_is_resolved_after_parameter_binding(self) -> None:
+        self.assertIn('[string]$InstallRoot = ""', self.source)
+        self.assertIn("$InstallRoot = $PSScriptRoot", self.source)
+        self.assertNotIn("[string]$InstallRoot = $PSScriptRoot", self.source)
+
     def test_update_is_built_from_detached_remote_commit(self) -> None:
         self.assertIn('"worktree", "add", "--detach"', self.source)
         self.assertIn('Arguments @("test")', self.source)

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$InstallRoot = $PSScriptRoot,
+    [string]$InstallRoot = "",
     [string]$SourceRoot = [Environment]::GetEnvironmentVariable(
         "HEARTHGHOST_WINDOWS_UPDATE_SOURCE",
         "User"
@@ -21,6 +21,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    # Windows PowerShell 5.1 does not reliably populate PSScriptRoot while
+    # evaluating parameter default expressions. Resolve it from the script
+    # body so installed launchers can omit -InstallRoot.
+    $InstallRoot = $PSScriptRoot
+}
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    throw "HearthGhost installation root could not be resolved"
+}
 
 $installRootPath = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
 $webRoot = Join-Path $installRootPath "web"
