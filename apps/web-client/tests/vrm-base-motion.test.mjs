@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { VectorKeyframeTrack } from "three";
 
+import {
+  reanchorHipsPositionTrack,
+  targetBaseAnimationWeight,
+} from "../.test-dist/character/vrm-base-animation.js";
 import { ProceduralIdleBaseMotion } from "../.test-dist/character/vrm-base-motion.js";
 
 function sequenceRandom(values) {
@@ -71,4 +76,35 @@ test("base-motion rotations stay intentionally small", () => {
       }
     }
   }
+});
+
+test("VRMA hips translation is re-anchored and bounded around model rest", () => {
+  const track = new VectorKeyframeTrack(
+    "NormalizedHips.position",
+    [0, 1, 2],
+    [
+      10, 20, 30,
+      10.5, 19.0, 30.5,
+      9.0, 21.0, 28.0,
+    ],
+  );
+  const anchored = reanchorHipsPositionTrack(track, [1, 2, 3]);
+  const values = Array.from(anchored.values);
+
+  assert.deepEqual(values.slice(0, 3), [1, 2, 3]);
+  for (let index = 0; index + 2 < values.length; index += 3) {
+    assert.ok(values[index] >= 1 - 0.055 && values[index] <= 1 + 0.055);
+    assert.ok(values[index + 1] >= 2 - 0.030 && values[index + 1] <= 2 + 0.050);
+    assert.ok(values[index + 2] >= 3 - 0.035 && values[index + 2] <= 3 + 0.035);
+  }
+});
+
+test("authored idle blend remains subtle and state-aware", () => {
+  const states = ["sleeping", "thinking", "listening", "engaged", "noticing", "speaking"];
+  for (const state of states) {
+    const weight = targetBaseAnimationWeight(state);
+    assert.ok(weight >= 0 && weight < 0.9, `${state} authored idle weight must remain bounded`);
+  }
+  assert.ok(targetBaseAnimationWeight("sleeping") < targetBaseAnimationWeight("engaged"));
+  assert.ok(targetBaseAnimationWeight("thinking") < targetBaseAnimationWeight("listening"));
 });
