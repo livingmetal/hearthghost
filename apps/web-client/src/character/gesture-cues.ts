@@ -80,10 +80,16 @@ export function inferCharacterGestures(text: string): readonly CharacterGesture[
   if (/(?:뒤로|뒤쪽|멀리).{0,18}(?:가|물러|후진|이동|retreat|step\s+back|move\s+back)/iu.test(normalized)) {
     appendUnique(gestures, { gesture: "move", direction: "backward" });
   }
-  if (/(?:왼쪽|좌측|left).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}left/iu.test(normalized)) {
+  if (
+    !gestures.some((gesture) => gesture.gesture === "point" && gesture.direction === "left")
+    && /(?:왼쪽|좌측|left).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}left/iu.test(normalized)
+  ) {
     appendUnique(gestures, { gesture: "move", direction: "left" });
   }
-  if (/(?:오른쪽|우측|right).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}right/iu.test(normalized)) {
+  if (
+    !gestures.some((gesture) => gesture.gesture === "point" && gesture.direction === "right")
+    && /(?:오른쪽|우측|right).{0,18}(?:가|이동|옮겨|걸어|step|move)|(?:step|move).{0,8}right/iu.test(normalized)
+  ) {
     appendUnique(gestures, { gesture: "move", direction: "right" });
   }
 
