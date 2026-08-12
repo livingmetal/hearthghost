@@ -142,8 +142,9 @@ export class VrmCharacterRenderer implements CharacterRenderer {
     this.applyConversationPose(vrm);
     this.captureDrivenBones(vrm);
     this.indexExpressions(vrm);
-    if (vrm.lookAt !== null) {
-      vrm.lookAt.target = this.lookAtTarget;
+    const lookAt = vrm.lookAt;
+    if (lookAt !== null && lookAt !== undefined) {
+      lookAt.target = this.lookAtTarget;
     }
   }
 
@@ -188,7 +189,7 @@ export class VrmCharacterRenderer implements CharacterRenderer {
   private indexExpressions(vrm: VRM): void {
     this.expressionNames.clear();
     const manager = vrm.expressionManager;
-    if (manager === null) {
+    if (manager === null || manager === undefined) {
       return;
     }
     for (const name of Object.keys(manager.expressionMap)) {
