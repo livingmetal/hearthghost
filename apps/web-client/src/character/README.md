@@ -52,6 +52,26 @@ the arm gesture rises, so a resting hand does not look rigid and a raised hand
 does not remain clenched. Missing optional finger bones are skipped without
 preventing the VRM from rendering.
 
+`vrm-expression-composer.ts` owns facial emotion composition. Semantic emotion
+is intentionally broader than any one VRM blendshape and currently includes
+neutral, happy, amused, curious, concerned, surprised, angry, sad, annoyed,
+embarrassed, smug, and affectionate. The composer maps those meanings through a
+local expression style and the expression names actually available on the
+loaded VRM. Standard VRM presets provide the fallback path; optional custom
+expressions such as smirk, blush, annoyance, or affection enrich a recipe when
+the model contains a matching reviewed expression. Missing custom expressions
+fail soft rather than preventing the avatar from loading.
+
+Expression styles are presentation-local profiles, not semantic commands.
+`balanced`, `playful`, and `reserved` support ordinary character differences,
+while `tsundere`, `mesugaki`, and `yandere` are reserved profiles that can later
+be selected by a reviewed persona setting. A semantic emotion event cannot
+inject a style, blendshape name, morph weight, blink value, gaze coordinate, or
+lip-sync value. Blink, gaze, and speech vowels remain separate renderer-owned
+layers so a facial style cannot seize those channels. Younghee currently uses
+`playful` by default and Cheolsu uses `reserved`; future persona wiring can
+change the local style without changing the semantic emotion contract.
+
 `vrm-base-motion.ts` remains the fail-safe fallback. Its foot-planted procedural
 idle shifts weight through pelvis, legs, spine, shoulders, neck, and head with
 no root-position output. If the bundled VRMA is unavailable or malformed, the
