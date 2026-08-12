@@ -9,14 +9,14 @@ import {
 } from "../.test-dist/character/catalog.js";
 
 
-test("character catalog maps official sample slots to HearthGhost names", () => {
+test("character catalog maps model A and C slots to HearthGhost names", () => {
   const younghee = characterById("younghee");
   const cheolsu = characterById("cheolsu");
 
   assert.equal(CHARACTER_CATALOG.length, 2);
   assert.equal(younghee?.name, "영희");
-  assert.equal(younghee?.sample, "AvatarSample_A");
-  assert.equal(younghee?.assetUrl, "/models/AvatarSample_A.vrm");
+  assert.equal(younghee?.sample, "AvatarSample_Y");
+  assert.equal(younghee?.assetUrl, "/models/AvatarSample_Y.vrm");
   assert.equal(cheolsu?.name, "철수");
   assert.equal(cheolsu?.sample, "AvatarSample_C");
   assert.equal(cheolsu?.assetUrl, "/models/AvatarSample_C.vrm");

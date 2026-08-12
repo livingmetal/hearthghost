@@ -32,6 +32,39 @@ camera, microphone, location, Bluetooth, nearby-device, or storage access.
 Provider credentials, Home Assistant credentials, and Node private keys do not
 belong in this package.
 
+## Model A asset
+
+HearthGhost model A / `younghee` resolves to `/models/AvatarSample_Y.vrm`.
+The user-created VRM is intended to be distributable with HearthGhost and is
+tracked at `public/models/AvatarSample_Y.vrm`; `.gitignore` explicitly allows
+this file while continuing to ignore other local VRM files.
+
+The asset step validates the reviewed model before use:
+
+- byte length: `16935148`
+- SHA-256: `48af6bf879cadbc4e17431543f795010c9ca2bf31c3ca5e0b450c87b05545c11`
+- container: glTF 2.0 / VRM
+
+`HEARTHGHOST_MODEL_A_PATH` remains available as a development override when a
+local replacement needs to be tested before it is committed:
+
+```text
+$env:HEARTHGHOST_MODEL_A_PATH = "C:\path\to\AvatarSample_Y.vrm"
+npm run windows:dev
+```
+
+Android local builds use the same validation and override path:
+
+```text
+$env:HEARTHGHOST_MODEL_A_PATH = "C:\path\to\AvatarSample_Y.vrm"
+npm run android:debug
+```
+
+Until the tracked binary is present in a checkout, Android CI uses the pinned
+public AvatarSample_A only as a packaging fixture at the same Y path. Once the
+Y binary is committed, the fixture should be removed so CI packages the real
+tracked model.
+
 ## Local web checks
 
 ```text
