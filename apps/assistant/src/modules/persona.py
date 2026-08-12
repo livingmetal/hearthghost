@@ -8,6 +8,23 @@ from dataclasses import dataclass
 
 YOUNGHEE_NAME = "영희"
 CHEOLSU_NAME = "철수"
+EXPRESSION_STYLES = frozenset(
+    {"balanced", "playful", "reserved", "tsundere", "mesugaki", "yandere"}
+)
+
+
+def default_expression_style_for_name(name: str) -> str:
+    if name == YOUNGHEE_NAME:
+        return "playful"
+    if name == CHEOLSU_NAME:
+        return "reserved"
+    return "balanced"
+
+
+def require_expression_style(value: object) -> str:
+    if not isinstance(value, str) or value not in EXPRESSION_STYLES:
+        raise ValueError("expression_style is not an approved presentation style")
+    return value
 
 
 @dataclass(frozen=True)
@@ -17,6 +34,7 @@ class PersonaProfile:
     verbosity: str = "normal"
     formality: str = "casual"
     initiative: str = "low"
+    expression_style: str = "balanced"
 
     def __post_init__(self) -> None:
         require_persona_name(self.name)
@@ -24,6 +42,7 @@ class PersonaProfile:
         _require_choice("verbosity", self.verbosity, {"concise", "normal", "detailed"})
         _require_choice("formality", self.formality, {"casual", "neutral", "formal"})
         _require_choice("initiative", self.initiative, {"low", "moderate", "high"})
+        require_expression_style(self.expression_style)
 
     def conversation_instructions(self) -> str:
         return "\n".join(

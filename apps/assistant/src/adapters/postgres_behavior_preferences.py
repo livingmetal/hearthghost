@@ -34,8 +34,8 @@ class PostgresBehaviorPreferenceRepository:
                 cursor.execute(
                     """
                     SELECT scope, scope_id, character_name, humor, verbosity,
-                           formality, initiative, followup_timeout_sec,
-                           proactive_frequency, revision, updated_at,
+                           formality, initiative, expression_style,
+                           followup_timeout_sec, proactive_frequency, revision, updated_at,
                            updated_by_node_id
                     FROM behavior_preference_records
                     WHERE scope = %s AND scope_id = %s
@@ -61,6 +61,7 @@ class PostgresBehaviorPreferenceRepository:
             record.persona.verbosity,
             record.persona.formality,
             record.persona.initiative,
+            record.persona.expression_style,
             record.followup_timeout_sec,
             record.proactive_frequency,
             record.revision,
@@ -74,10 +75,10 @@ class PostgresBehaviorPreferenceRepository:
                         """
                         INSERT INTO behavior_preference_records (
                             scope, scope_id, character_name, humor, verbosity,
-                            formality, initiative, followup_timeout_sec,
-                            proactive_frequency, revision, updated_at,
+                            formality, initiative, expression_style,
+                            followup_timeout_sec, proactive_frequency, revision, updated_at,
                             updated_by_node_id
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (scope, scope_id) DO NOTHING
                         """,
                         values,
@@ -91,6 +92,7 @@ class PostgresBehaviorPreferenceRepository:
                             verbosity = %s,
                             formality = %s,
                             initiative = %s,
+                            expression_style = %s,
                             followup_timeout_sec = %s,
                             proactive_frequency = %s,
                             revision = %s,
@@ -104,6 +106,7 @@ class PostgresBehaviorPreferenceRepository:
                             record.persona.verbosity,
                             record.persona.formality,
                             record.persona.initiative,
+                            record.persona.expression_style,
                             record.followup_timeout_sec,
                             record.proactive_frequency,
                             record.revision,
@@ -125,17 +128,17 @@ class PostgresBehaviorPreferenceRepository:
 def _decode(row: object) -> StoredBehaviorPreferences:
     try:
         values = tuple(row)
-        if len(values) != 12:
+        if len(values) != 13:
             raise ValueError("unexpected column count")
-        updated_at = values[10]
+        updated_at = values[11]
         if (
             not isinstance(updated_at, datetime)
             or updated_at.tzinfo is None
             or updated_at.utcoffset() is None
         ):
             raise ValueError("naive timestamp")
-        revision = values[9]
-        followup_timeout_sec = values[7]
+        revision = values[10]
+        followup_timeout_sec = values[8]
         if not isinstance(revision, int) or isinstance(revision, bool) or revision <= 0:
             raise ValueError("invalid revision")
         if (
@@ -153,12 +156,13 @@ def _decode(row: object) -> StoredBehaviorPreferences:
                 verbosity=values[4],
                 formality=values[5],
                 initiative=values[6],
+                expression_style=values[7],
             ),
             followup_timeout_sec=followup_timeout_sec,
-            proactive_frequency=values[8],
+            proactive_frequency=values[9],
             revision=revision,
             updated_at=updated_at,
-            updated_by_node_id=values[11],
+            updated_by_node_id=values[12],
         )
     except (TypeError, ValueError) as error:
         raise RuntimeError("behavior preference database contains invalid record") from error

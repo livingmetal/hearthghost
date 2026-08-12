@@ -208,6 +208,7 @@ try {
   renderedCharacterId = null;
   initialVrmFallback = true;
 }
+viewport.setExpressionStyle(activePersona.expressionStyle);
 
 const character = new CharacterExperienceController(viewport);
 const conversation = androidPlatform === null
@@ -289,6 +290,7 @@ function adoptServerPersona(serverPersona: PersonaProfilePreset): void {
   }
   activePersonaId = selected.id;
   activePersona = selected;
+  viewport.setExpressionStyle(selected.expressionStyle);
   saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
   populatePersonaOptions(characterOptions, personaProfiles, selected.id);
   writePersonaForm(characterOptions, selected);
@@ -525,6 +527,7 @@ characterOptions.personaSelect.addEventListener("change", () => {
   creatingPersona = false;
   activePersonaId = selected.id;
   activePersona = selected;
+  viewport.setExpressionStyle(selected.expressionStyle);
   saveActivePersonaId(preferenceStorage, personaProfiles, selected.id);
   writePersonaForm(characterOptions, selected);
   void applySelectedPersona();
@@ -538,6 +541,7 @@ characterOptions.personaNew.addEventListener("click", () => {
   characterOptions.personaVerbosity.value = "normal";
   characterOptions.personaFormality.value = "casual";
   characterOptions.personaInitiative.value = "low";
+  characterOptions.personaExpressionStyle.value = "balanced";
   characterOptions.personaDelete.disabled = true;
   setPersonaOptionsStatus(characterOptions, "Enter a name, then choose Save & apply.");
   characterOptions.personaName.focus();
@@ -553,6 +557,7 @@ characterOptions.personaSave.addEventListener("click", () => {
     personaProfiles = saveCustomPersonaProfile(preferenceStorage, personaProfiles, profile);
     activePersonaId = profile.id;
     activePersona = profile;
+    viewport.setExpressionStyle(profile.expressionStyle);
     creatingPersona = false;
     saveActivePersonaId(preferenceStorage, personaProfiles, profile.id);
     populatePersonaOptions(characterOptions, personaProfiles, profile.id);
@@ -571,6 +576,7 @@ characterOptions.personaDelete.addEventListener("click", () => {
   personaProfiles = deleteCustomPersonaProfile(preferenceStorage, personaProfiles, selected.id);
   activePersonaId = preferredCharacterId;
   activePersona = requirePersona(activePersonaId);
+  viewport.setExpressionStyle(activePersona.expressionStyle);
   saveActivePersonaId(preferenceStorage, personaProfiles, activePersonaId);
   populatePersonaOptions(characterOptions, personaProfiles, activePersonaId);
   writePersonaForm(characterOptions, activePersona);
@@ -578,6 +584,7 @@ characterOptions.personaDelete.addEventListener("click", () => {
 });
 
 async function applySelectedPersona(): Promise<void> {
+  viewport.setExpressionStyle(activePersona.expressionStyle);
   if (characterName !== null) {
     characterName.textContent = activePersona.name;
   }

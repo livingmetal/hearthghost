@@ -11,7 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Iterable
 
-from apps.assistant.src.modules.persona import PersonaProfile, require_persona_name
+from apps.assistant.src.modules.persona import (
+    PersonaProfile,
+    require_expression_style,
+    require_persona_name,
+)
 from apps.assistant.src.ports.behavior_preferences import (
     BehaviorPreferenceRepository,
     StoredBehaviorPreferences,
@@ -26,6 +30,7 @@ ALLOWED_PATHS = frozenset(
         "character.verbosity",
         "character.formality",
         "character.initiative",
+        "character.expression_style",
         "conversation.followup_timeout_sec",
         "proactive.frequency",
     }
@@ -166,6 +171,8 @@ def _apply_changes(
             persona = replace(persona, formality=_require_string(change.value))
         elif change.path == "character.initiative":
             persona = replace(persona, initiative=_require_string(change.value))
+        elif change.path == "character.expression_style":
+            persona = replace(persona, expression_style=require_expression_style(change.value))
         elif change.path == "conversation.followup_timeout_sec":
             followup_timeout_sec = _require_timeout_seconds(change.value)
         elif change.path == "proactive.frequency":

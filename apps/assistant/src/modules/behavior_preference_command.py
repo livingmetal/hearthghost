@@ -22,7 +22,11 @@ from apps.assistant.src.modules.behavior_preferences import (
     BehaviorPreferenceSnapshot,
 )
 from apps.assistant.src.modules.conversation_principal import ConversationPrincipalResolver
-from apps.assistant.src.modules.persona import CHEOLSU_NAME, YOUNGHEE_NAME
+from apps.assistant.src.modules.persona import (
+    CHEOLSU_NAME,
+    YOUNGHEE_NAME,
+    default_expression_style_for_name,
+)
 
 
 _PREFERENCE_CUES = re.compile(
@@ -39,12 +43,16 @@ _CHARACTER_SELECTION = re.compile(
     rf"^\s*(?:캐릭터|character)\s*[:=]\s*({YOUNGHEE_NAME}|{CHEOLSU_NAME})\s*$",
     re.IGNORECASE,
 )
-_PERSONA_PROFILE_PREFIX = "페르소나:v1:"
-_PERSONA_PROFILE_QUERY = "페르소나조회:v1"
-_PERSONA_PROFILE_STATE_PREFIX = "페르소나상태:v1:"
-_PERSONA_PROFILE_FIELDS = frozenset(
+_PERSONA_PROFILE_V1_PREFIX = "페르소나:v1:"
+_PERSONA_PROFILE_V2_PREFIX = "페르소나:v2:"
+_PERSONA_PROFILE_V1_QUERY = "페르소나조회:v1"
+_PERSONA_PROFILE_V2_QUERY = "페르소나조회:v2"
+_PERSONA_PROFILE_V1_STATE_PREFIX = "페르소나상태:v1:"
+_PERSONA_PROFILE_V2_STATE_PREFIX = "페르소나상태:v2:"
+_PERSONA_PROFILE_V1_FIELDS = frozenset(
     {"name", "humor", "verbosity", "formality", "initiative"}
 )
+_PERSONA_PROFILE_V2_FIELDS = _PERSONA_PROFILE_V1_FIELDS | {"expressionStyle"}
 
 
 @dataclass(frozen=True)
@@ -68,9 +76,12 @@ class BehaviorPreferenceCommandService:
 
     def handle(self, *, node_id: str, text: str) -> BehaviorPreferenceCommandResult:
         selection = _parse_character_selection(text)
-        persona_query = text == _PERSONA_PROFILE_QUERY
+        persona_query_version = _persona_query_version(text)
+        persona_query = persona_query_version is not None
         persona_profile = None
-        if isinstance(text, str) and text.startswith(_PERSONA_PROFILE_PREFIX):
+        if isinstance(text, str) and text.startswith(
+            (_PERSONA_PROFILE_V1_PREFIX, _PERSONA_PROFILE_V2_PREFIX)
+        ):
             try:
                 persona_profile = _parse_persona_profile(text)
             except (TypeError, ValueError, json.JSONDecodeError):
@@ -115,11 +126,15 @@ class BehaviorPreferenceCommandService:
                 "formality": persona.formality,
                 "initiative": persona.initiative,
             }
+            state_prefix = _PERSONA_PROFILE_V1_STATE_PREFIX
+            if persona_query_version == 2:
+                payload["expressionStyle"] = persona.expression_style
+                state_prefix = _PERSONA_PROFILE_V2_STATE_PREFIX
             return BehaviorPreferenceCommandResult(
                 True,
                 False,
                 "persona_profile_read",
-                _PERSONA_PROFILE_STATE_PREFIX
+                state_prefix
                 + json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
                 snapshot,
             )
@@ -127,9 +142,17 @@ class BehaviorPreferenceCommandService:
         try:
             if persona_profile is not None:
                 result = self._preferences.apply_explicit(
-                    [
+                        [
                         BehaviorPreferenceChange(f"character.{field}", persona_profile[field])
-                        for field in ("name", "humor", "verbosity", "formality", "initiative")
+                        for field in (
+                            "name",
+                            "humor",
+                            "verbosity",
+                            "formality",
+                            "initiative",
+                            "expression_style",
+                        )
+                        if field in persona_profile
                     ],
                     scope=principal.scope.value,
                     scope_id=principal.scope_id,
@@ -137,7 +160,13 @@ class BehaviorPreferenceCommandService:
                 )
             elif selection is not None:
                 result = self._preferences.apply_explicit(
-                    [BehaviorPreferenceChange("character.name", selection)],
+                [
+                    BehaviorPreferenceChange("character.name", selection),
+                    BehaviorPreferenceChange(
+                        "character.expression_style",
+                        default_expression_style_for_name(selection),
+                    ),
+                ],
                     scope=principal.scope.value,
                     scope_id=principal.scope_id,
                     updated_by_node_id=node_id,
@@ -203,22 +232,37 @@ def _parse_character_selection(text: object) -> str | None:
     return None
 
 
+def _persona_query_version(text: object) -> int | None:
+    if text == _PERSONA_PROFILE_V1_QUERY:
+        return 1
+    if text == _PERSONA_PROFILE_V2_QUERY:
+        return 2
+    return None
+
+
 def _parse_persona_profile(text: object) -> dict[str, str]:
-    if (
-        not isinstance(text, str)
-        or not text.startswith(_PERSONA_PROFILE_PREFIX)
-        or len(text) > 1_000
-        or "\x00" in text
-    ):
+    if not isinstance(text, str) or len(text) > 1_000 or "\x00" in text:
         raise ValueError("persona profile command is invalid")
-    payload = json.loads(text[len(_PERSONA_PROFILE_PREFIX) :])
+    if text.startswith(_PERSONA_PROFILE_V2_PREFIX):
+        payload = json.loads(text[len(_PERSONA_PROFILE_V2_PREFIX) :])
+        expected = _PERSONA_PROFILE_V2_FIELDS
+        version = 2
+    elif text.startswith(_PERSONA_PROFILE_V1_PREFIX):
+        payload = json.loads(text[len(_PERSONA_PROFILE_V1_PREFIX) :])
+        expected = _PERSONA_PROFILE_V1_FIELDS
+        version = 1
+    else:
+        raise ValueError("persona profile command is invalid")
     if (
         not isinstance(payload, dict)
-        or set(payload) != _PERSONA_PROFILE_FIELDS
+        or set(payload) != expected
         or any(not isinstance(value, str) for value in payload.values())
     ):
         raise ValueError("persona profile fields are invalid")
-    return payload
+    normalized = dict(payload)
+    if version == 2:
+        normalized["expression_style"] = normalized.pop("expressionStyle")
+    return normalized
 
 
 def _looks_like_preference(text: object) -> bool:
