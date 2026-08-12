@@ -16,7 +16,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -26,6 +25,7 @@ public final class VoiceOutputPlugin extends Plugin {
     private static final Pattern LOCALE_PATTERN = Pattern.compile(
         "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
     );
+    private static final Pattern UTTERANCE_ID_PATTERN = Pattern.compile("^[A-Za-z0-9._:-]{1,128}$");
     private static final String PROFILE_DEFAULT = "default";
     private static final String PROFILE_YOUNGHEE = "younghee";
     private static final String PROFILE_CHEOLSU = "cheolsu";
@@ -79,6 +79,7 @@ public final class VoiceOutputPlugin extends Plugin {
         String text = call.getString("text");
         String locale = call.getString("locale", "ko-KR");
         String profile = call.getString("profile", PROFILE_DEFAULT);
+        String utteranceId = call.getString("utteranceId");
         if (
             text == null
             || text.trim().isEmpty()
@@ -97,12 +98,18 @@ public final class VoiceOutputPlugin extends Plugin {
             call.reject("tts_profile_invalid");
             return;
         }
+        if (utteranceId == null || !UTTERANCE_ID_PATTERN.matcher(utteranceId).matches()) {
+            call.reject("tts_utterance_id_invalid");
+            return;
+        }
         if (!getActivity().hasWindowFocus()) {
             call.reject("tts_foreground_required");
             return;
         }
         final String normalized = text.trim();
-        getBridge().executeOnMainThread(() -> speakOnMainThread(call, normalized, locale, profile));
+        getBridge().executeOnMainThread(
+            () -> speakOnMainThread(call, normalized, locale, profile, utteranceId)
+        );
     }
 
     @PluginMethod
@@ -128,7 +135,13 @@ public final class VoiceOutputPlugin extends Plugin {
         super.handleOnDestroy();
     }
 
-    private void speakOnMainThread(PluginCall call, String text, String locale, String profile) {
+    private void speakOnMainThread(
+        PluginCall call,
+        String text,
+        String locale,
+        String profile,
+        String utteranceId
+    ) {
         if (!initialized.get() || textToSpeech == null) {
             call.reject("tts_not_initialized");
             return;
@@ -151,7 +164,6 @@ public final class VoiceOutputPlugin extends Plugin {
             call.reject("embedded_tts_rate_rejected");
             return;
         }
-        String utteranceId = UUID.randomUUID().toString();
         int queued = textToSpeech.speak(
             text,
             TextToSpeech.QUEUE_FLUSH,
@@ -259,6 +271,22 @@ public final class VoiceOutputPlugin extends Plugin {
         @Override
         public void onStart(String utteranceId) {
             notifyListeners("speechStart", new JSObject().put("utteranceId", utteranceId));
+        }
+
+        @Override
+        public void onRangeStart(String utteranceId, int start, int end, int frame) {
+            notifyListeners(
+                "speechRange",
+                new JSObject()
+                    .put("utteranceId", utteranceId)
+                    .put("start", start)
+                    .put("end", end)
+            );
+        }
+
+        @Override
+        public void onStop(String utteranceId, boolean interrupted) {
+            notifyListeners("speechStop", new JSObject().put("utteranceId", utteranceId));
         }
 
         @Override
