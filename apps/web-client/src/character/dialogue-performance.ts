@@ -32,11 +32,12 @@ const SURPRISED = /(?:놀라|대박|헉|세상에|와[!！]|wow\b|surpris)/iu;
 const AMUSED = /(?:ㅋㅋ|ㅎㅎ|하하|웃|재밌|농담|풋|haha|lol\b|funny)/iu;
 const SMUG = /(?:역시|내가\s*(?:말했|그랬)|그럴\s*줄|알고\s*있었|그렇지[?？]?|told\s+you)/iu;
 const HAPPY = /(?:축하|잘했|해냈|성공|다행|기쁘|좋네|멋지|congrat|well\s+done|great\b|nice\b)/iu;
-const CURIOUS = /(?:궁금|왜\b|어떻게|뭘까|무엇일까|wonder|how\b|why\b)/iu;
+const CURIOUS = /(?:궁금|왜|어떻게|뭘까|무엇일까|wonder|how\b|why\b)/iu;
 
 const CLAP_CUE = /(?:축하|잘했|해냈|성공했|congrat|well\s+done)/iu;
-const NOD_CUE = /^(?:맞아|그래[,.!！]?|그렇지[,.!！]?|맞습니다|그렇습니다|exactly\b|right\b)/iu;
-const SHAKE_CUE = /^(?:아니야|아닙니다|안\s*돼|그건\s*아니|no[,! ]|not\s+quite)/iu;
+const NOD_CUE = /^(?:맞아|그래|그렇지|맞습니다|그렇습니다)(?=\s|$|[,，.!！?？])/iu;
+const NOD_CUE_EN = /^(?:exactly|right)(?=\s|$|[,!.?])/iu;
+const SHAKE_CUE = /^(?:아니야|아닙니다|안\s*돼|그건\s*아니)(?=\s|$|[,，.!！?？])|^(?:no|not\s+quite)(?=\s|$|[,!.?])/iu;
 const SHRUG_CUE = /(?:모르겠|확실하지\s*않|어쩔\s*수\s*없|not\s+sure|uncertain)/iu;
 const EMBODIED_ACK = /(?:이렇게\s*할게|이렇게\s*해볼게|like\s+this)/iu;
 
@@ -59,7 +60,7 @@ function inferEmotion(segment: string): CharacterEmotion {
 function inferGesture(segment: string, fullText: string): CharacterGesture | null {
   if (EMBODIED_ACK.test(fullText)) return null;
   if (CLAP_CUE.test(segment)) return Object.freeze({ gesture: "clap" });
-  if (NOD_CUE.test(segment)) return Object.freeze({ gesture: "nod" });
+  if (NOD_CUE.test(segment) || NOD_CUE_EN.test(segment)) return Object.freeze({ gesture: "nod" });
   if (SHAKE_CUE.test(segment)) return Object.freeze({ gesture: "shake_head" });
   if (SHRUG_CUE.test(segment)) return Object.freeze({ gesture: "shrug" });
   return null;
