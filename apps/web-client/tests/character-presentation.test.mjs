@@ -35,26 +35,39 @@ class RecordingRenderer {
   dispose() {}
 }
 
-function fakeElement() {
+function fakeElement(label = "영희 character viewport") {
+  const attributes = new Map([["aria-label", label]]);
   return {
+    dataset: {},
+    style: {},
+    firstElementChild: null,
     getBoundingClientRect() {
       return { width: 320, height: 480 };
+    },
+    getAttribute(name) {
+      return attributes.get(name) ?? null;
+    },
+    setAttribute(name, value) {
+      attributes.set(name, value);
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
     },
   };
 }
 
-async function experienceFixture() {
+async function experienceFixture(schedule = undefined) {
   const renderer = new RecordingRenderer();
   const viewport = new CharacterViewport(fakeElement(), renderer);
   await viewport.mount();
   return {
     renderer,
     viewport,
-    experience: new CharacterExperienceController(viewport),
+    experience: new CharacterExperienceController(viewport, schedule),
   };
 }
 
-test("state and emotion remain separate semantic dimensions", () => {
+test("state, emotion and presence remain separate semantic dimensions", () => {
   const speaking = reduceCharacterPresentation(
     INITIAL_PRESENTATION,
     parseCharacterSemanticEvent({
@@ -69,8 +82,19 @@ test("state and emotion remain separate semantic dimensions", () => {
       payload: { emotion: "amused" },
     }),
   );
+  const present = reduceCharacterPresentation(
+    amused,
+    parseCharacterSemanticEvent({
+      type: "character.presence",
+      payload: { presence: "present" },
+    }),
+  );
 
-  assert.deepEqual(amused, { state: "speaking", emotion: "amused" });
+  assert.deepEqual(present, {
+    state: "speaking",
+    emotion: "amused",
+    presence: "present",
+  });
 });
 
 test("VRM conversation framing is close while preserving forward gesture clearance", () => {
@@ -124,10 +148,14 @@ test("noticing is a first-class semantic state", () => {
       payload: { state: "noticing" },
     }),
   );
-  assert.deepEqual(noticing, { state: "noticing", emotion: "neutral" });
+  assert.deepEqual(noticing, {
+    state: "noticing",
+    emotion: "neutral",
+    presence: "offstage",
+  });
 });
 
-test("renderer receives semantic presentation only", async () => {
+test("renderer receives semantic presentation including renderer-agnostic presence", async () => {
   const renderer = new RecordingRenderer();
   const viewport = new CharacterViewport(fakeElement(), renderer);
   await viewport.mount();
@@ -137,9 +165,11 @@ test("renderer receives semantic presentation only", async () => {
   assert.deepEqual(renderer.presentations.at(-1), {
     state: "thinking",
     emotion: "neutral",
+    presence: "offstage",
   });
   assert.deepEqual(Object.keys(renderer.presentations.at(-1)).sort(), [
     "emotion",
+    "presence",
     "state",
   ]);
 });
@@ -187,36 +217,84 @@ test("gesture payloads reject arbitrary renderer or bone parameters", () => {
   }
 });
 
-test("touch wake and local voice phases produce visible character states", async () => {
-  const { viewport, experience } = await experienceFixture();
+test("touch wake enters from offstage and sleep exits before becoming offstage", async () => {
+  const scheduled = [];
+  const { viewport, experience } = await experienceFixture((callback, delayMillis) => {
+    scheduled.push({ callback, delayMillis });
+  });
+
+  assert.deepEqual(viewport.snapshot(), {
+    state: "sleeping",
+    emotion: "neutral",
+    presence: "offstage",
+  });
 
   experience.wakeByTouch();
-  assert.deepEqual(viewport.snapshot(), { state: "noticing", emotion: "curious" });
+  assert.deepEqual(viewport.snapshot(), {
+    state: "noticing",
+    emotion: "curious",
+    presence: "entering",
+  });
+  assert.equal(scheduled[0].delayMillis, 850);
+  scheduled[0].callback();
+  assert.equal(viewport.snapshot().presence, "present");
 
   experience.beginListening();
-  assert.deepEqual(viewport.snapshot(), { state: "listening", emotion: "curious" });
-
+  assert.equal(viewport.snapshot().state, "listening");
   experience.beginThinking();
-  assert.deepEqual(viewport.snapshot(), { state: "thinking", emotion: "neutral" });
-
+  assert.equal(viewport.snapshot().state, "thinking");
   experience.beginSpeaking();
-  assert.deepEqual(viewport.snapshot(), { state: "speaking", emotion: "neutral" });
-
+  assert.equal(viewport.snapshot().state, "speaking");
   experience.engage();
-  assert.deepEqual(viewport.snapshot(), { state: "engaged", emotion: "neutral" });
+  assert.equal(viewport.snapshot().state, "engaged");
 
   experience.sleep();
-  assert.deepEqual(viewport.snapshot(), { state: "sleeping", emotion: "neutral" });
+  assert.deepEqual(viewport.snapshot(), {
+    state: "sleeping",
+    emotion: "neutral",
+    presence: "exiting",
+  });
+  assert.equal(scheduled[1].delayMillis, 650);
+  scheduled[1].callback();
+  assert.equal(viewport.snapshot().presence, "offstage");
+});
+
+test("a new wake invalidates a pending exit so the character cannot disappear mid-entry", async () => {
+  const scheduled = [];
+  const { viewport, experience } = await experienceFixture((callback) => scheduled.push(callback));
+
+  experience.wakeByTouch();
+  scheduled.shift()();
+  assert.equal(viewport.snapshot().presence, "present");
+
+  experience.sleep();
+  const staleExit = scheduled.shift();
+  experience.wakeByTouch();
+  const currentEnter = scheduled.shift();
+  staleExit();
+  assert.equal(viewport.snapshot().presence, "entering");
+  currentEnter();
+  assert.equal(viewport.snapshot().presence, "present");
 });
 
 test("success and error cues change emotion without inventing device authority", async () => {
-  const { viewport, experience } = await experienceFixture();
+  const scheduled = [];
+  const { viewport, experience } = await experienceFixture((callback) => scheduled.push(callback));
   experience.wakeByTouch();
+  scheduled.shift()();
   experience.acknowledgeSuccess();
-  assert.deepEqual(viewport.snapshot(), { state: "engaged", emotion: "happy" });
+  assert.deepEqual(viewport.snapshot(), {
+    state: "engaged",
+    emotion: "happy",
+    presence: "present",
+  });
 
   experience.showConcern();
-  assert.deepEqual(viewport.snapshot(), { state: "engaged", emotion: "concerned" });
+  assert.deepEqual(viewport.snapshot(), {
+    state: "engaged",
+    emotion: "concerned",
+    presence: "present",
+  });
 });
 
 test("server semantic events still pass through the same strict viewport boundary", async () => {
@@ -254,10 +332,11 @@ test("renderer-specific commands are rejected at the viewport boundary", async (
   assert.equal(renderer.presentations.length, 1);
 });
 
-test("unknown or combined state values fail closed", () => {
+test("unknown or combined state, emotion and presence values fail closed", () => {
   for (const event of [
     { type: "character.state", payload: { state: "speaking_happy" } },
     { type: "character.emotion", payload: { emotion: "execute_tool" } },
+    { type: "character.presence", payload: { presence: "teleport" } },
     { type: "character.animation", payload: { clip: "wave" } },
   ]) {
     assert.throws(() => parseCharacterSemanticEvent(event));

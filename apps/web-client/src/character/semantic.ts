@@ -16,6 +16,13 @@ export const CHARACTER_EMOTIONS = [
   "surprised",
 ] as const;
 
+export const CHARACTER_PRESENCES = [
+  "offstage",
+  "entering",
+  "present",
+  "exiting",
+] as const;
+
 export const CHARACTER_GESTURES = [
   "wave",
   "nod",
@@ -36,6 +43,7 @@ export const CHARACTER_MOVE_DIRECTIONS = [
 
 export type CharacterState = (typeof CHARACTER_STATES)[number];
 export type CharacterEmotion = (typeof CHARACTER_EMOTIONS)[number];
+export type CharacterPresence = (typeof CHARACTER_PRESENCES)[number];
 export type CharacterGestureName = (typeof CHARACTER_GESTURES)[number];
 export type CharacterSide = (typeof CHARACTER_SIDES)[number];
 export type CharacterMoveDirection = (typeof CHARACTER_MOVE_DIRECTIONS)[number];
@@ -52,16 +60,19 @@ export type CharacterGesture =
 export interface CharacterPresentation {
   readonly state: CharacterState;
   readonly emotion: CharacterEmotion;
+  readonly presence: CharacterPresence;
 }
 
 export type CharacterSemanticEvent =
   | Readonly<{ type: "character.state"; payload: Readonly<{ state: CharacterState }> }>
   | Readonly<{ type: "character.emotion"; payload: Readonly<{ emotion: CharacterEmotion }> }>
+  | Readonly<{ type: "character.presence"; payload: Readonly<{ presence: CharacterPresence }> }>
   | Readonly<{ type: "character.gesture"; payload: CharacterGesture }>;
 
 export const INITIAL_PRESENTATION: CharacterPresentation = Object.freeze({
   state: "sleeping",
   emotion: "neutral",
+  presence: "offstage",
 });
 
 function isExactObject(value: unknown, field: string): value is Record<string, unknown> {
@@ -146,6 +157,13 @@ export function parseCharacterSemanticEvent(value: unknown): CharacterSemanticEv
     throw new Error("Unknown semantic character emotion");
   }
 
+  if (value.type === "character.presence" && isExactObject(value.payload, "presence")) {
+    if (CHARACTER_PRESENCES.includes(value.payload.presence as CharacterPresence)) {
+      return value as CharacterSemanticEvent;
+    }
+    throw new Error("Unknown semantic character presence");
+  }
+
   if (value.type === "character.gesture") {
     return Object.freeze({
       type: "character.gesture",
@@ -165,6 +183,9 @@ export function reduceCharacterPresentation(
   }
   if (event.type === "character.emotion") {
     return Object.freeze({ ...current, emotion: event.payload.emotion });
+  }
+  if (event.type === "character.presence") {
+    return Object.freeze({ ...current, presence: event.payload.presence });
   }
   return current;
 }

@@ -1,11 +1,27 @@
 # Character Boundary
 
 `CharacterViewport` hosts a `CharacterRenderer` implementation selected at the
-composition boundary. Renderers consume semantic character state, emotion, and
-future speech timing. They do not interpret policy or perform device actions.
+composition boundary. Renderers consume semantic character state, emotion,
+presence, and future speech timing. They do not interpret policy or perform
+device actions.
 
-Conversation state and emotion are separate inputs. Renderer-specific branching
-must not escape this boundary.
+Conversation state, emotion, and visual presence are separate inputs.
+`state=sleeping` keeps its attention/security meaning while
+`presence=offstage` means the character is not visually on the stage. This lets
+HearthGhost keep the VRM preloaded without depicting an inactive character as
+standing asleep in the middle of the screen. Wake transitions presence through
+`offstage -> entering -> present`; idle attention expiry transitions through
+`present -> exiting -> offstage`. A stale exit is invalidated by a new wake so
+the character cannot disappear in the middle of a fresh interaction.
+
+Presence motion is renderer-agnostic and is projected by `CharacterViewport`
+onto the mounted renderer surface. It never changes VRM bone poses, camera zoom,
+or the user-controlled drag offset. Younghee enters with a slightly softer
+left/lower approach while Cheolsu uses a shorter, more restrained right-side
+approach. Reduced-motion system preferences collapse these visual transitions
+to effectively immediate state changes.
+
+Renderer-specific branching must not escape this boundary.
 
 `DomCharacterRenderer` is the dependency-free 2D/test fallback.
 `VrmCharacterRenderer` contains all Three.js, `@pixiv/three-vrm`, and reviewed
