@@ -65,7 +65,7 @@ COPY apps/web-client ./
 RUN npm run assets:prepare \
     && npm run build
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0-bookworm-slim AS windows-native-build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS windows-native-build
 
 WORKDIR /workspace
 COPY .hearthghost-release /tmp/hearthghost-release
