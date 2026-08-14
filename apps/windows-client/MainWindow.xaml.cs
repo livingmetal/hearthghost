@@ -8,10 +8,10 @@ public partial class MainWindow : Window
     private readonly WindowsClientOptions options;
     private readonly WindowsBridgeDispatcher bridge;
 
-    public MainWindow()
+    internal MainWindow(WindowsClientOptions configuredOptions)
     {
         InitializeComponent();
-        options = WindowsClientOptions.FromEnvironment();
+        options = configuredOptions;
         bridge = new WindowsBridgeDispatcher(new NodeProtocolClient(options));
         Loaded += OnLoaded;
     }
@@ -32,6 +32,13 @@ public partial class MainWindow : Window
             core.NewWindowRequested += (_, args) => args.Handled = true;
             core.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
             core.WebMessageReceived += OnWebMessageReceived;
+            if (options.BundledWebRoot is not null)
+            {
+                core.SetVirtualHostNameToFolderMapping(
+                    options.WebUiUri.Host,
+                    options.BundledWebRoot,
+                    CoreWebView2HostResourceAccessKind.DenyCors);
+            }
             core.Navigate(options.WebUiUri.AbsoluteUri);
         }
         catch (Exception error)
@@ -76,8 +83,8 @@ public partial class MainWindow : Window
         return string.Equals(left.Scheme, right.Scheme, StringComparison.OrdinalIgnoreCase)
             && string.Equals(left.Host, right.Host, StringComparison.OrdinalIgnoreCase)
             && left.Port == right.Port
-            && left.IsLoopback
-            && right.IsLoopback;
+            && (left.IsLoopback || left.Host == WindowsClientOptions.BundledWebHost)
+            && (right.IsLoopback || right.Host == WindowsClientOptions.BundledWebHost);
     }
 
     protected override void OnClosed(EventArgs e)

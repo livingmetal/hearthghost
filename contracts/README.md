@@ -26,6 +26,8 @@ It does not select a runtime language, web framework, or wire transport.
 | Node | `node/v1/node-administration-result.schema.json` | Mutation result without Policy or execution authority |
 | Node | `node/v1/node-gateway-message.schema.json` | Framed technical-session and sequenced capability request |
 | Node | `node/v1/node-gateway-result.schema.json` | Gateway result without Policy or execution authority |
+| Node | `node/v1/client-update-message.schema.json` | Capability-gated Windows release check and file request |
+| Node | `node/v1/client-update-result.schema.json` | Hash-bound update manifest or exact file header |
 | Node | `node/v1/node-capabilities.schema.json` | Preserved HG-001 capability/trust snapshot |
 | Node | `node/v2/node-capabilities.schema.json` | Advertised and granted capabilities, independent of trust |
 

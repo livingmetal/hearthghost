@@ -32,7 +32,22 @@ require_repository_root() {
 }
 
 build_image() {
+    local release_id
+    local release_file=".hearthghost-release"
+    release_id="$(git rev-parse HEAD)"
+    if [[ ! "${release_id}" =~ ^[0-9a-f]{40}$ ]]; then
+        printf 'repository HEAD is not a full Git commit id\n' >&2
+        exit 2
+    fi
+    if [[ -e "${release_file}" ]]; then
+        printf 'temporary release file already exists\n' >&2
+        exit 2
+    fi
+    trap 'rm -f .hearthghost-release' RETURN
+    printf '%s\n' "${release_id}" > "${release_file}"
     podman build --pull=always --target development-core -t "${IMAGE}" .
+    rm -f "${release_file}"
+    trap - RETURN
 }
 
 initialize() {
@@ -215,6 +230,7 @@ deploy() {
         --certificate /run/hearthghost-tls/server.crt \
         --private-key /run/hearthghost-tls/server.key \
         --client-ca /run/hearthghost-tls/client-ca.crt \
+        --windows-client-update-root /opt/hearthghost/windows-client \
         --bind "${GATEWAY_BIND_IP}" \
         "${GATEWAY_RUNTIME_ARGS[@]}" \
         --llm-adapter "${LLM_ADAPTER}" \

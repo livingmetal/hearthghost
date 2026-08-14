@@ -10,10 +10,11 @@ The Windows client is a first-class development surface for the shared HearthGho
 - A reviewed HearthGhost Node certificate in `CurrentUser\\My` with a CNG-backed non-exportable private key.
 - The HearthGhost development CA certificate in `CurrentUser\\CA`.
 - The Windows Node must be enrolled/trusted and granted `conversation.text` on Core.
+- Automatic updates additionally require the separately advertised and granted `client.update` capability.
 
 The current Windows foundation deliberately does **not** import PFX files or accept a private-key path. The Node private key must stay in the Windows certificate/key store.
 
-## Start the shared UI
+## Development UI override
 
 From `apps/web-client`:
 
@@ -28,6 +29,10 @@ writes build-fetched assets only into the local `public` presentation tree,
 and starts Vite on loopback. The running Windows client does not fetch those
 character assets from GitHub.
 
+Packaged clients include the built web UI and do not require Node.js, Vite or a
+loopback web server. `windows:dev` remains only for repository development; set
+`HEARTHGHOST_WEB_DEV_URL` to opt into that loopback override.
+
 ## Configure the native Node
 
 In a separate PowerShell window:
@@ -38,6 +43,7 @@ $env:HEARTHGHOST_WINDOWS_CA_THUMBPRINT   = "<CurrentUser\\CA HearthGhost CA SHA-
 $env:HEARTHGHOST_WINDOWS_CORE_HOST       = "192.168.55.100"
 $env:HEARTHGHOST_WINDOWS_CORE_PORT       = "38443"
 $env:HEARTHGHOST_WINDOWS_NODE_ID         = "windows-development-01"
+# Optional development-only override:
 $env:HEARTHGHOST_WEB_DEV_URL             = "http://127.0.0.1:5173/windows.html"
 ```
 
@@ -63,11 +69,12 @@ The WebView2 shell accepts bridge messages only from the configured loopback ori
 - Core must trust the Node and grant `conversation.text` before Send or character selection is enabled.
 - Character appearance and the VRM base idle are rendered locally by the shared web renderer.
 - Conversation history is in-memory only and clears when the page closes.
+- On process start, the client checks the existing mTLS Gateway for a newer Git release. It applies only a complete SHA-256-verified bundle authorized through `client.update`; failure keeps the installed version.
 
 ## Not implemented yet
 
 - Windows non-exportable key generation + CSR/enrollment UI.
 - Windows local-only STT/TTS adapter.
 - Windows toast reminders.
-- Packaged/offline static WebView2 distribution. The current shell intentionally targets the loopback Vite development server for fast iteration.
+- Authenticode signing and staged rollout channels. The current private deployment authenticates the release through the pinned mTLS server and hash-bound manifest.
 - Physical Windows certificate-store/Core E2E validation.

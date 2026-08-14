@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from apps.assistant.src.adapters.conversation_protocol import ConversationProtocol
+from apps.assistant.src.adapters.client_update_protocol import ClientUpdateBundle, ClientUpdateProtocol
 from apps.assistant.src.adapters.development_state import (
     DevelopmentStateFile,
     LocalDevelopmentAdministratorAuthorizer,
@@ -54,6 +55,7 @@ class DevelopmentGatewayServer:
         tls: MutualTlsServerAdapter,
         node_protocol: NodeGatewayProtocol,
         conversation_protocol: ConversationProtocol,
+        client_update_protocol: ClientUpdateProtocol | None = None,
         reminder_sync_protocol: ReminderSyncProtocol | None = None,
         socket_timeout_seconds: float = DEFAULT_SOCKET_TIMEOUT_SECONDS,
         allow_unspecified_bind: bool = False,
@@ -73,6 +75,7 @@ class DevelopmentGatewayServer:
         self._tls = tls
         self._node_protocol = node_protocol
         self._conversation_protocol = conversation_protocol
+        self._client_update_protocol = client_update_protocol
         self._reminder_sync_protocol = reminder_sync_protocol
         self._socket_timeout = socket_timeout_seconds
         self._stopping = threading.Event()
@@ -130,6 +133,10 @@ class DevelopmentGatewayServer:
                         return
                 elif message_type in {"conversation.open", "conversation.text", "conversation.close"}:
                     self._conversation_protocol.handle_document(channel, document)
+                elif message_type in {"client.update.check", "client.update.file"}:
+                    if self._client_update_protocol is None:
+                        raise NodeProtocolError("client update is not configured")
+                    self._client_update_protocol.handle_document(channel, document)
                 elif message_type == "reminder.sync":
                     if self._reminder_sync_protocol is None:
                         raise NodeProtocolError("reminder sync is not configured")
@@ -156,6 +163,7 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--certificate", required=True)
     parser.add_argument("--private-key", required=True)
     parser.add_argument("--client-ca", required=True)
+    parser.add_argument("--windows-client-update-root", default=None)
     parser.add_argument("--bind", default=DEFAULT_GATEWAY_BIND)
     parser.add_argument(
         "--allow-multi-network-bind",
@@ -254,12 +262,18 @@ def main(arguments: list[str] | None = None) -> int:
         targets=components.notification_targets,
         clock=SystemClock(),
     )
+    client_update_protocol = (
+        ClientUpdateProtocol(components.node_gateway, ClientUpdateBundle(Path(options.windows_client_update_root)))
+        if options.windows_client_update_root
+        else None
+    )
     gateway_server = DevelopmentGatewayServer(
         bind_address=options.bind,
         port=options.port,
         tls=MutualTlsServerAdapter(server_context),
         node_protocol=node_protocol,
         conversation_protocol=conversation_protocol,
+        client_update_protocol=client_update_protocol,
         reminder_sync_protocol=reminder_sync_protocol,
         allow_unspecified_bind=options.allow_multi_network_bind,
     )

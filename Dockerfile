@@ -56,7 +56,40 @@ FROM core AS openai-smoke
 
 CMD ["python", "-m", "apps.assistant.src.runtime.openai_smoke", "--adapter", "openai"]
 
+FROM node:22-bookworm-slim AS windows-web-build
+
+WORKDIR /workspace/apps/web-client
+COPY apps/web-client/package.json apps/web-client/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY apps/web-client ./
+RUN npm run assets:prepare \
+    && npm run build
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0-bookworm-slim AS windows-native-build
+
+WORKDIR /workspace
+COPY .hearthghost-release /tmp/hearthghost-release
+COPY apps/windows-client/HearthGhost.WindowsClient.csproj apps/windows-client/
+RUN dotnet restore apps/windows-client/HearthGhost.WindowsClient.csproj \
+        --runtime win-x64 \
+        -p:EnableWindowsTargeting=true
+COPY apps/windows-client apps/windows-client
+RUN HEARTHGHOST_RELEASE_ID="$(cat /tmp/hearthghost-release)" \
+    && test -n "${HEARTHGHOST_RELEASE_ID}" \
+    && dotnet publish apps/windows-client/HearthGhost.WindowsClient.csproj \
+        --configuration Release \
+        --runtime win-x64 \
+        --self-contained false \
+        --no-restore \
+        -p:EnableWindowsTargeting=true \
+        -p:InformationalVersion="${HEARTHGHOST_RELEASE_ID}" \
+        --output /windows-client \
+    && printf '%s\n' "${HEARTHGHOST_RELEASE_ID}" > /windows-client/.hearthghost-release
+
 FROM core AS development-core
+
+COPY --from=windows-native-build --chown=hearthghost:hearthghost /windows-client /opt/hearthghost/windows-client
+COPY --from=windows-web-build --chown=hearthghost:hearthghost /workspace/apps/web-client/dist /opt/hearthghost/windows-client/web
 
 CMD ["python", "-m", "apps.assistant.src.runtime.development_server", "--state", "/var/lib/hearthghost/state.json", "--certificate", "/run/hearthghost-tls/server.crt", "--private-key", "/run/hearthghost-tls/server.key", "--client-ca", "/run/hearthghost-tls/client-ca.crt"]
 

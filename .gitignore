@@ -29,6 +29,7 @@ apps/web-client/public/animations/*.vrma
 *.apk
 *.aab
 coverage/
+/.hearthghost-release
 
 # Editors and operating systems
 .idea/

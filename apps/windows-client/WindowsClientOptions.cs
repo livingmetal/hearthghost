@@ -1,9 +1,11 @@
 using System.Globalization;
+using System.IO;
 
 namespace HearthGhost.WindowsClient;
 
 internal sealed record WindowsClientOptions(
     Uri WebUiUri,
+    string? BundledWebRoot,
     string CoreHost,
     int CorePort,
     string NodeId,
@@ -12,13 +14,27 @@ internal sealed record WindowsClientOptions(
 {
     internal const string CredentialReference = "hearthghost.windows.current-user-store";
     internal const string Alpn = "hearthghost-node/1";
+    internal const string BundledWebHost = "hearthghost.local";
     private const string UnprovisionedThumbprint = "0000000000000000000000000000000000000000";
 
     internal static WindowsClientOptions FromEnvironment()
     {
-        Uri webUi = ParseLoopbackUri(
-            Environment.GetEnvironmentVariable("HEARTHGHOST_WEB_DEV_URL")
-                ?? "http://127.0.0.1:5173/windows.html");
+        string? developmentUrl = Environment.GetEnvironmentVariable("HEARTHGHOST_WEB_DEV_URL");
+        string? bundledWebRoot = null;
+        Uri webUi;
+        if (string.IsNullOrWhiteSpace(developmentUrl))
+        {
+            bundledWebRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "web"));
+            if (!File.Exists(Path.Combine(bundledWebRoot, "windows.html")))
+            {
+                throw new InvalidOperationException("bundled Windows web client is missing");
+            }
+            webUi = new Uri($"https://{BundledWebHost}/windows.html");
+        }
+        else
+        {
+            webUi = ParseLoopbackUri(developmentUrl);
+        }
         string host = Required("HEARTHGHOST_WINDOWS_CORE_HOST", "192.168.55.100");
         string nodeId = Required("HEARTHGHOST_WINDOWS_NODE_ID", "windows-development-01");
         string nodeThumbprint = NormalizeOptionalThumbprint(
@@ -26,7 +42,7 @@ internal sealed record WindowsClientOptions(
         string caThumbprint = NormalizeOptionalThumbprint(
             Environment.GetEnvironmentVariable("HEARTHGHOST_WINDOWS_CA_THUMBPRINT"));
         int port = ParsePort(Environment.GetEnvironmentVariable("HEARTHGHOST_WINDOWS_CORE_PORT") ?? "38443");
-        return new WindowsClientOptions(webUi, host, port, nodeId, nodeThumbprint, caThumbprint);
+        return new WindowsClientOptions(webUi, bundledWebRoot, host, port, nodeId, nodeThumbprint, caThumbprint);
     }
 
     internal bool IdentityConfigured =>

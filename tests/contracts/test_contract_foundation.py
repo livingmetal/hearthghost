@@ -24,6 +24,8 @@ EXPECTED_SCHEMAS = {
     "node/v1/node-administration-result.schema.json",
     "node/v1/node-gateway-message.schema.json",
     "node/v1/node-gateway-result.schema.json",
+    "node/v1/client-update-message.schema.json",
+    "node/v1/client-update-result.schema.json",
     "node/v1/node-capabilities.schema.json",
     "node/v2/node-identity.schema.json",
     "node/v2/node-capabilities.schema.json",

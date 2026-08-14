@@ -18,6 +18,11 @@ runtime exposes only `192.168.55.100:38443`; its status endpoint remains inside
 the container on loopback. The default `fake` adapter keeps the internal network
 without an Internet route and mounts no provider credential.
 
+The same image build produces a `win-x64` client bundle from the deployed Git
+commit. The bundle is available only over the existing mTLS listener and only
+to a Node with the separately advertised and granted `client.update`
+capability. No public update endpoint is created.
+
 ## Opt-in live text provider
 
 Live conversation is an explicit operator choice. The existing server-side
@@ -139,6 +144,19 @@ deploy/development/hearthghost-development.sh admin trust \
   --node-id android-development-01 --state-value trusted
 deploy/development/hearthghost-development.sh admin grant \
   --node-id android-development-01 --capability conversation.text
+```
+
+For a Windows Node that should follow server releases automatically, advertise
+and grant `client.update` independently. Authentication or `conversation.text`
+never implies update authority:
+
+```text
+deploy/development/hearthghost-development.sh admin advertise \
+  --node-id windows-development-01 \
+  --capability conversation.text \
+  --capability client.update
+deploy/development/hearthghost-development.sh admin grant \
+  --node-id windows-development-01 --capability client.update
 ```
 
 Revocation is similarly explicit and is observed by the running Gateway on the

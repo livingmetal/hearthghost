@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:hearthghost:contracts:node:v1.0:client-update-message",
+  "title": "Client Update Message v1.0",
+  "description": "A sequenced Windows update request on an authenticated Node session. It requires separate client.update capability admission and is not authorized by authentication alone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "message_type", "request_id", "node_session_id", "sequence"],
+  "properties": {
+    "contract_version": { "const": "1.0" },
+    "message_type": { "enum": ["client.update.check", "client.update.file"] },
+    "request_id": { "type": "string", "format": "uuid" },
+    "node_session_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "sequence": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "platform": { "const": "win-x64" },
+    "current_release_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "release_id": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "path": { "type": "string", "minLength": 1, "maxLength": 240, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\\\u0000]+$" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "message_type": { "const": "client.update.check" } }, "required": ["message_type"] },
+      "then": {
+        "required": ["platform", "current_release_id"],
+        "not": { "anyOf": [{ "required": ["release_id"] }, { "required": ["path"] }] }
+      }
+    },
+    {
+      "if": { "properties": { "message_type": { "const": "client.update.file" } }, "required": ["message_type"] },
+      "then": {
+        "required": ["release_id", "path"],
+        "not": { "anyOf": [{ "required": ["platform"] }, { "required": ["current_release_id"] }] }
+      }
+    }
+  ]
+}
