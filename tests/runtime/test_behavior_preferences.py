@@ -53,7 +53,7 @@ class BehaviorPreferenceTests(unittest.TestCase):
         younghee = PersonaProfile(name="영희").conversation_instructions()
         cheolsu = PersonaProfile(name="철수").conversation_instructions()
 
-        self.assertIn("AvatarSample_A", younghee)
+        self.assertIn("AvatarSample_Y", younghee)
         self.assertIn("bright, quick, personable Korean cadence", younghee)
         self.assertIn("AvatarSample_C", cheolsu)
         self.assertIn("calm, grounded, economical Korean cadence", cheolsu)

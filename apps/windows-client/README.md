@@ -8,7 +8,7 @@ The Windows client is a first-class development surface for the shared HearthGho
 - .NET 10 SDK.
 - Node.js matching the web-client development baseline.
 - A reviewed HearthGhost Node certificate in `CurrentUser\\My` with a CNG-backed non-exportable private key.
-- The HearthGhost development CA certificate in `CurrentUser\\Root`.
+- The HearthGhost development CA certificate in `CurrentUser\\CA`.
 - The Windows Node must be enrolled/trusted and granted `conversation.text` on Core.
 
 The current Windows foundation deliberately does **not** import PFX files or accept a private-key path. The Node private key must stay in the Windows certificate/key store.
@@ -22,10 +22,11 @@ npm ci
 npm run windows:dev
 ```
 
-`windows:dev` retrieves the pinned AvatarSample A/C VRMs and the pinned AIRI
-`idle_loop.vrma`, verifies their exact Git blob identities, writes them only
-into the local `public` presentation tree, and starts Vite on loopback. The
-running Windows client does not fetch those character assets from GitHub.
+`windows:dev` validates the tracked AvatarSample Y model, retrieves the pinned
+AvatarSample C VRM and AIRI `idle_loop.vrma`, verifies their exact identities,
+writes build-fetched assets only into the local `public` presentation tree,
+and starts Vite on loopback. The running Windows client does not fetch those
+character assets from GitHub.
 
 ## Configure the native Node
 
@@ -33,7 +34,7 @@ In a separate PowerShell window:
 
 ```powershell
 $env:HEARTHGHOST_WINDOWS_CERT_THUMBPRINT = "<CurrentUser\\My node certificate SHA-1 thumbprint>"
-$env:HEARTHGHOST_WINDOWS_CA_THUMBPRINT   = "<CurrentUser\\Root HearthGhost CA SHA-1 thumbprint>"
+$env:HEARTHGHOST_WINDOWS_CA_THUMBPRINT   = "<CurrentUser\\CA HearthGhost CA SHA-1 thumbprint>"
 $env:HEARTHGHOST_WINDOWS_CORE_HOST       = "192.168.55.100"
 $env:HEARTHGHOST_WINDOWS_CORE_PORT       = "38443"
 $env:HEARTHGHOST_WINDOWS_NODE_ID         = "windows-development-01"
@@ -41,6 +42,10 @@ $env:HEARTHGHOST_WEB_DEV_URL             = "http://127.0.0.1:5173/windows.html"
 ```
 
 Do not put certificate private keys, PFX passwords or provider credentials in these variables. Only public identifiers and certificate thumbprints belong here.
+
+The CA stays outside the Windows trusted-root store. The native client loads it
+by exact thumbprint from `CurrentUser\\CA` and builds a private custom trust
+chain for the configured Core connection only.
 
 ## Run the shell
 

@@ -1,7 +1,7 @@
 FROM docker.io/library/node:22-bookworm-slim@sha256:a17d50af28002a160548bd4225b3cfcb12c5efcb171f79e68758f2885fb1b066 AS web
 
 ARG VROID_SAMPLE_SOURCE_COMMIT=114d4336e0ac36bf9c2297b0a93ad7604b13704b
-ARG VROID_SAMPLE_A_FIXTURE_BLOB_SHA=2ab43eef01826a3f93ab92e4174473efd473ae98
+ARG HEARTHGHOST_MODEL_A_SHA256=48af6bf879cadbc4e17431543f795010c9ca2bf31c3ca5e0b450c87b05545c11
 ARG VROID_SAMPLE_C_BLOB_SHA=4513c2989150c6bd5040f8a3e1b89631efef9a87
 ARG AIRI_IDLE_SOURCE_COMMIT=b6011381bc34a6b85ad669363513cb1a2eea6438
 ARG AIRI_IDLE_BLOB_SHA=26b28f4e4227c48eecdd29d25e3dc6f4c6ac3844
@@ -13,12 +13,9 @@ RUN npm ci --ignore-scripts --no-audit --no-fund
 
 COPY apps/web-client ./
 
-# Production/developer builds use a private, user-supplied AvatarSample_Y.vrm
-# for HearthGhost model A. The public CI image cannot redistribute that asset,
-# so it places the already-reviewed public AvatarSample_A into the Y slot only
-# as a renderer/package fixture. This validates the local path, Vite copy,
-# Capacitor copy and APK packaging without publishing the private model.
-# Public presentation assets remain pinned to source commits and Git blob IDs.
+# Model A is the reviewed, tracked AvatarSample_Y.vrm copied with the web client.
+# Build-fetched presentation assets remain pinned to source commits and Git
+# blob IDs.
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -27,15 +24,13 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p public/models public/animations \
     && curl --fail --location --show-error \
-        "https://raw.githubusercontent.com/hirokazuniimoto/virtual-avatar-sdk/${VROID_SAMPLE_SOURCE_COMMIT}/assets/avatars/AvatarSample_A.vrm" \
-        --output public/models/AvatarSample_Y.vrm \
-    && curl --fail --location --show-error \
         "https://raw.githubusercontent.com/hirokazuniimoto/virtual-avatar-sdk/${VROID_SAMPLE_SOURCE_COMMIT}/assets/avatars/AvatarSample_C.vrm" \
         --output public/models/AvatarSample_C.vrm \
     && curl --fail --location --show-error \
         "https://raw.githubusercontent.com/moeru-ai/airi/${AIRI_IDLE_SOURCE_COMMIT}/packages/stage-ui-three/src/assets/vrm/animations/idle_loop.vrma" \
         --output public/animations/airi-idle-loop.vrma \
-    && test "$(git hash-object public/models/AvatarSample_Y.vrm)" = "${VROID_SAMPLE_A_FIXTURE_BLOB_SHA}" \
+    && echo "${HEARTHGHOST_MODEL_A_SHA256}  public/models/AvatarSample_Y.vrm" \
+        | sha256sum --check --strict \
     && test "$(git hash-object public/models/AvatarSample_C.vrm)" = "${VROID_SAMPLE_C_BLOB_SHA}" \
     && test "$(git hash-object public/animations/airi-idle-loop.vrma)" = "${AIRI_IDLE_BLOB_SHA}" \
     && test -s public/models/AvatarSample_Y.vrm \

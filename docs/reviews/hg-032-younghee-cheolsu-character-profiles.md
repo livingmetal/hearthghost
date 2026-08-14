@@ -9,10 +9,11 @@ Status: software implementation complete pending final Android CI and physical m
 
 ## Character mapping
 
-- `영희` → local character id `younghee` → official asset slot `/models/AvatarSample_A.vrm`
+- `영희` → local character id `younghee` → project asset slot `/models/AvatarSample_Y.vrm`
 - `철수` → local character id `cheolsu` → official asset slot `/models/AvatarSample_C.vrm`
 
-The HearthGhost names are local fictional presentation/persona labels. They do not rename or claim authorship of the official VRoid sample assets.
+The HearthGhost names are local fictional presentation/persona labels. Model A
+is created by the repository owner; Model C remains an official VRoid sample.
 
 ## Implemented behavior
 
@@ -33,17 +34,25 @@ The HearthGhost names are local fictional presentation/persona labels. They do n
 
 ## VRM asset prerequisite
 
-The binary official sample VRM files are intentionally not sourced from unofficial mirrors. Obtain/export the official VRoid Studio sample assets through the official VRoid Studio/VRoid Hub flow, then place them at:
+Model A is created by repository owner `livingmetal`, approved by the owner for
+project distribution, and tracked at:
 
-- `apps/web-client/public/models/AvatarSample_A.vrm`
+- `apps/web-client/public/models/AvatarSample_Y.vrm`
+
+Model C remains a build-fetched, revision-pinned official sample at:
+
 - `apps/web-client/public/models/AvatarSample_C.vrm`
 
-The current official VRoid sample terms state that AvatarSample A–Z are not CC0 but permit broad use including commercial use, modification, redistribution, and no mandatory attribution, subject to the current conditions. Re-check the official terms at release time.
+The Model A binary retains default VRoid Studio creator and permission metadata
+that conflicts with the repository owner's stated authorship and distribution
+authorization. This known metadata discrepancy is recorded beside the asset in
+`apps/web-client/public/models/README.md` and should be corrected in a future
+authoring export. Model C remains governed by its third-party source terms.
 
 ## Physical Android checks
 
-- [ ] Bundle official A and C VRM files and confirm both render on the target Galaxy device without network access.
-- [ ] Confirm VRM 0.x orientation, camera framing, hair/clothing visibility, and acceptable frame rate.
+- [ ] Bundle the reviewed Y model and official C model and confirm both render on the target Galaxy device without network access.
+- [ ] Confirm version-specific VRM orientation, camera framing, hair/clothing visibility, and acceptable frame rate.
 - [ ] Switch 영희 → 철수 → 영희 repeatedly and confirm no WebGL context/resource leak or blank viewport.
 - [ ] Confirm sleeping/listening/thinking/speaking state transitions remain visible on both VRM assets.
 - [ ] Confirm `aa` mouth expression responds during local TTS on both models.

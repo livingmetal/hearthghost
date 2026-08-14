@@ -385,7 +385,7 @@ internal sealed class NodeProtocolClient : IAsyncDisposable
 
     private X509Certificate2 LoadAuthorityCertificate()
     {
-        return FindCertificate(StoreName.Root, options.AuthorityCertificateThumbprint);
+        return FindCertificate(StoreName.CertificateAuthority, options.AuthorityCertificateThumbprint);
     }
 
     private static X509Certificate2 FindCertificate(StoreName storeName, string thumbprint)

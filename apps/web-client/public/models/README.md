@@ -7,14 +7,25 @@ The client recognizes two local VRM asset names:
 
 ## Model A / Younghee
 
-`AvatarSample_Y.vrm` is the user-created, redistributable HearthGhost model A
-asset and is intended to be tracked directly in this directory.
+`AvatarSample_Y.vrm` is a user-created HearthGhost model made by repository
+owner `livingmetal`, who authorized its distribution with this repository on
+2026-08-14. It is tracked directly in this directory as HearthGhost model A.
 
 Reviewed identity:
 
 - bytes: `16935148`
 - SHA-256: `48af6bf879cadbc4e17431543f795010c9ca2bf31c3ca5e0b450c87b05545c11`
 - container: glTF 2.0 / VRM 1.0
+- generator: `VRoid Studio 2.14.0`
+- creator and distribution authority: repository owner `livingmetal`
+
+The current VRM binary retains default embedded metadata naming
+`pixiv VRoid Project` and marking redistribution and modification as
+restricted. This does not match the repository owner's stated authorship and
+distribution authorization. The repository records the discrepancy rather
+than misclassifying Model A as a third-party VRoid sample. A future authoring
+export should align the embedded creator and redistribution fields; until then,
+the reviewed SHA-256 above identifies the exact owner-authorized binary.
 
 The client asset step validates this identity before Windows or local Android
 packaging. `HEARTHGHOST_MODEL_A_PATH` is only a development override for

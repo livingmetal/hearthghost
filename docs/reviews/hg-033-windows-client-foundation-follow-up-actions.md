@@ -10,7 +10,9 @@ Make Windows a first-class HearthGhost development client alongside Android so t
 - Added a strict WebView2 request/response bridge with bounded request count and timeout.
 - Added `WindowsNodePlatform` implementing the existing `NodePlatformPort` and `TextConversationTransportPort` contracts.
 - Added a Windows-native `SslStream` transport using TLS 1.3 and ALPN `hearthghost-node/1`.
-- Uses a Node certificate from `CurrentUser\\My` and HearthGhost CA from `CurrentUser\\Root` by exact thumbprint.
+- Uses a Node certificate from `CurrentUser\\My` and HearthGhost CA from
+  `CurrentUser\\CA` by exact thumbprint. The CA is a connection-scoped custom
+  trust anchor, not a Windows trusted root.
 - Rejects missing/ambiguous certificate matches, missing private keys and CNG keys whose export policy allows export/archiving.
 - Rebuilds the server certificate chain against the configured HearthGhost CA and rejects endpoint-name mismatch.
 - Reuses the existing Node Gateway sequence: `session.open` then `conversation.text` capability request.

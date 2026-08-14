@@ -35,15 +35,22 @@ belong in this package.
 ## Model A asset
 
 HearthGhost model A / `younghee` resolves to `/models/AvatarSample_Y.vrm`.
-The user-created VRM is intended to be distributable with HearthGhost and is
-tracked at `public/models/AvatarSample_Y.vrm`; `.gitignore` explicitly allows
-this file while continuing to ignore other local VRM files.
+This is a user-created HearthGhost model made by the repository owner and
+approved by the owner for distribution with the project. It is tracked at
+`public/models/AvatarSample_Y.vrm`; `.gitignore` explicitly allows this
+reviewed file while continuing to ignore other local VRM files.
 
 The asset step validates the reviewed model before use:
 
 - byte length: `16935148`
 - SHA-256: `48af6bf879cadbc4e17431543f795010c9ca2bf31c3ca5e0b450c87b05545c11`
 - container: glTF 2.0 / VRM
+
+The current binary retains default VRoid Studio metadata naming
+`pixiv VRoid Project` and restrictive permission flags. Those embedded values
+do not match the repository owner's stated authorship and distribution
+authorization; the discrepancy is recorded in `public/models/README.md` and
+should be corrected in a future authoring export.
 
 `HEARTHGHOST_MODEL_A_PATH` remains available as a development override when a
 local replacement needs to be tested before it is committed:
@@ -59,11 +66,6 @@ Android local builds use the same validation and override path:
 $env:HEARTHGHOST_MODEL_A_PATH = "C:\path\to\AvatarSample_Y.vrm"
 npm run android:debug
 ```
-
-Until the tracked binary is present in a checkout, Android CI uses the pinned
-public AvatarSample_A only as a packaging fixture at the same Y path. Once the
-Y binary is committed, the fixture should be removed so CI packages the real
-tracked model.
 
 ## Local web checks
 
