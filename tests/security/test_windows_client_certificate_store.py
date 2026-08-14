@@ -24,6 +24,8 @@ class WindowsClientCertificateStoreTests(unittest.TestCase):
         self.assertIn("IncrementalHash.CreateHash(HashAlgorithmName.SHA256)", updater)
         self.assertIn("X509ChainTrustMode.CustomRootTrust", updater)
         self.assertIn("SslProtocols.Tls13", updater)
+        self.assertIn("await output.DisposeAsync()", updater)
+        self.assertIn("WorkingDirectory = staging", updater)
         self.assertIn('UPDATE_CAPABILITY = "client.update"', protocol)
         self.assertIn("admit_request", protocol)
         self.assertNotIn("StoreName.Root", updater)

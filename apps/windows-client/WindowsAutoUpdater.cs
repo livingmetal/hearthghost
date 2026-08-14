@@ -46,7 +46,11 @@ internal static class WindowsAutoUpdater
                 Directory.Delete(staging, recursive: true);
                 return false;
             }
-            ProcessStartInfo start = new(updater) { UseShellExecute = false };
+            ProcessStartInfo start = new(updater)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = staging,
+            };
             start.ArgumentList.Add(ApplyArgument);
             start.ArgumentList.Add(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
             start.ArgumentList.Add(staging);
@@ -344,9 +348,16 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
         }
         byte[] header = new byte[4];
         BinaryPrimitives.WriteInt32BigEndian(header, payload.Length);
-        await tls.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-        await tls.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-        await tls.FlushAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await tls.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+            await tls.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+            await tls.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            throw new WindowsNodeException("update_frame_write_io");
+        }
     }
 
     private async Task<JsonElement> ReadFrameAsync(CancellationToken cancellationToken)
@@ -356,14 +367,28 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
             throw new WindowsNodeException("update_transport_missing");
         }
         byte[] header = new byte[4];
-        await tls.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await tls.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            throw new WindowsNodeException("update_frame_read_io");
+        }
         int length = BinaryPrimitives.ReadInt32BigEndian(header);
         if (length is < 2 or > MaxFrameBytes)
         {
             throw new WindowsNodeException("update_inbound_frame_invalid");
         }
         byte[] payload = new byte[length];
-        await tls.ReadExactlyAsync(payload, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await tls.ReadExactlyAsync(payload, cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            throw new WindowsNodeException("update_frame_read_io");
+        }
         using JsonDocument document = JsonDocument.Parse(payload, new JsonDocumentOptions { MaxDepth = 16 });
         return document.RootElement.Clone();
     }
@@ -371,6 +396,7 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
     private async Task DownloadFileAsync(string destination, UpdateFile file, CancellationToken cancellationToken)
     {
         string temporary = destination + ".partial";
+        string phase = "open";
         try
         {
             using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -379,21 +405,32 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
             long remaining = file.Size;
             while (remaining > 0)
             {
+                phase = "read";
                 int read = await tls!.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), cancellationToken).ConfigureAwait(false);
                 if (read == 0)
                 {
                     throw new WindowsNodeException("update_file_truncated");
                 }
+                phase = "write";
                 await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
                 hash.AppendData(buffer, 0, read);
                 remaining -= read;
             }
+            phase = "flush";
             await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await output.DisposeAsync().ConfigureAwait(false);
             if (Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant() != file.Sha256)
             {
                 throw new WindowsNodeException("update_file_hash_mismatch");
             }
+            phase = "move";
             File.Move(temporary, destination, true);
+        }
+        catch (IOException error)
+        {
+            File.Delete(temporary);
+            int nativeError = error.HResult & 0xffff;
+            throw new WindowsNodeException($"update_file_{phase}_io_{nativeError}");
         }
         catch
         {
