@@ -143,8 +143,9 @@ class DevelopmentGatewayServer:
                     self._reminder_sync_protocol.handle_document(channel, document)
                 else:
                     raise NodeProtocolError("unsupported Node command type")
-        except (OSError, ssl.SSLError, NodeProtocolError, ValueError):
-            pass
+        except (OSError, ssl.SSLError, NodeProtocolError, ValueError) as error:
+            reason = str(error) if isinstance(error, NodeProtocolError) else type(error).__name__
+            print(f"node_connection_closed reason={reason}", flush=True)
         finally:
             if channel is not None and open_session_id is not None:
                 try:

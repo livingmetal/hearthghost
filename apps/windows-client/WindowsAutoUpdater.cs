@@ -35,6 +35,7 @@ internal static class WindowsAutoUpdater
             }
             await using UpdateProtocolClient client = new(options);
             UpdateDownloadResult result = await client.DownloadAsync(currentRelease, staging).ConfigureAwait(true);
+            RecordStatus(result.ReasonCode);
             if (!result.Downloaded || result.ReleaseId is null)
             {
                 return false;
@@ -54,10 +55,11 @@ internal static class WindowsAutoUpdater
             _ = Process.Start(start) ?? throw new InvalidOperationException("update helper did not start");
             return true;
         }
-        catch
+        catch (Exception error)
         {
             // A failed or unauthorized update is never applied. The last verified
             // installed client remains usable and can retry on the next launch.
+            RecordStatus(error is WindowsNodeException ? error.Message : error.GetType().Name);
             return false;
         }
     }
@@ -141,6 +143,28 @@ internal static class WindowsAutoUpdater
     private static bool IsReleaseId(string value) =>
         value.Length == 40 && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
+    private static void RecordStatus(string reasonCode)
+    {
+        try
+        {
+            string root = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "HearthGhost");
+            Directory.CreateDirectory(root);
+            string bounded = reasonCode.Length is >= 1 and <= 128
+                && reasonCode.All(character => character is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '_' or '.')
+                ? reasonCode
+                : "update_failure_unclassified";
+            File.WriteAllText(
+                Path.Combine(root, "update-status.txt"),
+                $"{DateTimeOffset.UtcNow:O} {bounded}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Update diagnostics must never block the installed client.
+        }
+    }
+
     private static void CopyDirectory(string source, string destination)
     {
         Directory.CreateDirectory(destination);
@@ -199,7 +223,7 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
         RequireGatewayResult(capability, capabilityRequestId);
         if (RequiredString(capability, "outcome", 16) != "accepted")
         {
-            return new(false, null);
+            return new(false, null, RequiredString(capability, "reason_code", 128));
         }
 
         string checkId = Guid.NewGuid().ToString();
@@ -216,7 +240,7 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
         RequireResult(manifest, checkId, sessionId!);
         if (RequiredString(manifest, "outcome", 16) != "accepted" || !RequiredBoolean(manifest, "available"))
         {
-            return new(false, null);
+            return new(false, null, RequiredString(manifest, "reason_code", 128));
         }
         string releaseId = RequiredHex(manifest, "release_id", 40);
         JsonElement fileArray = RequiredArray(manifest, "files", MaxFiles);
@@ -258,7 +282,7 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
             }
             await DownloadFileAsync(destination, file, timeout.Token).ConfigureAwait(false);
         }
-        return new(true, releaseId);
+        return new(true, releaseId, "update_downloaded");
     }
 
     private async Task ConnectAsync(CancellationToken cancellationToken)
@@ -522,4 +546,4 @@ internal sealed class UpdateProtocolClient : IAsyncDisposable
     private sealed record UpdateFile(string Path, long Size, string Sha256);
 }
 
-internal sealed record UpdateDownloadResult(bool Downloaded, string? ReleaseId);
+internal sealed record UpdateDownloadResult(bool Downloaded, string? ReleaseId, string ReasonCode);
