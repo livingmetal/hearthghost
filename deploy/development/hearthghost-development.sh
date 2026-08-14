@@ -43,11 +43,11 @@ build_image() {
         printf 'temporary release file already exists\n' >&2
         exit 2
     fi
-    trap 'rm -f .hearthghost-release' RETURN
-    printf '%s\n' "${release_id}" > "${release_file}"
-    podman build --pull=always --target development-core -t "${IMAGE}" .
-    rm -f "${release_file}"
-    trap - RETURN
+    (
+        trap 'rm -f .hearthghost-release' EXIT
+        printf '%s\n' "${release_id}" > "${release_file}"
+        podman build --pull=always --target development-core -t "${IMAGE}" .
+    )
 }
 
 initialize() {
